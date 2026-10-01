@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import ImageIO
 import PDFKit
@@ -69,7 +68,8 @@ actor NativeSourceProcessingService: SourceProcessing {
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !unreadable.contains(index) { unreadable.append(index) }
             // Preserve empty pages too; they never become retrieval candidates.
             units.append(.init(position: index, text: text, origin: origin, locator: .pdf(pageIndex: index)))
-            if index == 0 { try? writeThumbnail(page.thumbnail(of: CGSize(width: 220, height: 280), for: .mediaBox), beside: url) }
+            if index == 0, let thumbnail = page.thumbnail(of: CGSize(width: 220, height: 280), for: .mediaBox)
+                .cgImage(forProposedRect: nil, context: nil, hints: nil) { try? writeThumbnail(thumbnail, beside: url) }
             await progress(.init(phase: "Extracting text", completed: index + 1, total: document.pageCount))
         }
         guard units.contains(where: { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else { throw SourceImportError.noText }
@@ -84,7 +84,7 @@ actor NativeSourceProcessingService: SourceProcessing {
               let height = properties[kCGImagePropertyPixelHeight] as? Int,
               let image = Self.downsample(url: url, maximumDimension: 2000) else { throw SourceImportError.invalidFile }
         if let thumb = Self.downsample(url: url, maximumDimension: 220) {
-            try? writeThumbnail(NSImage(cgImage: thumb, size: .zero), beside: url)
+            try? writeThumbnail(thumb, beside: url)
         }
         await progress(.init(phase: "Extracting text locally", completed: 0, total: 1))
         let observations = try await ocr.recognize(image)
@@ -136,8 +136,7 @@ actor NativeSourceProcessingService: SourceProcessing {
         return CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceThumbnailMaxPixelSize: maximumDimension, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary)
     }
-    private func writeThumbnail(_ image: NSImage, beside url: URL) throws {
-        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+    private func writeThumbnail(_ cg: CGImage, beside url: URL) throws {
         let destination = url.deletingLastPathComponent().appending(path: "thumbnail.jpg")
         guard let writer = CGImageDestinationCreateWithURL(destination as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else { return }
         CGImageDestinationAddImage(writer, cg, nil)

@@ -435,3 +435,14 @@ See [M13 implementation status](M13_IMPLEMENTATION.md), [release audit](RELEASE_
 repository is `Kudl1k/AudioNotes`; Pages currently reports disabled and the stable
 feed / v1 asset return 404. No production update URL is embedded. The application is
 not ready to distribute until the remaining manual/credential/live gates pass.
+
+## M14 — SwiftUI-first UI architecture (first pass; desktop acceptance pending)
+
+- [x] UI architecture audit: app was already SwiftUI-first (SwiftUI `App`, `NavigationSplitView`, 53 SwiftUI views, one PDFKit representable); SwiftUI transcript and Markdown renderers retained
+- [x] AppKit classified and confined to `Platform/macOS/AppKit` (file panels, clipboard, Finder/browser, alerts, PDF preview); services no longer import AppKit except the retained CoreText `PDFExporter`
+- [x] Help/Privacy/Licenses windows migrated from manual `NSWindow` controllers to a SwiftUI window scene; composer Shift+Return uses key-event modifiers instead of global `NSEvent` state
+- [x] Debug tests (389/73) and Release build pass; no new warnings; no schema, signing, Sparkle or bundle changes
+- [ ] Desktop acceptance of migrated menus, panels, copy, Finder reveal, composer keys and PDF citation jumps
+- [ ] Presentation-boundary cleanup, single shared chat UI, shared progress component, previews/accessibility identifiers
+
+See [M14 migration report](SWIFTUI_MIGRATION.md).

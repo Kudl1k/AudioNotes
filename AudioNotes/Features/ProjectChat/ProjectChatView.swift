@@ -1,4 +1,3 @@
-import AppKit
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -132,8 +131,9 @@ struct ProjectChatView: View {
             HStack(alignment: .bottom) {
                 TextField("Ask about \(model.project.name)…", text: $model.inputText, axis: .vertical)
                     .textFieldStyle(.roundedBorder).lineLimit(1...5).focused($inputFocused)
-                    .onKeyPress(.return) {
-                        if NSEvent.modifierFlags.contains(.shift) { return .ignored }
+                    .onKeyPress(.return, phases: [.down, .repeat]) { press in
+                        // A vertical TextField ends editing on Return, so insert the line break here.
+                        if press.modifiers.contains(.shift) { model.inputText.append("\n"); return .handled }
                         if model.canSend { model.send() }; return .handled
                     }
                 if model.isGenerating {
@@ -151,12 +151,12 @@ struct ProjectChatView: View {
         }
     }
     private func export() {
-        let panel = NSSavePanel(); panel.allowedContentTypes = [.plainText]; panel.nameFieldStringValue = model.project.name + " Chat.md"
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
+        Task {
+            let types = [UTType(filenameExtension: "md") ?? .plainText]
+            guard let url = await FilePanels.chooseSaveDestination(fileName: model.project.name + " Chat.md", types: types) else { return }
             let content = model.exportContent()
             let options = ExportOptions(format: .markdown, includeMetadata: false, includeSummary: false, includeTranscript: false, includeChat: true)
-            Task { do { try await NativeExportService().write(content: content, options: options, to: url) } catch { exportError = error.localizedDescription } }
+            do { try await NativeExportService().write(content: content, options: options, to: url) } catch { exportError = error.localizedDescription }
         }
     }
 }
@@ -219,5 +219,5 @@ private struct ProjectChatMessageRow: View {
                 if message.role == .assistant && canRegenerate { Button("Regenerate", action: regenerate) }
             }
     }
-    private func copy() { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(message.text, forType: .string) }
+    private func copy() { Clipboard.copy(message.text) }
 }

@@ -631,3 +631,13 @@ the library's current recording list, then move each through SwiftDataProjectRep
 never reimport/copy audio or recreate history. Preserve active recording tasks. Show
 drop hover feedback. Menu-based Move to Project remains available. Native drag/drop
 acceptance is still required.
+
+## SwiftUI-first UI (M14 — first pass; desktop acceptance pending)
+
+SwiftUI is the default UI technology. AppKit belongs in `Platform/macOS/AppKit` behind
+small intent-named adapters (`FilePanels`, `Clipboard`, `Workspace`, `Alerts`,
+`PDFPreviewRepresentable`); features and services must not import AppKit. `PDFExporter`
+is the documented exception. Representables keep logic outside and guard state sync in
+a coordinator. Keep the SwiftUI transcript and Markdown renderers unless a measured
+benchmark justifies change. Do not move SwiftData models across modules while v1
+migration guarantees depend on them. See docs/SWIFTUI_MIGRATION.md. Do not start iOS.

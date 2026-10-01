@@ -1,4 +1,3 @@
-import AppKit
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -261,7 +260,7 @@ struct LibraryView: View {
                             if urls.isEmpty {
                                 model.workspaceError = "This workspace has no available imported files to reveal."
                             } else {
-                                NSWorkspace.shared.activateFileViewerSelecting(urls)
+                                Workspace.revealInFinder(urls)
                             }
                         }
                         Divider()
@@ -314,17 +313,13 @@ struct LibraryView: View {
 
     private func showImporter(for project: Project?) {
         guard !model.isImporting else { return }
-        let panel = NSOpenPanel()
-        panel.title = project == nil ? "Import Audio" : "Import Files to " + (project?.name ?? "")
-        panel.prompt = "Import"
-        panel.allowedContentTypes = project == nil ? [.audio] : SourceImportService.supportedTypes
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
         Task { @MainActor in
-            if await panel.begin() == .OK {
-                if let project, !project.isDeleted { model.projectImports.enqueue(panel.urls, to: project, context: modelContext) }
-                else if project == nil { importURLs(panel.urls) }
-            }
+            let urls = await FilePanels.chooseFiles(
+                title: project == nil ? "Import Audio" : "Import Files to " + (project?.name ?? ""), prompt: "Import",
+                types: project == nil ? [.audio] : SourceImportService.supportedTypes)
+            guard !urls.isEmpty else { return }
+            if let project, !project.isDeleted { model.projectImports.enqueue(urls, to: project, context: modelContext) }
+            else if project == nil { importURLs(urls) }
         }
     }
 

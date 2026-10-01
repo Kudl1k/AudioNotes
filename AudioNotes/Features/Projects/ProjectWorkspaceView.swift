@@ -1,4 +1,3 @@
-import AppKit
 import SwiftData
 import SwiftUI
 
@@ -211,7 +210,7 @@ struct ProjectWorkspaceView: View {
             Button("Open") { preview = .init(source: source) }
             Button("Rename…") { sourceName = source.displayName; renaming = source }
             Button("Retry") { queue.retry(source, in: project, context: context) }.disabled(queue.isProcessing(source.id))
-            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([queue.storage.sourceURL(source)]) }
+            Button("Show in Finder") { Workspace.revealInFinder([queue.storage.sourceURL(source)]) }
             Button("Delete…", role: .destructive) { removing = source }.disabled(queue.isProcessing(source.id))
         }
     }

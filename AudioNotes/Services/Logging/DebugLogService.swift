@@ -1,5 +1,4 @@
 import Foundation
-import AppKit
 
 public enum DebugLogLevel: String, Sendable {
     case debug = "DEBUG"
@@ -96,14 +95,6 @@ public final class DebugLogService: @unchecked Sendable {
         lock.lock()
         entries.removeAll()
         lock.unlock()
-    }
-
-    @MainActor
-    public func copyToClipboard() {
-        let text = formattedLogs()
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
     }
 
     public static func redact(_ raw: String) -> String {

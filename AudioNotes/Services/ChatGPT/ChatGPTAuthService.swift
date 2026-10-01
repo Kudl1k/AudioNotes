@@ -1,15 +1,8 @@
-import AppKit
 import Combine
 import Foundation
 
 protocol BrowserOpening: Sendable {
     @MainActor func open(_ url: URL) -> Bool
-}
-
-struct DefaultBrowserOpener: BrowserOpening {
-    @MainActor func open(_ url: URL) -> Bool {
-        NSWorkspace.shared.open(url)
-    }
 }
 
 enum ChatGPTAuthError: LocalizedError, Equatable {
@@ -87,7 +80,7 @@ final class ChatGPTAuthService: ObservableObject, ChatGPTAuthenticating {
     init(
         credentialStore: any ChatGPTCredentialStoring = ChatGPTCredentialStore(),
         tokenValidator: ChatGPTIDTokenValidator = ChatGPTIDTokenValidator(),
-        browserOpener: any BrowserOpening = DefaultBrowserOpener(),
+        browserOpener: any BrowserOpening = SystemBrowserOpener(),
         loopbackFactory: @escaping @Sendable () -> any ChatGPTLoopbackListening = { ChatGPTLoopbackListener() },
         urlSession: URLSession = .shared,
         sessionStore: any ChatGPTSessionStoring = ChatGPTUserDefaultsSessionStore()

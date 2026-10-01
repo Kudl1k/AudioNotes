@@ -1,4 +1,3 @@
-import AppKit
 import SwiftData
 import SwiftUI
 
@@ -315,9 +314,11 @@ struct ChatInspectorView: View {
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(1...5)
                 .focused($isInputFocused)
-                .onKeyPress(.return) {
-                    if NSEvent.modifierFlags.contains(.shift) {
-                        return .ignored
+                .onKeyPress(.return, phases: [.down, .repeat]) { press in
+                    if press.modifiers.contains(.shift) {
+                        // A vertical TextField ends editing on Return, so insert the line break here.
+                        model.inputText.append("\n")
+                        return .handled
                     } else if model.canSend {
                         model.sendMessage()
                         return .handled
@@ -469,8 +470,7 @@ private struct ChatMessageBubble: View {
                 if message.role == .assistant {
                     HStack(spacing: 12) {
                         Button {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(copyContent(message), forType: .string)
+                            Clipboard.copy(copyContent(message))
                         } label: {
                             Label("Copy", systemImage: "doc.on.doc")
                                 .font(.caption2)
@@ -503,8 +503,7 @@ private struct ChatMessageBubble: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .contextMenu {
                 Button("Copy Message") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(copyContent(message), forType: .string)
+                    Clipboard.copy(copyContent(message))
                 }
             }
         }
