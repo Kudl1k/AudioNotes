@@ -117,6 +117,8 @@ struct ClaudeCLIRunner: ClaudeCLIRunning {
                     try invocation.checkCancellation()
                     try Task.checkCancellation()
                     guard process.terminationStatus == 0 else { throw ClaudeCLIError.executionFailed(process.terminationStatus) }
+                    try? stdin.close()
+                    try FileManager.default.removeItem(at: directory)
                     continuation.finish()
                 } catch {
                     invocation.stop()
