@@ -1,8 +1,9 @@
 name: Publish Sparkle appcast
 
+# Dispatch-only: the github-pages environment allows deployments from the main
+# branch, and release events run on the tag ref, which it rejects. The release
+# script dispatches this on main after publishing; dispatch it manually to retry.
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -20,7 +21,7 @@ concurrency:
 
 jobs:
   prepare:
-    if: github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && !github.event.release.draft)
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -30,7 +31,7 @@ jobs:
       - name: Download published appcast and verify every release asset
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
           SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
         shell: bash
         run: |
@@ -43,11 +44,9 @@ jobs:
           mkdir -p site
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --dir site
           python3 scripts/release/validate_appcast.py site/appcast.xml --repository "$GITHUB_REPOSITORY"
-          touch site/.nojekyll
       - uses: actions/upload-pages-artifact@v4
         with:
           path: site
-          include-hidden-files: true
 
   deploy:
     needs: prepare

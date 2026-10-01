@@ -51,7 +51,7 @@ PYACCEPT
     python3 scripts/release/validate_appcast.py "$output/feed/appcast.xml" --repository "$repository" --offline-artifacts "$output/feed"
     gh release create "v$version" --repo "$repository" --target "$(git rev-parse HEAD)" --title "AudioNotes $version" --notes-file "docs/release/$version.md" --draft "$output/AudioNotes-$version.dmg" "$output/SHA256SUMS" "$output/feed/appcast.xml"
     gh release edit "v$version" --repo "$repository" --draft=false
-    gh workflow run publish-appcast.yml --repo "$repository" -f "release_tag=v$version"
+    gh workflow run publish-appcast.yml --repo "$repository" --ref main -f "release_tag=v$version"
     echo 'Release published; Pages dispatched. Verify the public feed and actual installed update before announcing.'
     exit 0
 fi
@@ -62,6 +62,11 @@ if [[ "$mode" != --dry-run ]]; then
     : "${SPARKLE_PUBLIC_ED_KEY:?Set the existing Sparkle public Ed25519 key}"
     [[ "$DEVELOPER_ID_APPLICATION" == 'Developer ID Application:'* ]] || { echo 'Production cannot use ad-hoc/Apple Development signing.'; exit 1; }
     security find-identity -v -p codesigning | grep -F -- "\"$DEVELOPER_ID_APPLICATION\"" >/dev/null || { echo 'Developer ID identity unavailable.'; exit 1; }
+    # The paid Developer Program team is the certificate's own "(TEAMID)" suffix;
+    # personal Xcode teams cannot issue Developer ID certificates.
+    team="${DEVELOPER_ID_APPLICATION##*(}"; team="${team%)}"
+    [[ "$team" =~ ^[A-Z0-9]{10}$ ]] || { echo 'Developer ID certificate name must end with its (TEAMID).'; exit 1; }
+    echo "Signing team: $team"
     xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" --output-format json >/dev/null
     [[ -z "$(git status --porcelain)" ]] || { echo 'Use a clean validated source revision for signed release packaging.'; exit 1; }
 fi
@@ -74,16 +79,17 @@ if [[ "$mode" == --dry-run ]]; then
     app="$output/AudioNotes.xcarchive/Products/Applications/AudioNotes.app"
     dmg="$output/UNSIGNED-DO-NOT-DISTRIBUTE-AudioNotes-$version.dmg"
 else
-    xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes -configuration Release -destination 'generic/platform=macOS' -derivedDataPath "$derived" -archivePath "$output/AudioNotes.xcarchive" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$DEVELOPER_ID_APPLICATION" AUDIONOTES_UPDATE_FEED_URL="$feed" AUDIONOTES_UPDATE_PUBLIC_KEY="$SPARKLE_PUBLIC_ED_KEY" archive > "$output/archive.log" 2>&1
+    xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes -configuration Release -destination 'generic/platform=macOS' -derivedDataPath "$derived" -archivePath "$output/AudioNotes.xcarchive" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$DEVELOPER_ID_APPLICATION" DEVELOPMENT_TEAM="$team" AUDIONOTES_UPDATE_FEED_URL="$feed" AUDIONOTES_UPDATE_PUBLIC_KEY="$SPARKLE_PUBLIC_ED_KEY" archive > "$output/archive.log" 2>&1
     /usr/libexec/PlistBuddy -c 'Add :method string developer-id' "$output/ExportOptions.plist"
     /usr/libexec/PlistBuddy -c 'Add :signingStyle string manual' "$output/ExportOptions.plist"
     /usr/libexec/PlistBuddy -c "Add :signingCertificate string $DEVELOPER_ID_APPLICATION" "$output/ExportOptions.plist"
-    /usr/libexec/PlistBuddy -c 'Add :teamID string 829XTK67RJ' "$output/ExportOptions.plist"
+    /usr/libexec/PlistBuddy -c "Add :teamID string $team" "$output/ExportOptions.plist"
     xcodebuild -exportArchive -archivePath "$output/AudioNotes.xcarchive" -exportPath "$output/export" -exportOptionsPlist "$output/ExportOptions.plist" > "$output/export.log" 2>&1
     app="$output/export/AudioNotes.app"
     codesign --verify --deep --strict --verbose=2 "$app"
     codesign -dv "$app" 2>&1 | grep -F 'Authority=Developer ID Application:' >/dev/null
     codesign -dv "$app" 2>&1 | grep 'flags=.*runtime' >/dev/null
+    codesign -dv "$app" 2>&1 | grep -Fx "TeamIdentifier=$team" >/dev/null || { echo 'Exported app is not signed by the Developer ID team.'; exit 1; }
     # Notarize and staple the app first so the dragged application works offline.
     ditto -c -k --keepParent "$app" "$output/notarize-app.zip"
     xcrun notarytool submit "$output/notarize-app.zip" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json > "$output/app-notarization.json"
