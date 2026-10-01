@@ -107,6 +107,10 @@ final class UsageTrackingLLMProvider: LLMProvider {
     var executionLocation: ProviderExecutionLocation { base.executionLocation }
     var billingKind: BillingKind { base.billingKind }
     init(base: any LLMProvider, tracker: OperationUsageTracker) { self.base = base; self.tracker = tracker }
+    func prepareForGeneration() async throws { try await base.prepareForGeneration() }
+    func summaryRequestFits(context: SourceSummaryContext, configuration: SummaryConfiguration) async throws -> Bool {
+        try await base.summaryRequestFits(context: context, configuration: configuration)
+    }
 
     func generateSummary(transcript: Transcript, configuration: SummaryConfiguration) async throws -> Summary {
         let id = tracker.beginRequest()

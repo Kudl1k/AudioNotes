@@ -40,6 +40,29 @@ struct SummaryView: View {
     }
 
     private var emptyStateGenerator: some View {
+        ScrollView {
+            generatorForm
+                .frame(maxWidth: .infinity)
+                .padding(24)
+        }
+        .sheet(isPresented: $showingSavePreset) {
+            PresetEditorView(
+                defaultFeature: .summary,
+                initialSettings: model.generationSettings,
+                initialInstructions: model.customInstructions
+            ) { created in
+                model.applyUserPreset(created)
+            }
+        }
+        .sheet(isPresented: $showingManagePresets) {
+            PresetsManagementView()
+                .frame(minWidth: 500, minHeight: 400)
+        }
+    }
+
+    // Keep the form's natural height independent of the TabView's available
+    // height. Native controls must not be compressed to fit a short detail pane.
+    private var generatorForm: some View {
         VStack(spacing: 20) {
             Image(systemName: "doc.text.magnifyingglass")
                 .font(.system(size: 40))
@@ -55,21 +78,21 @@ struct SummaryView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sourceSelection
                 SummaryProviderControls(model: model)
-                HStack {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Preset:")
                         .font(.headline)
-                    Spacer()
                     presetMenu
+                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 }
 
-                HStack {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Length:").font(.headline)
-                    Spacer()
                     Picker("Output length", selection: $model.outputLength) {
                         ForEach(OutputLength.allCases) { length in Text(length.title).tag(length) }
                     }
                     .labelsHidden()
-                    .frame(width: 150)
+                    .pickerStyle(.menu)
+                    .frame(minWidth: 0, maxWidth: .infinity)
                 }
 
                 if model.selectedPreset == .custom {
@@ -87,7 +110,7 @@ struct SummaryView: View {
                     }
                 }
 
-                HStack {
+                VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(model.isMockProvider ? "Provider: Mock (development)" : "Provider: \(model.providerName)")
                         Text(model.executionDescription)
@@ -95,20 +118,22 @@ struct SummaryView: View {
                     }
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Spacer()
                     if model.state.isGenerating {
-                        HStack(spacing: 8) {
+                        HStack(alignment: .top, spacing: 8) {
                             ProgressView().controlSize(.small)
                             Text(model.progressMessage ?? "Generating summary…")
                                 .font(.callout)
                             Button("Cancel", action: model.cancelGeneration)
                         }
                     } else {
-                        Button("Generate Summary") {
-                            startGeneration()
+                        HStack {
+                            Spacer(minLength: 0)
+                            Button("Generate Summary") {
+                                startGeneration()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(!model.canGenerate)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!model.canGenerate)
                     }
                 }
             }
@@ -122,21 +147,6 @@ struct SummaryView: View {
                     .textSelection(.enabled)
                     .padding(.horizontal)
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(24)
-        .sheet(isPresented: $showingSavePreset) {
-            PresetEditorView(
-                defaultFeature: .summary,
-                initialSettings: model.generationSettings,
-                initialInstructions: model.customInstructions
-            ) { created in
-                model.applyUserPreset(created)
-            }
-        }
-        .sheet(isPresented: $showingManagePresets) {
-            PresetsManagementView()
-                .frame(minWidth: 500, minHeight: 400)
         }
     }
 

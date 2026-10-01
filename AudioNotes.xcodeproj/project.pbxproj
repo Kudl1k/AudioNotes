@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 110;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -22,8 +22,6 @@
 		};
 /* End PBXContainerItemProxy section */
 
-
-
 /* Begin PBXFileReference section */
 		AA0000000000000000000001 /* AudioNotesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = AudioNotesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = SOURCE_ROOT; };
@@ -32,11 +30,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-        AC1300000000000000000007 /* Excluded developer OAuth client config */ = {
-            isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-            membershipExceptions = ("Resources/GoogleOAuth.json", );
-            target = E817569E306D0BDF00E1DF07 /* AudioNotes */;
-        };
+		AC1300000000000000000007 /* Exceptions for "AudioNotes" folder in "AudioNotes" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Resources/GoogleOAuth.json,
+			);
+			target = E817569E306D0BDF00E1DF07 /* AudioNotes */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -47,7 +47,9 @@
 		};
 		E81756A1306D0BDF00E1DF07 /* AudioNotes */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-            exceptions = (AC1300000000000000000007 /* Excluded developer OAuth client config */, );
+			exceptions = (
+				AC1300000000000000000007 /* Exceptions for "AudioNotes" folder in "AudioNotes" target */,
+			);
 			path = AudioNotes;
 			sourceTree = "<group>";
 		};

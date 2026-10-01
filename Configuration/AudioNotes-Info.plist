@@ -6,9 +6,19 @@
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>mac.lab</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<false/>
+			</dict>
+		</dict>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>AudioNotes connects to the Ollama server you choose on your local network to discover models and generate summaries and chat responses.</string>
+	<string>AudioNotes connects to the Ollama and llama.cpp servers you choose on your local network to discover models and generate summaries and chat responses.</string>
 	<key>SUAutomaticallyUpdate</key>
 	<false/>
 	<key>SUEnableSystemProfiling</key>

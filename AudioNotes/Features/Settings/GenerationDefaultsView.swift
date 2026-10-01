@@ -127,7 +127,10 @@ struct GenerationDefaultsView: View {
                 OllamaModelPicker(title: "Model", selection: Binding(get: { llmConfig.localAI.summaryModel }, set: { llmConfig.localAI.summaryModel = $0 }), configuration: llmConfig.localAI)
                 Text("Manage the Ollama connection and installed models in Providers → Local AI.").font(.caption).foregroundStyle(.secondary)
             } else if llmConfig.selectedProvider == .llamaCpp {
-                TextField("Loaded model name", text: $llmConfig.localAI.llamaCppModel)
+                TextField("Loaded model name", text: Binding(
+                    get: { llmConfig.localAI.llamaCppModel },
+                    set: { llmConfig.localAI.llamaCppModel = $0 }
+                ))
                 Text("Configure the llama.cpp server address in Providers → Local AI.").font(.caption).foregroundStyle(.secondary)
             } else if llmConfig.selectedProvider == .gemini {
                 Picker("Authentication", selection: $llmConfig.summaryGeminiAuthenticationMethod) {
@@ -245,7 +248,10 @@ struct GenerationDefaultsView: View {
             } else if llmConfig.chatProvider == .ollama {
                 OllamaModelPicker(title: "Model", selection: Binding(get: { llmConfig.localAI.chatModel }, set: { llmConfig.localAI.chatModel = $0 }), configuration: llmConfig.localAI)
             } else if llmConfig.chatProvider == .llamaCpp {
-                TextField("Loaded model name", text: $llmConfig.localAI.llamaCppModel)
+                TextField("Loaded model name", text: Binding(
+                    get: { llmConfig.localAI.llamaCppModel },
+                    set: { llmConfig.localAI.llamaCppModel = $0 }
+                ))
             } else if llmConfig.chatProvider == .mock {
                 Text("Mock simulates streaming answers and transcript citations locally without an API key or network access.")
                     .foregroundStyle(.secondary)

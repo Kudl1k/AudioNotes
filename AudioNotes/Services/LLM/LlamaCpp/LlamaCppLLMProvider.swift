@@ -11,10 +11,88 @@ import Foundation
     let configuration: LocalAIConfiguration
     private let endpoint: OllamaEndpoint?
     private let session: URLSession
+    private var serverContextTokens: Int?
     var modelID: String? { model }
     var executionLocation: ProviderExecutionLocation { endpoint?.executionLocation ?? .remote }
     var billingKind: BillingKind { executionLocation == .local ? .local : .unknown }
-    var inputCapabilities: LLMInputCapabilities { LLMModelCapabilities.capabilities(for: model, provider: .llamaCpp).input }
+    var inputCapabilities: LLMInputCapabilities { LLMInputCapabilities(contextWindowTokens: serverContextTokens ?? 4096) }
+
+    func prepareForGeneration() async throws {
+        struct Properties: Decodable {
+            struct Generation: Decodable { let n_ctx: Int }
+            let default_generation_settings: Generation
+        }
+        let data = try await send(path: "props")
+        guard let props = try? JSONDecoder().decode(Properties.self, from: data),
+              props.default_generation_settings.n_ctx > 0 else {
+            throw LocalAIError.inference("llama.cpp did not report a usable context size from /props. Check the server version and selected model.")
+        }
+        serverContextTokens = props.default_generation_settings.n_ctx
+    }
+
+    private func outputCeiling(_ settings: LLMGenerationSettings?) -> Int {
+        min(max(1, settings?.maxOutputTokens ?? 2048), max(1, inputCapabilities.contextWindowTokens / 4))
+    }
+
+    private func inputTokenCount(messages: [LLMChatMessage]) async throws -> Int {
+        struct Template: Decodable { let prompt: String }
+        struct Tokens: Decodable { let tokens: [Int] }
+        let templateData = try await send(path: "apply-template", body: ["model": model,
+            "messages": messages.map { ["role": $0.role.rawValue, "content": $0.content] }])
+        guard let template = try? JSONDecoder().decode(Template.self, from: templateData) else { throw LocalAIError.invalidResponse }
+        let tokenData = try await send(path: "tokenize", body: ["model": model, "content": template.prompt,
+            "add_special": true, "parse_special": true])
+        guard let result = try? JSONDecoder().decode(Tokens.self, from: tokenData) else { throw LocalAIError.invalidResponse }
+        return result.tokens.count
+    }
+
+    func summaryRequestFits(context: SourceSummaryContext, configuration: SummaryConfiguration) async throws -> Bool {
+        if serverContextTokens == nil { try await prepareForGeneration() }
+        let prompt = try context.prompt(configuration: configuration)
+        let count = try await inputTokenCount(messages: [.init(role: .system, content: prompt.systemMessage), .init(role: .user, content: prompt.userMessage)])
+        return count + outputCeiling(configuration.generationSettings) + 256 <= inputCapabilities.contextWindowTokens
+    }
+
+    private func send(path: String, body: [String: Any]? = nil) async throws -> Data {
+        guard let endpoint else { throw LocalAIError.invalidEndpoint }
+        try Task.checkCancellation()
+        try configuration.policy.validate(endpoint.executionLocation)
+        guard var components = URLComponents(url: endpoint.url.appendingPathComponent(path), resolvingAgainstBaseURL: false) else { throw LocalAIError.invalidEndpoint }
+        if body == nil { components.queryItems = [.init(name: "model", value: model)] }
+        guard let url = components.url else { throw LocalAIError.invalidEndpoint }
+        var request = URLRequest(url: url)
+        // HTTP llama-server/router connections can close between consecutive sizing
+        // requests. Avoid reusing those connections; HTTPS retains normal pooling.
+        if url.scheme == "http" { request.setValue("close", forHTTPHeaderField: "Connection") }
+        if let body {
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        // These read-only operations are safe to repeat even though sizing uses POST.
+        // Keep inference outside this retry path: a lost response can hide completed work.
+        let retryable = ["props", "apply-template", "tokenize"].contains(path)
+        var retried = false
+        while true {
+            try Task.checkCancellation()
+            try configuration.policy.validate(endpoint.executionLocation)
+            do {
+                let (data, response) = try await session.data(for: request, delegate: LlamaCppNoRedirect())
+                try Task.checkCancellation()
+                try configuration.policy.validate(endpoint.executionLocation)
+                guard let http = response as? HTTPURLResponse else { throw LocalAIError.invalidResponse }
+                guard (200..<300).contains(http.statusCode) else { throw serverError(status: http.statusCode, data: data) }
+                return data
+            } catch let error as URLError {
+                if Task.isCancelled || error.code == .cancelled { throw CancellationError() }
+                if retryable && !retried && error.code == .networkConnectionLost {
+                    retried = true
+                    continue
+                }
+                throw LocalServerConnectionError(provider: id, address: endpoint.url.absoluteString, operation: "/" + path, code: error.code)
+            }
+        }
+    }
 
     init(model: String, configuration: LocalAIConfiguration, session: URLSession? = nil) {
         self.model = model
@@ -42,7 +120,7 @@ import Foundation
     }
 
     func generateSourceSummary(context: SourceSummaryContext, configuration summaryConfiguration: SummaryConfiguration) async throws -> Summary {
-        let prompt = context.prompt(configuration: summaryConfiguration)
+        let prompt = try context.prompt(configuration: summaryConfiguration)
         let result = try await complete(messages: [.init(role: .system, content: prompt.systemMessage), .init(role: .user, content: prompt.userMessage)], schema: StructuredResponseSchema.summarySchema(), settings: summaryConfiguration.generationSettings)
         guard let dto = try? JSONDecoder().decode(StructuredSummaryResponse.self, from: Data(result.content.utf8)) else { throw LocalAIError.invalidResponse }
         let summary = dto.makeSummary(preset: summaryConfiguration.preset, providerName: displayName, modelName: model)
@@ -80,16 +158,47 @@ import Foundation
     }
     private struct Result { let content: String; let usage: GenerationUsage? }
 
+    private struct ServerError: Decodable {
+        struct Detail: Decodable { let message: String }
+        let error: Detail
+    }
+
+    private func serverError(status: Int, data: Data) -> LocalAIError {
+        let prefix = "llama.cpp server returned HTTP \(status)."
+        if let response = try? JSONDecoder().decode(ServerError.self, from: data) {
+            let message = response.error.message.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !message.isEmpty {
+                // Display only the server's bounded diagnostic, never dump/log the response body.
+                return .inference(prefix + " " + String(message.prefix(1_000)))
+            }
+        }
+        let guidance: String = switch status {
+        case 400: "The server rejected the request. Check its log for the reason, including model, chat-template, schema, and context-window compatibility."
+        case 401, 403: "The server requires authorization or denied access."
+        case 404: "Check the server address and loaded model name."
+        case 503: "The server is unavailable or still loading the model. Try again when it is ready."
+        default: "Check the llama-server log for details."
+        }
+        return .inference(prefix + " " + guidance)
+    }
+
     private func complete(messages: [LLMChatMessage], schema: [String: Any], settings: LLMGenerationSettings?) async throws -> Result {
         guard let endpoint else { throw LocalAIError.invalidEndpoint }
         try configuration.policy.validate(endpoint.executionLocation)
         guard !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw LocalAIError.missingModel("No llama.cpp model selected") }
+        if serverContextTokens == nil { try await prepareForGeneration() }
+        let inputTokens = try await inputTokenCount(messages: messages)
+        guard inputTokens + outputCeiling(settings) + 256 <= inputCapabilities.contextWindowTokens else {
+            throw LLMError.contextTooLarge(approximateTokens: inputTokens)
+        }
         let url = endpoint.url.appendingPathComponent("v1").appendingPathComponent("chat").appendingPathComponent("completions")
         var request = URLRequest(url: url); request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var body: [String: Any] = ["model": model, "messages": messages.map { ["role": $0.role.rawValue, "content": $0.content] }, "stream": false,
-            "response_format": ["type": "json_schema", "json_schema": ["name": "response", "schema": schema]], "temperature": settings?.temperature ?? 0.7,
-            "max_tokens": settings?.maxOutputTokens ?? 2048]
+            // llama.cpp's documented envelope retains schema-constrained generation
+            // and also works with servers predating the OpenAI json_schema wrapper.
+            "response_format": ["type": "json_object", "schema": schema], "temperature": settings?.temperature ?? 0.7,
+            "max_tokens": outputCeiling(settings)]
         if let topP = settings?.topP { body["top_p"] = topP }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         do {
@@ -97,13 +206,13 @@ import Foundation
             try Task.checkCancellation()
             try configuration.policy.validate(endpoint.executionLocation)
             guard let http = response as? HTTPURLResponse else { throw LocalAIError.invalidResponse }
-            guard (200..<300).contains(http.statusCode) else { throw LocalAIError.inference("llama.cpp server returned HTTP \(http.statusCode). Check that llama-server is running and the model is loaded.") }
+            guard (200..<300).contains(http.statusCode) else { throw serverError(status: http.statusCode, data: data) }
             guard let completion = try? JSONDecoder().decode(Completion.self, from: data), let content = completion.choices.first?.message?.content else { throw LocalAIError.invalidResponse }
             let usage: GenerationUsage? = if let input = completion.usage?.prompt_tokens, let output = completion.usage?.completion_tokens, input >= 0, output >= 0 { GenerationUsage(inputTokens: input, outputTokens: output, totalTokens: input + output) } else { nil }
             return Result(content: content, usage: usage)
         } catch let error as URLError {
             if Task.isCancelled || error.code == .cancelled { throw CancellationError() }
-            throw LocalAIError.unreachable(local: endpoint.executionLocation == .local)
+            throw LocalServerConnectionError(provider: id, address: endpoint.url.absoluteString, operation: "/v1/chat/completions", code: error.code)
         }
     }
 }

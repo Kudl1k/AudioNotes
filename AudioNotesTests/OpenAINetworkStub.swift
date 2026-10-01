@@ -18,11 +18,23 @@ final class NetworkProbe: Sendable {
 
 final class OpenAIStubURLProtocol: URLProtocol, @unchecked Sendable {
     struct Scenario: Sendable {
+        struct Response: Sendable {
+            let status: Int
+            let data: Data
+            let errorsBeforeSuccess: [URLError.Code]
+
+            init(status: Int, data: Data, errorsBeforeSuccess: [URLError.Code] = []) {
+                self.status = status
+                self.data = data
+                self.errorsBeforeSuccess = errorsBeforeSuccess
+            }
+        }
         let status: Int
         let data: Data
         let error: URLError.Code?
         let suspend: Bool
         let probe: NetworkProbe
+        let responsesByPath: [String: Response]
     }
     static let scenarios = Mutex<[String: Scenario]>([:])
 
@@ -53,10 +65,18 @@ final class OpenAIStubURLProtocol: URLProtocol, @unchecked Sendable {
             client?.urlProtocol(self, didFailWithError: URLError(error))
             return
         }
-        let response = HTTPURLResponse(url: request.url!, statusCode: scenario.status,
+        let route = scenario.responsesByPath[request.url?.path ?? ""]
+        let pathAttempt = scenario.probe.requests.withLock { requests in
+            requests.filter { $0.url?.path == request.url?.path }.count
+        }
+        if let route, pathAttempt <= route.errorsBeforeSuccess.count {
+            client?.urlProtocol(self, didFailWithError: URLError(route.errorsBeforeSuccess[pathAttempt - 1]))
+            return
+        }
+        let response = HTTPURLResponse(url: request.url!, statusCode: route?.status ?? scenario.status,
                                        httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: scenario.data)
+        client?.urlProtocol(self, didLoad: route?.data ?? scenario.data)
         client?.urlProtocolDidFinishLoading(self)
     }
 
@@ -73,13 +93,14 @@ struct OpenAINetworkFixture {
     let probe = NetworkProbe()
     let session: URLSession
 
-    init(status: Int = 200, data: Data, error: URLError.Code? = nil, suspend: Bool = false) {
+    init(status: Int = 200, data: Data, error: URLError.Code? = nil, suspend: Bool = false,
+         responsesByPath: [String: OpenAIStubURLProtocol.Scenario.Response] = [:]) {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [OpenAIStubURLProtocol.self]
         configuration.httpAdditionalHeaders = ["X-AudioNotes-Test-ID": id]
         session = URLSession(configuration: configuration)
         OpenAIStubURLProtocol.scenarios.withLock {
-            $0[id] = .init(status: status, data: data, error: error, suspend: suspend, probe: probe)
+            $0[id] = .init(status: status, data: data, error: error, suspend: suspend, probe: probe, responsesByPath: responsesByPath)
         }
     }
 

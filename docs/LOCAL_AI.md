@@ -29,6 +29,24 @@ To opt into sandboxed discovery against a chosen server without inference or sou
 
 LAN connection validation (2026-10-01): the app build and 30 Ollama/local-policy tests passed. `/usr/bin/curl` reached `mac.lab:11434`, listed three models, and retrieved valid vision model metadata. The opt-in sandboxed discovery test failed with URLSession `-1009` (network unavailable, underlying network error 50 despite a satisfied path), consistent with local-network access being denied. Granting AudioNotes local-network permission and rerunning discovery remains manual acceptance; a successful sandboxed LAN connection is not claimed. The build emitted only the existing AppIntents metadata extraction notice.
 
+llama.cpp LAN validation (2026-10-01): the configured server at `mac.lab:11435`
+(resolving to `192.168.123.238`) responds to metadata-only command-line checks and
+reports a 4,096-token slot for the selected model. An app-native metadata test first
+failed with ATS `-1022`; the exact `mac.lab` HTTP exception now fixes that rejection.
+The rebuilt app then fails with URLSession `-1009` / underlying network error 50,
+with a satisfied Wi-Fi path. This is consistent with app-specific Local Network
+access being denied; it is not proof that the server is down. The current Debug
+configuration has App Sandbox disabled, so this is app-native networking validation,
+not a sandbox acceptance claim. The build and ten relevant offline tests pass.
+Successful live app access remains pending enabling AudioNotes in macOS Local Network
+settings and retrying. No source content or inference was sent by this live check.
+Llama.cpp transport errors now retain provider, endpoint, operation and URLSession
+code, with distinct ATS/DNS/timeout/TLS/network guidance; they no longer claim Ollama
+is unreachable. The new opt-in `LocalAILiveTests.nativeAppCanReadLlamaCppContext`
+requires `TEST_RUNNER_AUDIONOTES_LIVE_LLAMACPP=1`, plus
+`TEST_RUNNER_AUDIONOTES_LIVE_LLAMACPP_ADDRESS` and
+`TEST_RUNNER_AUDIONOTES_LIVE_LLAMACPP_MODEL`. It reads only `/props`.
+
 POST `/api/chat` uses non-streaming generation for summaries and NDJSON streaming for chat. `format` carries the existing provider-independent JSON schema; it is also included in the prompt. Temperature/top-p map to `options.temperature`/`top_p`; the output safety ceiling maps to `num_predict`; context maps to `num_ctx`. Ollama output is capped at the smaller of the requested ceiling and one quarter of context, with a 2,048-token default. OutputLength remains a separate requested detail instruction. `truncate:false` and `shift:false` request failure instead of silently dropping grounded context. `keep_alive:0` requests model release after generation. Ollama controls scheduling; hierarchy passes are sequential.
 
 Chat uses `StreamingJSONAnswerParser` to expose Markdown deltas, validates the complete JSON at completion, and resolves returned IDs against selected authoritative transcript/source snapshots. A truncated transport or invalid final structured answer fails rather than saving a completed answer. Numeric model timestamps never authorize local-summary links. Source citations retain authoritative audio timestamps, PDF pages, document ranges, and image anchors.
@@ -38,6 +56,61 @@ Vision is enabled only by reported `vision` capability, with at most two prepare
 The model context is the smaller of the configured budget and metadata, with a conservative 16,384-token fallback. Retrieval accounts for history, output reserve, instruction reserve, and image budget; payload construction checks the full text prompt/schema/output budget again. Approximate counts are budgeting only. Metadata can change between refresh and generation; a smaller newly reported window causes a useful error rather than truncation. Image token estimates cannot precisely predict every model's tokenizer. Very small context windows or unusually long individual source units can require a larger context/model.
 
 Ollama is never bundled, installed, launched, stopped, or repaired by AudioNotes. Pull behavior was reviewed; an in-app Ollama marketplace/pull UI is deliberately deferred. Use the official Ollama website/application to install models.
+
+llama.cpp request compatibility (2026-10-01): `/v1/chat/completions` uses
+`response_format: {"type":"json_object","schema":…}` with the full shared summary/chat
+schema. This is the schema-constrained form documented in the [official server API](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md#post-v1chatcompletions-openai-compatible-chat-completions-api),
+and avoids requiring support for the newer nested OpenAI `json_schema` wrapper.
+HTTP errors display the bounded `error.message` diagnostic; missing/non-JSON details
+use status-specific guidance without dumping the response body. No automatic retry,
+format relaxation, model switch, or cloud fallback is added.
+
+llama.cpp context budgeting (2026-10-01): unknown server metadata starts with a
+conservative 4,096-token descriptor, rather than the generic 100,000-token fallback.
+Summary preparation reads the selected model's per-slot `default_generation_settings.n_ctx`
+from [GET /props](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md#get-props-get-server-global-properties).
+Missing/invalid metadata fails before inference. Prompt sizing uses the same server's
+`/apply-template` and `/tokenize`, below the privacy boundary with redirects blocked;
+these requests produce no generation/cost records. A dropped connection (URLSession
+`-1005`) triggers one immediate retry for these read-only metadata/sizing operations,
+with cancellation and Local Only rechecked before the retry. Inference is not retried
+automatically because the server may have completed work before its response was lost.
+The error distinguishes a dropped connection from unavailable network access; `-1005`
+alone does not establish a Local Network permission denial. The server's `/health`
+and `/tokenize` endpoints responded to command-line checks with synthetic text on
+2026-10-01. The opt-in native app-hosted `/props` test also passed against
+`mac.lab:11435` with the selected model (one live test, Ollama/Whisper tests skipped).
+The build and 24 selected offline tests passed, including transient recovery,
+bounded persistent failure, cancellation, and no inference retry. Only the existing
+AppIntents metadata-extraction notices appeared. Successful app-native generation
+with a real transcript remains unverified.
+Every inference reserves 256 tokens
+of template slack plus an output ceiling capped at one quarter of the server context.
+OutputLength remains the requested final detail. Oversized source chunks are split into
+request-only text fragments retaining original IDs/locators; stored source text is
+unchanged. Initial groups, derivative notes and final synthesis are checked before
+inference. Derivative notes carry at most eight short authoritative anchors, further
+bounded by the context budget, and repeated anchors are deduplicated. Cancellation and
+Local Only checks apply to metadata, sizing, and every inference request. Live acceptance
+against the user's server remains pending. Offline tests cover a long Czech source in a
+simulated 4,096-token context, original text/locator preservation, final references and
+OutputLength, measured over-budget rejection, invalid metadata, privacy, usage, and 400
+diagnostics.
+
+Repeated llama.cpp sizing validation (2026-10-01): an app console log contained
+39 dropped HTTP requests (21 `/tokenize`, 18 `/apply-template`). A native app-hosted
+test with 150 synthetic source prompts reproduced 16 drops, all recovered by the
+bounded retry. Requesting `Connection: close` for HTTP metadata/sizing requests
+then completed the same 150 checks with zero HTTP drops in 12.4 seconds (baseline
+13.4 seconds). HTTPS keeps normal pooling; inference retains its existing transport
+and is never automatically retried. This is evidence of a connection-reuse
+compatibility issue, not proof of a specific server/router defect. The server
+responses advertised both `Connection: close` and `Keep-Alive`. The opt-in
+`nativeAppCanRepeatedlySizeLlamaCppPrompts` test sends synthetic text only and
+performs no inference. The build and selected offline/live suites passed (17 tests,
+including two skipped Ollama/Whisper live tests); only the existing AppIntents build
+notice appeared. macOS `nw_path_necp_check_for_updates` diagnostics still appeared
+during successful checks. Real-transcript generation remains manual acceptance.
 
 ## Whisper runtime and model management
 

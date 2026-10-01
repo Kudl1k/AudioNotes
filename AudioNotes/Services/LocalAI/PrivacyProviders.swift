@@ -13,6 +13,14 @@ import Foundation
     var executionLocation: ProviderExecutionLocation { base.executionLocation }
     var billingKind: BillingKind { base.billingKind }
     init(base: any LLMProvider, configuration: LocalAIConfiguration) { self.base = base; self.configuration = configuration }
+    func prepareForGeneration() async throws {
+        try configuration.policy.validate(executionLocation)
+        try await base.prepareForGeneration()
+    }
+    func summaryRequestFits(context: SourceSummaryContext, configuration: SummaryConfiguration) async throws -> Bool {
+        try self.configuration.policy.validate(executionLocation)
+        return try await base.summaryRequestFits(context: context, configuration: configuration)
+    }
     func generateSummary(transcript: Transcript, configuration: SummaryConfiguration) async throws -> Summary {
         try self.configuration.policy.validate(executionLocation)
         return try await base.generateSummary(transcript: transcript, configuration: configuration)

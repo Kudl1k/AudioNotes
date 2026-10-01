@@ -61,11 +61,7 @@ struct LLMModelCapabilities: Equatable, Sendable, Codable {
         case .ollama:
             return OllamaModelDescriptor(id: model, size: nil, vision: false, contextWindow: nil).capabilities(contextLimit: 16_384)
         case .llamaCpp:
-            var result = LLMModelCapabilities(defaultTemperature: 0.7)
-            var input = LLMInputCapabilities.known(model: model, provider: provider)
-            input.contextWindowTokens = 16_384
-            result.input = input
-            return result
+            return LLMModelCapabilities(defaultTemperature: 0.7)
         case .mock:
             return LLMModelCapabilities(
                 supportsTemperature: true,

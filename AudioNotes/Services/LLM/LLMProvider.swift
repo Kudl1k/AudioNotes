@@ -116,6 +116,8 @@ protocol LLMProvider: Sendable {
     var inputCapabilities: LLMInputCapabilities { get }
     var executionLocation: ProviderExecutionLocation { get }
     var billingKind: BillingKind { get }
+    func prepareForGeneration() async throws
+    func summaryRequestFits(context: SourceSummaryContext, configuration: SummaryConfiguration) async throws -> Bool
     func generateSourceSummary(context: SourceSummaryContext, configuration: SummaryConfiguration) async throws -> Summary
 
     func generateSummary(
@@ -130,6 +132,13 @@ protocol LLMProvider: Sendable {
 }
 
 extension LLMProvider {
+    func prepareForGeneration() async throws {}
+    func summaryRequestFits(context: SourceSummaryContext, configuration: SummaryConfiguration) async throws -> Bool {
+        let prompt = try context.prompt(configuration: configuration)
+        let reserve = min(8000, inputCapabilities.contextWindowTokens / 2)
+        return TranscriptTokenEstimator.estimate(prompt.systemMessage + prompt.userMessage)
+            + reserve + context.images.count * inputCapabilities.approximateTokensPerImage <= inputCapabilities.contextWindowTokens
+    }
     var isMock: Bool { id == .mock }
     var executionLocation: ProviderExecutionLocation { id == .mock ? .local : .cloud }
     var billingKind: BillingKind { BillingKind.resolve(provider: id.rawValue, authentication: authenticationMethod) }
