@@ -9,14 +9,24 @@ final class Recording {
     /// A relative filename keeps the library portable across sandbox locations.
     var audioFileName: String
     var originalFileName: String
+    var project: Project?
     var duration: TimeInterval
 
     @Relationship(deleteRule: .cascade, inverse: \Transcript.recording)
     var transcript: Transcript?
+    @Relationship(deleteRule: .cascade, inverse: \Transcript.historicalRecording)
+    var transcriptHistory: [Transcript] = []
     @Relationship(deleteRule: .cascade, inverse: \Summary.recording)
     var summary: Summary?
+    @Relationship(deleteRule: .cascade, inverse: \Summary.historicalRecording)
+    var summaryHistory: [Summary] = []
+    @Relationship(deleteRule: .cascade, inverse: \GenerationRecord.recording)
+    var generationRecords: [GenerationRecord] = []
     @Relationship(deleteRule: .cascade, inverse: \ChatSession.recording)
     var chatSessions: [ChatSession] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \RecordingSource.recording)
+    var sources: [RecordingSource] = []
 
     init(id: UUID = UUID(), title: String, audioFileName: String,
          originalFileName: String, duration: TimeInterval, importedAt: Date = .now) {

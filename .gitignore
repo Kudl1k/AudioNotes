@@ -4,3 +4,6 @@ build/
 *.xcresult
 xcuserdata/
 *.xcuserstate
+
+# Developer Google Desktop OAuth configuration (copied into the app by Xcode)
+AudioNotes/Resources/GoogleOAuth.json

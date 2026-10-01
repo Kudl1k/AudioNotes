@@ -4,7 +4,7 @@ import SwiftData
 struct LibraryStorage: Sendable {
     let rootURL: URL
 
-    init(rootURL: URL = URL.applicationSupportDirectory.appending(path: "AudioNotes", directoryHint: .isDirectory)) {
+    init(rootURL: URL = AppStorageLocations.applicationSupport().appending(path: "AudioNotes", directoryHint: .isDirectory)) {
         self.rootURL = rootURL
     }
 
@@ -17,8 +17,9 @@ struct LibraryStorage: Sendable {
     @MainActor
     func makeContainer(inMemory: Bool = false) throws -> ModelContainer {
         let schema = Schema([
-            Recording.self, Transcript.self, TranscriptSegment.self,
-            Summary.self, ChatSession.self, ChatMessage.self
+            Project.self, Recording.self, RecordingSource.self, SourceTextUnit.self, Transcript.self, TranscriptSegment.self,
+            Summary.self, ChatSession.self, ChatMessage.self,
+            AIPreset.self, GenerationRecord.self
         ])
         let configuration: ModelConfiguration
         if inMemory {

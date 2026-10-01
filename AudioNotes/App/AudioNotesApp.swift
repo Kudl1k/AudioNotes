@@ -1,61 +1,159 @@
-import SwiftData
 import SwiftUI
+import SwiftData
 
 @main
 struct AudioNotesApp: App {
+#if DEBUG
+    @NSApplicationDelegateAdaptor(PerformanceFixtureApplicationDelegate.self) private var fixtureDelegate
+#endif
+    @State private var services = AppServices()
     private let container: ModelContainer?
-    private let startupError: String?
 
     init() {
         do {
-            container = try LibraryStorage().makeContainer()
-            startupError = nil
+#if DEBUG
+            let isTestHost = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+                || NSClassFromString("XCTestCase") != nil
+            if isTestHost || ProcessInfo.processInfo.arguments.contains("--performance-fixtures") || ProcessInfo.processInfo.arguments.contains("--performance-empty-library") {
+                container = try LibraryStorage().makeContainer(inMemory: true)
+                return
+            }
+#endif
+            let schema = Schema([
+                Project.self, Recording.self, RecordingSource.self, SourceTextUnit.self,
+                Transcript.self,
+                TranscriptSegment.self,
+                Summary.self,
+                ChatSession.self,
+                ChatMessage.self,
+                AIPreset.self,
+                GenerationRecord.self
+            ])
+            let support = AppStorageLocations.applicationSupport()
+            try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+            let database = ModelConfiguration(schema: schema, url: support.appending(path: "default.store"))
+            let openedContainer = try ModelContainer(for: schema, configurations: [database])
+            try? UsageRepository().markInterruptedOperations(context: ModelContext(openedContainer))
+            try SourceCompatibilityMigration().backfill(context: ModelContext(openedContainer))
+            container = openedContainer
         } catch {
             container = nil
-            startupError = error.localizedDescription
+            assertionFailure("Failed to initialize SwiftData container: \(error)")
         }
     }
 
     var body: some Scene {
-        WindowGroup("AudioNotes") {
+        WindowGroup("AudioNotes", id: "library") {
             if let container {
-                LibraryView()
-                    .modelContainer(container)
-                    .frame(minWidth: 760, minHeight: 500)
+#if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--performance-fixtures") {
+                    PerformanceFixtureLibrary().modelContainer(container).environment(services.llmConfiguration.localAI).frame(minWidth: 760, minHeight: 500)
+                } else {
+                    library(container: container)
+                }
+#else
+                library(container: container)
+#endif
             } else {
                 ContentUnavailableView {
                     Label("Library could not be opened", systemImage: "externaldrive.badge.exclamationmark")
                 } description: {
-                    Text(startupError ?? "An unknown storage error occurred.")
-                    Text("Quit and reopen AudioNotes after checking access to Application Support.")
+                    Text("AudioNotes could not initialize its local database.")
                 }
-                .frame(width: 550, height: 300)
+                .frame(minWidth: 760, minHeight: 500)
             }
         }
         .defaultSize(width: 1100, height: 750)
-        .commands { ImportCommands() }
+        .commands {
+            ImportCommands()
+            ExportCommands()
+            SidebarCommands()
+        }
+        Settings {
+            if let container {
+                ProviderSettingsView(
+                    transcriptionConfig: services.configuration,
+                    llmConfig: services.llmConfiguration,
+                    credentials: services.credentials,
+                    chatGPTAuth: services.chatGPTAuthService,
+                    tokenRefresher: services.chatGPTTokenRefresher,
+                    modelsClient: services.modelsClient,
+                    googleOAuth: services.googleGeminiOAuth,
+                    whisperStore: services.whisperStore,
+                    localAISettings: services.localAISettings
+                )
+                .modelContainer(container)
+                .environment(services.llmConfiguration.localAI)
+                .frame(minWidth: 580, minHeight: 520)
+            } else {
+                ContentUnavailableView("Settings unavailable", systemImage: "externaldrive.badge.exclamationmark",
+                                       description: Text("AudioNotes could not initialize its local database."))
+                    .frame(minWidth: 580, minHeight: 520)
+            }
+        }
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unifiedCompact)
     }
+    private func library(container: ModelContainer) -> some View {
+        LibraryView(transcriptionResolver: services.transcriptionResolver, llmResolver: services.llmResolver)
+            .modelContainer(container)
+            .environment(services.llmConfiguration.localAI)
+            .frame(minWidth: 760, minHeight: 500)
+    }
+
 }
+
+private struct NewProjectKey: FocusedValueKey { typealias Value = () -> Void }
 
 private struct ImportAudioKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+struct ExportKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
+    var newProject: (() -> Void)? {
+        get { self[NewProjectKey.self] }
+        set { self[NewProjectKey.self] = newValue }
+    }
+
     var importAudio: (() -> Void)? {
         get { self[ImportAudioKey.self] }
         set { self[ImportAudioKey.self] = newValue }
+    }
+
+    var exportAction: (() -> Void)? {
+        get { self[ExportKey.self] }
+        set { self[ExportKey.self] = newValue }
     }
 }
 
 private struct ImportCommands: Commands {
     @FocusedValue(\.importAudio) private var importAudio
+    @FocusedValue(\.newProject) private var newProject
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("Import Audio…") { importAudio?() }
-                .keyboardShortcut("i", modifiers: .command)
+            Button("New Project…") { newProject?() }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .disabled(newProject == nil)
+            Button("Import…") { importAudio?() }
+                .keyboardShortcut("o", modifiers: .command)
                 .disabled(importAudio == nil)
+        }
+    }
+}
+
+private struct ExportCommands: Commands {
+    @FocusedValue(\.exportAction) private var exportAction
+
+    var body: some Commands {
+        CommandGroup(after: .importExport) {
+            Button("Export…") { exportAction?() }
+                .keyboardShortcut("e", modifiers: .command)
+                .disabled(exportAction == nil)
         }
     }
 }

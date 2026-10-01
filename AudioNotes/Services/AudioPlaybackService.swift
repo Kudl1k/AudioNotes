@@ -13,6 +13,8 @@ final class AudioPlaybackService {
     @ObservationIgnored private var progressTask: Task<Void, Never>?
 
     func load(url: URL) {
+        let interval = PerformanceSignposts.begin("Audio playback load")
+        defer { PerformanceSignposts.end("Audio playback load", interval) }
         stop()
         errorMessage = nil
         do {
