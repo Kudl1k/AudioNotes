@@ -85,8 +85,12 @@ final class ProjectChatViewModel {
     func refreshCoverage() {
         var value = RetrievalCoverage(), ids = Set<UUID>()
         func include(_ source: RecordingSource) {
-            if source.status == .processing || source.status == .imported { value.processingSources += 1; return }
-            if source.status == .failed || source.status == .unsupported { value.failedSources += 1; return }
+            let status = source.status
+            switch status {
+            case .processing, .imported: value.processingSources += 1; return
+            case .failed, .unsupported: value.failedSources += 1; return
+            case .ready, .partial: break
+            }
             guard source.isContextReady else { return }
             let hasText = source.type == .audio ? source.transcript?.segments.contains { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } == true :
                 source.textUnits.contains { $0.locator != nil && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
