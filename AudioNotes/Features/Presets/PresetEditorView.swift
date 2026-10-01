@@ -105,10 +105,14 @@ struct PresetEditorView: View {
                             Text("Anthropic Claude").tag(Optional(LLMProviderID.anthropic))
                             Text("Google Gemini").tag(Optional(LLMProviderID.gemini))
                             Text("Ollama").tag(Optional(LLMProviderID.ollama))
+                            Text("llama.cpp Server").tag(Optional(LLMProviderID.llamaCpp))
                         }
 
                         if selectedProvider == .ollama, let localConfiguration {
                             OllamaModelPicker(title: "Model override", selection: $selectedModel, configuration: localConfiguration)
+                        }
+                        if selectedProvider == .llamaCpp, let localConfiguration {
+                            TextField("Loaded model override", text: $selectedModel, prompt: Text(localConfiguration.llamaCppModel))
                         }
                         if selectedProvider == .openAI || selectedProvider == .anthropic || selectedProvider == .gemini {
                             TextField("Model Override (Optional)", text: $selectedModel, prompt: Text("e.g. gpt-4o, o3-mini"))

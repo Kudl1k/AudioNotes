@@ -66,6 +66,12 @@ final class LocalAIConfiguration {
     var ollamaAddress: String {
         didSet { defaults.set(ollamaAddress, forKey: "ai.ollama.address"); models = [] }
     }
+    var llamaCppAddress: String {
+        didSet { defaults.set(llamaCppAddress, forKey: "ai.llamaCpp.address") }
+    }
+    var llamaCppModel: String {
+        didSet { defaults.set(llamaCppModel, forKey: "ai.llamaCpp.model") }
+    }
     var contextTokens: Int { didSet { defaults.set(contextTokens, forKey: "ai.ollama.context") } }
     var summaryModel: String { didSet { defaults.set(summaryModel, forKey: "ai.ollama.summaryModel") } }
     var chatModel: String { didSet { defaults.set(chatModel, forKey: "ai.ollama.chatModel") } }
@@ -77,6 +83,8 @@ final class LocalAIConfiguration {
         self.defaults = defaults
         localOnly = defaults.bool(forKey: "ai.localOnly")
         ollamaAddress = defaults.string(forKey: "ai.ollama.address") ?? "http://localhost:11434"
+        llamaCppAddress = defaults.string(forKey: "ai.llamaCpp.address") ?? "http://localhost:8080"
+        llamaCppModel = defaults.string(forKey: "ai.llamaCpp.model") ?? "local-model"
         let savedContext = defaults.integer(forKey: "ai.ollama.context")
         contextTokens = savedContext > 0 ? savedContext : 16_384
         summaryModel = defaults.string(forKey: "ai.ollama.summaryModel") ?? ""

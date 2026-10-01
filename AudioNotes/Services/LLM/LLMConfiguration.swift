@@ -175,6 +175,7 @@ final class LLMConfiguration {
     var summaryCapabilities: LLMModelCapabilities {
         if summaryProvider == .anthropic { return Self.claudeCapabilities }
         if summaryProvider == .ollama { return localAI.capabilities(model: localAI.summaryModel) }
+        if summaryProvider == .llamaCpp { return LLMModelCapabilities.capabilities(for: localAI.llamaCppModel, provider: .llamaCpp) }
         let model = summaryProvider == .openAI
             ? (summaryAuthMethod == .chatGPT ? summaryChatGPTModel : summaryOpenAIModel.rawValue)
             : LLMProviderID.defaultProvider.rawValue
@@ -190,6 +191,7 @@ final class LLMConfiguration {
     var chatCapabilities: LLMModelCapabilities {
         if chatProvider == .anthropic { return Self.claudeCapabilities }
         if chatProvider == .ollama { return localAI.capabilities(model: localAI.chatModel) }
+        if chatProvider == .llamaCpp { return LLMModelCapabilities.capabilities(for: localAI.llamaCppModel, provider: .llamaCpp) }
         let model = chatProvider == .openAI
             ? (chatAuthMethod == .chatGPT ? chatChatGPTModel : chatOpenAIModel.rawValue)
             : LLMProviderID.defaultProvider.rawValue

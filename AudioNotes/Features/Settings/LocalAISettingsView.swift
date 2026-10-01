@@ -27,6 +27,15 @@ struct LocalAISettingsView: View {
                 Text("Uses the smaller of this budget and the model's reported context window. Larger contexts require more memory.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("llama.cpp Server") {
+                TextField("Server", text: $configuration.llamaCppAddress)
+                Text((try? OllamaEndpoint(configuration.llamaCppAddress))?.executionLocation.title ?? "Invalid server address")
+                    .font(.caption).foregroundStyle(.secondary)
+                TextField("Loaded model name", text: $configuration.llamaCppModel)
+                Text("Connects to llama.cpp's OpenAI-compatible /v1/chat/completions endpoint. Start llama-server separately and load a model before use. AudioNotes does not install or launch it. Chat responses arrive when generation completes.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Link("llama.cpp server documentation", destination: URL(string: "https://github.com/ggml-org/llama.cpp/tree/master/examples/server")!)
+            }
             Section("Local Whisper · Runs on this Mac") {
                 if LocalAISettingsViewModel.supportsWhisper {
                     Text("Core ML models are stored in AudioNotes Application Support. Smaller files use less disk space. Download size is shown before installation.")

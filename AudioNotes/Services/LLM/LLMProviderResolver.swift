@@ -60,6 +60,9 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
             return configuration.cachedClaudeModels.map { .init(id: $0.id, title: $0.displayName) }
         case .ollama:
             return configuration.localAI.models.map { .init(id: $0.id, title: $0.id) }
+        case .llamaCpp:
+            let model = configuration.localAI.llamaCppModel
+            return model.isEmpty ? [] : [.init(id: model, title: model)]
         case .mock, .gemini: return []
         }
     }
@@ -68,6 +71,8 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
         switch provider ?? configuration.summaryProvider {
         case .ollama:
             return OllamaLLMProvider(model: model ?? configuration.localAI.summaryModel, configuration: configuration.localAI)
+        case .llamaCpp:
+            return LlamaCppLLMProvider(model: model ?? configuration.localAI.llamaCppModel, configuration: configuration.localAI)
         case .mock:
 #if DEBUG
             return MockLLMProvider()
@@ -107,6 +112,8 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
         switch configuration.chatProvider {
         case .ollama:
             return OllamaLLMProvider(model: configuration.localAI.chatModel, configuration: configuration.localAI)
+        case .llamaCpp:
+            return LlamaCppLLMProvider(model: configuration.localAI.llamaCppModel, configuration: configuration.localAI)
         case .mock:
 #if DEBUG
             return MockLLMProvider()

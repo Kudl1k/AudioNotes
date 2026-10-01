@@ -6,6 +6,7 @@ enum LLMProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
     case anthropic
     case gemini
     case ollama
+    case llamaCpp
 
     static var selectable: [Self] {
 #if DEBUG
@@ -30,6 +31,7 @@ enum LLMProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
         case .anthropic: "Anthropic Claude"
         case .gemini: "Google Gemini"
         case .ollama: "Ollama"
+        case .llamaCpp: "llama.cpp Server"
         }
     }
 }

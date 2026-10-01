@@ -7,6 +7,8 @@ Local Whisper processes imported audio on this Mac using downloaded models. Loca
 
 Ollama receives content at the server address you configure. A remote server is external processing. Even a local Ollama server can offer cloud-backed models. Local Only checks model metadata and blocks external/cloud-backed or unverified execution. The server itself must be trusted. Local Only cannot recall content already sent; cancel active external requests before enabling it.
 
+llama.cpp receives content at the configured `llama-server` address. Local Only permits only exact loopback hosts; a LAN or other remote server is blocked while that setting is enabled. AudioNotes does not verify the server binary or model provenance, so use a server you trust.
+
 Cloud providers receive the audio or transcript/source excerpts and conversation history needed for the operation you request. Selected recording sources and project membership constrain context. Summaries may send multiple requests for long material. Optional provider-supported image input requires separate permission. Provider policies and billing apply. AudioNotes has no Gemini generation implementation in this version; Anthropic uses your separately installed Claude Code tool. Consumer subscriptions do not automatically include API access.
 
 Network activity outside AI
