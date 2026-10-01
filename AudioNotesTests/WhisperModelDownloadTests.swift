@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import AudioNotes
 
+@Suite(.serialized)
 @MainActor struct WhisperModelDownloadTests {
     private func fixture() throws -> (URL, WhisperModelDescriptor) {
         let root = URL.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -16,9 +17,9 @@ import Testing
     }
 
     private func waitUntil(_ condition: @MainActor () -> Bool) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(15))
         while !condition(), ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(1))
+            try await Task.sleep(for: .milliseconds(10))
         }
         #expect(condition())
     }

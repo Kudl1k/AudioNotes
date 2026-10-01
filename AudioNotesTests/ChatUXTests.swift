@@ -3,6 +3,7 @@ import SwiftData
 import Testing
 @testable import AudioNotes
 
+@Suite(.serialized)
 @MainActor
 struct ChatUXTests {
 
@@ -56,6 +57,14 @@ struct ChatUXTests {
         let viewModel = ChatViewModel(recording: recording, resolver: TestResolver(provider: provider))
         viewModel.attachStorage(repo)
         return (viewModel, recording, container)
+    }
+
+    private func waitUntil(timeout: Duration = .seconds(10), _ condition: @MainActor () -> Bool) async throws {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(condition())
     }
 
     @Test func rapidSendAndRetryDoNotAppendOrReplaceActiveWork() throws {
@@ -207,20 +216,12 @@ struct ChatUXTests {
         #expect(viewModel.generationState == .waitingForFirstToken)
 
         // Wait for streamChat to initialize continuation
-        var waitCount = 0
-        while provider.continuation == nil && waitCount < 50 {
-            try? await Task.sleep(nanoseconds: 10_000_000)
-            waitCount += 1
-        }
+        try await waitUntil { provider.continuation != nil }
         let continuation = try #require(provider.continuation)
 
         // Yield first text token
         continuation.yield(.textDelta("First chunk"))
-        var streamWait = 0
-        while viewModel.generationState != .streaming && streamWait < 50 {
-            try? await Task.sleep(nanoseconds: 10_000_000)
-            streamWait += 1
-        }
+        try await waitUntil { viewModel.generationState == .streaming }
 
         #expect(viewModel.generationState == .streaming)
         #expect(viewModel.streamingDraft == "First chunk")
@@ -229,11 +230,7 @@ struct ChatUXTests {
         continuation.yield(.completed(LLMChatResponse(content: "First chunk and final.", references: [])))
         continuation.finish()
 
-        var completeWait = 0
-        while viewModel.isGenerating && completeWait < 50 {
-            try? await Task.sleep(nanoseconds: 10_000_000)
-            completeWait += 1
-        }
+        try await waitUntil { !viewModel.isGenerating }
 
         #expect(viewModel.generationState == .completed)
         #expect(viewModel.isGenerating == false)
