@@ -7,6 +7,20 @@ enum LLMProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
     case gemini
     case ollama
 
+    static var selectable: [Self] {
+#if DEBUG
+        allCases
+#else
+        allCases.filter { $0 != .mock }
+#endif
+    }
+    static var defaultProvider: Self {
+#if DEBUG
+        .mock
+#else
+        .openAI
+#endif
+    }
     var id: Self { self }
 
     var title: String {

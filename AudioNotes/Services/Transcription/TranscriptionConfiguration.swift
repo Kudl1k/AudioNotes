@@ -3,6 +3,20 @@ import Observation
 
 enum TranscriptionProviderID: String, CaseIterable, Identifiable, Sendable {
     case mock, openAI, localWhisper
+    static var selectable: [Self] {
+#if DEBUG
+        allCases
+#else
+        allCases.filter { $0 != .mock }
+#endif
+    }
+    static var defaultProvider: Self {
+#if DEBUG
+        .mock
+#else
+        .openAI
+#endif
+    }
     var id: Self { self }
     var title: String { switch self { case .mock: "Mock (development)"; case .openAI: "OpenAI"; case .localWhisper: "Local Whisper" } }
 }
@@ -93,7 +107,7 @@ final class TranscriptionConfiguration {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        selectedProvider = TranscriptionProviderID(rawValue: defaults.string(forKey: "transcription.provider") ?? "") ?? .mock
+        selectedProvider = TranscriptionProviderID(rawValue: defaults.string(forKey: "transcription.provider") ?? "") ?? .defaultProvider
         let storedModel = defaults.string(forKey: "transcription.openai.model")
         if let storedModel, storedModel != "unknown", !storedModel.isEmpty {
             openAIModel = OpenAITranscriptionModel(rawValue: storedModel)

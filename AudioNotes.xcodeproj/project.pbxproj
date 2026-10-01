@@ -10,6 +10,7 @@
 		AA0000000000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000010 /* Assets.xcassets */; };
 		AA0000000000000000000013 /* AudioNotes.icon in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000012 /* AudioNotes.icon */; };
 		AB1000000000000000000001 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = AB1000000000000000000002 /* WhisperKit */; };
+		AC1300000000000000000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = AC1300000000000000000002 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -22,12 +23,23 @@
 		};
 /* End PBXContainerItemProxy section */
 
+
+
 /* Begin PBXFileReference section */
 		AA0000000000000000000001 /* AudioNotesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = AudioNotesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000012 /* AudioNotes.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.icon; path = AudioNotes.icon; sourceTree = SOURCE_ROOT; };
+		AC1300000000000000000004 /* Configuration/App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration/App.xcconfig; sourceTree = SOURCE_ROOT; };
 		E817569F306D0BDF00E1DF07 /* AudioNotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioNotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+        AC1300000000000000000007 /* Excluded developer OAuth client config */ = {
+            isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+            membershipExceptions = ("Resources/GoogleOAuth.json", );
+            target = E817569E306D0BDF00E1DF07 /* AudioNotes */;
+        };
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AA0000000000000000000002 /* AudioNotesTests */ = {
@@ -37,6 +49,7 @@
 		};
 		E81756A1306D0BDF00E1DF07 /* AudioNotes */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+            exceptions = (AC1300000000000000000007 /* Excluded developer OAuth client config */, );
 			path = AudioNotes;
 			sourceTree = "<group>";
 		};
@@ -52,6 +65,7 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				AB1000000000000000000001 /* WhisperKit in Frameworks */,
+				AC1300000000000000000001 /* Sparkle in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -61,6 +75,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000010 /* Assets.xcassets */,
+				AC1300000000000000000004 /* Configuration/App.xcconfig */,
 				AA0000000000000000000012 /* AudioNotes.icon */,
 				E81756A1306D0BDF00E1DF07 /* AudioNotes */,
 				AA0000000000000000000002 /* AudioNotesTests */,
@@ -125,6 +140,7 @@
 			name = AudioNotes;
 			packageProductDependencies = (
 				AB1000000000000000000002 /* WhisperKit */,
+				AC1300000000000000000002 /* Sparkle */,
 			);
 			productName = AudioNotes;
 			productReference = E817569F306D0BDF00E1DF07 /* AudioNotes.app */;
@@ -156,6 +172,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AB1000000000000000000003 /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
+				AC1300000000000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E81756A0306D0BDF00E1DF07 /* Products */;
@@ -365,14 +382,15 @@
 		};
 		E81756AB306D0BE000E1DF07 /* Debug configuration for PBXNativeTarget "AudioNotes" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = AC1300000000000000000004 /* Configuration/App.xcconfig */;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AudioNotes;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = Configuration/Debug.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4YU8YPQY6W;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
@@ -381,13 +399,10 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Configuration/AudioNotes-Info.plist";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = cz.kudladev.AudioNotes;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -400,29 +415,27 @@
 		};
 		E81756AC306D0BE000E1DF07 /* Release configuration for PBXNativeTarget "AudioNotes" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = AC1300000000000000000004 /* Configuration/App.xcconfig */;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AudioNotes;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = Configuration/Release.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4YU8YPQY6W;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				ENABLE_PREVIEWS = YES;
+				ENABLE_PREVIEWS = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Configuration/AudioNotes-Info.plist";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = cz.kudladev.AudioNotes;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -471,6 +484,14 @@
 				version = 1.1.0;
 			};
 		};
+		AC1300000000000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -478,6 +499,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AB1000000000000000000003 /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
 			productName = WhisperKit;
+		};
+		AC1300000000000000000002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AC1300000000000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

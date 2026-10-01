@@ -1,0 +1,10 @@
+#include "Version.xcconfig"
+PRODUCT_BUNDLE_IDENTIFIER = cz.stepankudlacek.audionotes
+DEVELOPMENT_TEAM = 829XTK67RJ
+INFOPLIST_KEY_CFBundleDisplayName = AudioNotes
+INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.productivity
+INFOPLIST_KEY_NSHumanReadableCopyright = © 2026 Štěpán Kudláček
+// Leave unset until GitHub repository/Pages/feed/asset/Sparkle verification passes.
+AUDIONOTES_UPDATE_FEED_URL =
+AUDIONOTES_UPDATE_PUBLIC_KEY =
+#include? "Release.local.xcconfig"

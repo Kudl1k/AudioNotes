@@ -37,6 +37,8 @@ final class WhisperModelFileDownloader: WhisperModelFileDownloading, @unchecked 
     init() {
         let config = URLSessionConfiguration.ephemeral
         config.urlCache = nil; config.httpCookieStorage = nil
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 3600
         session = URLSession(configuration: config)
     }
     deinit { session.invalidateAndCancel() }

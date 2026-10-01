@@ -46,6 +46,10 @@ public final class DebugLogService: @unchecked Sendable {
     }
 
     public func log(level: DebugLogLevel, subsystem: String, message: String) {
+#if !DEBUG
+        // Free-form messages can contain private payloads; production never records them.
+        return
+#else
         let sanitized = Self.redact(message)
         let entry = DebugLogEntry(level: level, subsystem: subsystem, message: sanitized)
         lock.lock()
@@ -54,6 +58,7 @@ public final class DebugLogService: @unchecked Sendable {
             entries.removeFirst(entries.count - maxEntries)
         }
         lock.unlock()
+#endif
     }
 
     public func debug(subsystem: String, message: String) {

@@ -177,7 +177,7 @@ final class LLMConfiguration {
         if summaryProvider == .ollama { return localAI.capabilities(model: localAI.summaryModel) }
         let model = summaryProvider == .openAI
             ? (summaryAuthMethod == .chatGPT ? summaryChatGPTModel : summaryOpenAIModel.rawValue)
-            : "mock"
+            : LLMProviderID.defaultProvider.rawValue
         var capabilities = LLMModelCapabilities.capabilities(for: model, provider: summaryProvider)
         // The ChatGPT-plan Responses endpoint currently rejects max_output_tokens.
         // Keep the saved value intact so switching back to API-key auth restores it.
@@ -192,7 +192,7 @@ final class LLMConfiguration {
         if chatProvider == .ollama { return localAI.capabilities(model: localAI.chatModel) }
         let model = chatProvider == .openAI
             ? (chatAuthMethod == .chatGPT ? chatChatGPTModel : chatOpenAIModel.rawValue)
-            : "mock"
+            : LLMProviderID.defaultProvider.rawValue
         var capabilities = LLMModelCapabilities.capabilities(for: model, provider: chatProvider)
         if chatProvider == .openAI && chatAuthMethod == .chatGPT {
             capabilities.supportsMaxOutputTokens = false
@@ -221,7 +221,7 @@ final class LLMConfiguration {
 
         // Summary Provider
         let sumProviderRaw = defaults.string(forKey: "llm.summary.provider") ?? defaults.string(forKey: "llm.provider") ?? ""
-        let resolvedSummaryProvider = LLMProviderID(rawValue: sumProviderRaw) ?? .mock
+        let resolvedSummaryProvider = LLMProviderID(rawValue: sumProviderRaw) ?? .defaultProvider
         summaryProvider = resolvedSummaryProvider
 
         // Summary Auth Method

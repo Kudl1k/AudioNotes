@@ -7,40 +7,9 @@ struct AudioNotesApp: App {
     @NSApplicationDelegateAdaptor(PerformanceFixtureApplicationDelegate.self) private var fixtureDelegate
 #endif
     @State private var services = AppServices()
-    private let container: ModelContainer?
-
-    init() {
-        do {
-#if DEBUG
-            let isTestHost = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-                || NSClassFromString("XCTestCase") != nil
-            if isTestHost || ProcessInfo.processInfo.arguments.contains("--performance-fixtures") || ProcessInfo.processInfo.arguments.contains("--performance-empty-library") {
-                container = try LibraryStorage().makeContainer(inMemory: true)
-                return
-            }
-#endif
-            let schema = Schema([
-                Project.self, Recording.self, RecordingSource.self, SourceTextUnit.self,
-                Transcript.self,
-                TranscriptSegment.self,
-                Summary.self,
-                ChatSession.self,
-                ChatMessage.self,
-                AIPreset.self,
-                GenerationRecord.self
-            ])
-            let support = AppStorageLocations.applicationSupport()
-            try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
-            let database = ModelConfiguration(schema: schema, url: support.appending(path: "default.store"))
-            let openedContainer = try ModelContainer(for: schema, configurations: [database])
-            try? UsageRepository().markInterruptedOperations(context: ModelContext(openedContainer))
-            try SourceCompatibilityMigration().backfill(context: ModelContext(openedContainer))
-            container = openedContainer
-        } catch {
-            container = nil
-            assertionFailure("Failed to initialize SwiftData container: \(error)")
-        }
-    }
+    @State private var startup = LibraryStartup()
+    @StateObject private var updates = UpdateService(enabled: !BuildEnvironment.isDevelopmentHost)
+    private var container: ModelContainer? { startup.container }
 
     var body: some Scene {
         WindowGroup("AudioNotes", id: "library") {
@@ -55,12 +24,7 @@ struct AudioNotesApp: App {
                 library(container: container)
 #endif
             } else {
-                ContentUnavailableView {
-                    Label("Library could not be opened", systemImage: "externaldrive.badge.exclamationmark")
-                } description: {
-                    Text("AudioNotes could not initialize its local database.")
-                }
-                .frame(minWidth: 760, minHeight: 500)
+                LibraryRecoveryView(startup: startup)
             }
         }
         .defaultSize(width: 1100, height: 750)
@@ -68,6 +32,7 @@ struct AudioNotesApp: App {
             ImportCommands()
             ExportCommands()
             SidebarCommands()
+            ReleaseCommands(updates: updates, startup: startup)
         }
         Settings {
             if let container {
@@ -80,7 +45,8 @@ struct AudioNotesApp: App {
                     modelsClient: services.modelsClient,
                     googleOAuth: services.googleGeminiOAuth,
                     whisperStore: services.whisperStore,
-                    localAISettings: services.localAISettings
+                    localAISettings: services.localAISettings,
+                    updates: updates
                 )
                 .modelContainer(container)
                 .environment(services.llmConfiguration.localAI)
@@ -99,6 +65,7 @@ struct AudioNotesApp: App {
             .modelContainer(container)
             .environment(services.llmConfiguration.localAI)
             .frame(minWidth: 760, minHeight: 500)
+            .modifier(WelcomePresentation())
     }
 
 }

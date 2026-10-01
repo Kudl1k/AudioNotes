@@ -123,7 +123,7 @@ actor ChatGPTResponsesClient {
 
         DebugLogService.shared.info(
             subsystem: "ChatGPTResponsesClient",
-            message: "Stream completed: events=\(eventCount), length=\(accumulatedText.count), completed=\(completed)"
+            message: "Provider response could not be processed"
         )
 
         guard completed || !accumulatedText.isEmpty else {
@@ -149,7 +149,7 @@ actor ChatGPTResponsesClient {
         } catch {
             DebugLogService.shared.error(
                 subsystem: "ChatGPTResponsesClient",
-                message: "Failed to decode summary response JSON: \(error.localizedDescription)\nRaw text: \(accumulatedText)"
+                message: "Provider response could not be processed"
             )
             throw ProviderUsageError.preserving(LLMError.invalidResponse, usage: reportedUsage)
         }
@@ -295,7 +295,7 @@ actor ChatGPTResponsesClient {
         let errorBody = String(data: errorData, encoding: .utf8) ?? ""
         DebugLogService.shared.error(
             subsystem: "ChatGPTResponsesClient",
-            message: "HTTP error \(statusCode): \(errorBody)"
+            message: "Provider HTTP request rejected"
         )
 
         var extractedMessage: String?
@@ -337,7 +337,7 @@ actor ChatGPTResponsesClient {
 
         DebugLogService.shared.error(
             subsystem: "ChatGPTResponsesClient",
-            message: "Stream failed: \(msg) (code: \(code ?? "nil"))"
+            message: "Provider stream failed"
         )
 
         if code == "subscription_sharing_usage_limit_exceeded" || code?.contains("usage_limit") == true {

@@ -69,7 +69,11 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
         case .ollama:
             return OllamaLLMProvider(model: model ?? configuration.localAI.summaryModel, configuration: configuration.localAI)
         case .mock:
+#if DEBUG
             return MockLLMProvider()
+#else
+            return UnavailableLLMProvider(providerID: .mock)
+#endif
         case .anthropic:
             return ClaudeCLILLMProvider(model: model ?? configuration.summaryClaudeModel,
                                         client: ClaudeCLIClient(executable: configuration.claudeExecutablePath))
@@ -104,7 +108,11 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
         case .ollama:
             return OllamaLLMProvider(model: configuration.localAI.chatModel, configuration: configuration.localAI)
         case .mock:
+#if DEBUG
             return MockLLMProvider()
+#else
+            return UnavailableLLMProvider(providerID: .mock)
+#endif
         case .anthropic:
             return ClaudeCLILLMProvider(model: configuration.chatClaudeModel,
                                         client: ClaudeCLIClient(executable: configuration.claudeExecutablePath))

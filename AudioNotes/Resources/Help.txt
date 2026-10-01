@@ -1,0 +1,28 @@
+Getting started
+Import a local audio file with File → Import (⌘O), or create a project and add PDF, image, TXT or Markdown files. AudioNotes keeps managed copies. PDF text and image OCR are extracted locally. OCR may contain mistakes. No microphone permission is needed because this version imports recordings rather than recording them.
+
+AI setup
+Choose transcription and generation providers independently in Settings. OpenAI API use needs an API key and may incur metered charges. The implemented ChatGPT sign-in path is separate. Anthropic currently requires an existing Claude Code installation/account; this optional workflow is not a clean-machine native API integration. Gemini generation is unavailable. You can import, organize, read and export without an AI provider.
+
+Local AI
+Download a Local Whisper model in Settings → Providers → Local AI. Downloads show size/progress and can be cancelled/retried; supported native transcription requires Apple Silicon. Ollama must be installed and running separately, with a compatible model. Local Only blocks cloud providers, external servers and cloud-backed/unverified Ollama models. Download models before going offline. Local semantic retrieval and project-generated study notes are not available in this checkout.
+
+Projects and chat
+Projects group recordings and shared documents. Recording Chat stays within one recording. Project Chat retrieves selected current project evidence and keeps a persistent history. Citation controls open trusted original audio/page/image/text locations. Removed or moved evidence can become unavailable; historical prose remains. Moving recordings changes membership without reimporting audio.
+
+Export
+Use Export to create Markdown or PDF from the current recording. Project Chat supports Markdown export. Review OCR/transcription/AI output before relying on it. Export files are saved to your chosen location. Exporting readable output is not a complete library backup.
+
+Updates
+Install by dragging AudioNotes from the DMG into Applications, then launch from Applications. When configured, AudioNotes → Check for Updates uses Sparkle to verify and install updates. Automatic checks are optional in Settings. Updates preserve library files, settings, Keychain credentials and local models. Wait for active work to finish before installing an update. An unsigned development build cannot provide production update acceptance.
+
+Backup and recovery
+Help → Reveal Data Folder opens the actual Application Support root, including any retained development sandbox location. Quit AudioNotes before making a full backup. Copy both default.store (and any default.store-wal/default.store-shm siblings) and the complete AudioNotes folder to a protected backup disk. Recordings, Sources and Models live in that folder. Preserve your macOS preferences/Keychain through your normal encrypted system backup; credentials are intentionally excluded from library exports.
+
+A one-time pre-v1 structured-metadata snapshot is kept in AudioNotes/Backups/pre-v1.store when opening an existing store. It includes committed SQLite WAL pages but not multi-GB original files. Treat it as private. Never overwrite a failed database with an empty one. If the library cannot open, use Retry, Open Data Folder, Open Backup Location or Help → Export Diagnostics. Restore a known-good full backup only while the app is quit, and preserve a copy of the failed store first. Seek support if unsure.
+
+Support
+Settings shows version/build; the native About window uses the application bundle version. Export Diagnostics excludes project content and credentials. Include a description of the operation and the version when reporting a problem. Do not send API keys, tokens, recordings or source files unless you deliberately choose to share them.
+
+Supported release target
+The v1 release candidate targets Apple Silicon and macOS 15 or later. Acceptance on the minimum OS, clean installation, Gatekeeper and signed updates is required before distribution. Very large cloud audio is split into temporary parts; interrupted transcription restarts the logical job rather than resuming completed parts after quitting. Cloud AI needs internet and provider access. Local generation needs a separately running trusted Ollama server. No remote analytics or cloud library synchronization is added.

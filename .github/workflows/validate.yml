@@ -1,0 +1,22 @@
+name: Validate AudioNotes
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Validate release tooling
+        run: |
+          bash -n scripts/release/release.sh
+          python3 -m unittest discover -s scripts/release -p 'test_*.py'
+      - name: Debug tests
+        run: xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes -configuration Debug -destination 'platform=macOS,arch=arm64' CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES test
+      - name: Release build
+        run: xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes -configuration Release -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO build

@@ -99,7 +99,9 @@ struct PresetEditorView: View {
                         Picker("Provider Override", selection: $selectedProvider) {
                             Text("Use Default").tag(Optional<LLMProviderID>.none)
                             Text("OpenAI").tag(Optional(LLMProviderID.openAI))
+#if DEBUG
                             Text("Mock Provider").tag(Optional(LLMProviderID.mock))
+#endif
                             Text("Anthropic Claude").tag(Optional(LLMProviderID.anthropic))
                             Text("Google Gemini").tag(Optional(LLMProviderID.gemini))
                             Text("Ollama").tag(Optional(LLMProviderID.ollama))

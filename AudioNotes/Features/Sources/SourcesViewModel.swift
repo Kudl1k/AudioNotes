@@ -174,13 +174,11 @@ final class SourcesViewModel {
     func remove(_ source: RecordingSource, context: ModelContext) {
         guard !isProcessing(source) else { return }
         let file = url(for: source)
-        let trash = storage.rootURL.appending(path: "SourceRemoval-" + UUID().uuidString)
         // Stage the owned file for rollback if the database cannot save.
         let owned = source.isPrimaryAudio ? file : storage.sourceDirectory(id: source.id)
         do {
-            let exists = FileManager.default.fileExists(atPath: owned.path)
-            if exists { try FileManager.default.moveItem(at: owned, to: trash) }
-            do {
+            try ManagedFileDeletion(root: storage.rootURL).stageAndCommit([owned]) {
+                do {
                 let segmentIDs = Set(source.authoritativeTranscript?.segments.map(\.id) ?? [])
                 for session in recording.chatSessions {
                     for message in session.messages {
@@ -207,12 +205,11 @@ final class SourcesViewModel {
                 recording.sources.removeAll { $0.id == source.id }
                 context.delete(source)
                 try context.save()
-            } catch {
-                context.rollback()
-                if exists { try? FileManager.default.moveItem(at: trash, to: owned) }
-                throw error
+                } catch {
+                    context.rollback()
+                    throw error
+                }
             }
-            if exists { try FileManager.default.removeItem(at: trash) }
             search()
         } catch { self.error = error.localizedDescription }
     }

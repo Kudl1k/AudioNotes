@@ -6,6 +6,9 @@ struct ProviderSettingsView: View {
     @State private var localAISettings: LocalAISettingsViewModel
     @StateObject private var model: ProviderSettingsViewModel
 
+    @ObservedObject private var updates: UpdateService
+    @State private var information: ReleaseInformationView.Page?
+
     @State private var selectedPage: SettingsPage? = .general
 
     private enum SettingsPage: Hashable, Identifiable {
@@ -54,11 +57,13 @@ struct ProviderSettingsView: View {
         modelsClient: (any OpenAIModelsFetching)? = nil,
         googleOAuth: GoogleGeminiOAuthService? = nil,
         whisperStore: WhisperModelStore = WhisperModelStore(),
-        localAISettings: LocalAISettingsViewModel? = nil
+        localAISettings: LocalAISettingsViewModel? = nil,
+        updates: UpdateService = UpdateService(enabled: false)
     ) {
         _localAISettings = State(initialValue: localAISettings ?? LocalAISettingsViewModel(
             configuration: llmConfig.localAI, store: whisperStore
         ))
+        self.updates = updates
         self.transcriptionConfig = transcriptionConfig
         self.llmConfig = llmConfig
         _model = StateObject(wrappedValue: ProviderSettingsViewModel(
@@ -112,6 +117,7 @@ struct ProviderSettingsView: View {
         .toolbarVisibility(.visible, for: .windowToolbar)
         .frame(minWidth: 820, minHeight: 600)
         .task { await model.refresh() }
+        .sheet(item: $information) { ReleaseInformationView(page: $0) }
     }
 
     private func sidebarLabel(for page: SettingsPage) -> some View {
@@ -168,25 +174,32 @@ struct ProviderSettingsView: View {
 
             GenerationDefaultsView(transcriptionConfig: transcriptionConfig, llmConfig: llmConfig, model: model)
 
-            Section("Diagnostics & Logs") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Copy recent diagnostic logs for troubleshooting.")
+            Section("Updates") {
+                Toggle("Automatically check for updates", isOn: $updates.automaticallyChecksForUpdates)
+                    .disabled(!updates.isConfigured)
+                Button("Check for Updates…") { updates.checkForUpdates() }.disabled(!updates.canCheckForUpdates)
+                if !updates.isConfigured {
+                    Text("Updates are unavailable in this build. Release hosting and signing must be configured by the publisher.")
                         .font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        Button {
-                            model.copyLogs()
-                        } label: {
-                            Label(model.copiedLogsNotice ? "Copied!" : "Copy Debug Logs", systemImage: model.copiedLogsNotice ? "checkmark" : "doc.on.doc")
-                        }
-                        .buttonStyle(.bordered)
-                        Spacer()
-                    }
                 }
             }
+            Section("Storage & Privacy") {
+                Button("Reveal Data Folder") { NSWorkspace.shared.open(AppStorageLocations.applicationSupport()) }
+                Button("Privacy") { information = .privacy }
+                Button("AudioNotes Help") { information = .help }
+                Button("Third-Party Licenses") { information = .licenses }
+                Text("Use Help → Export Diagnostics for a report that excludes your content and credentials. To make a full backup, quit AudioNotes and copy the data folders described in Help.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+#if DEBUG
+            Section("Development") {
+                Button("Copy Debug Logs") { model.copyLogs() }
+            }
+#endif
 
             Section("About AudioNotes") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("AudioNotes for macOS")
+                    Text("AudioNotes \(ReleaseIdentity().version) (\(ReleaseIdentity().build))")
                         .font(.headline)
                     Text("Native audio transcription, AI summaries, and interactive transcript chat.")
                         .font(.caption)

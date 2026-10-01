@@ -18,7 +18,7 @@ struct GenerationDefaultsView: View {
     private var transcriptionSection: some View {
         Section("Transcription") {
             Picker("Provider", selection: $transcriptionConfig.selectedProvider) {
-                ForEach(TranscriptionProviderID.allCases) { Text($0.title).tag($0) }
+                ForEach(TranscriptionProviderID.selectable) { Text($0.title).tag($0) }
             }
             if transcriptionConfig.selectedProvider == .mock {
                 Text("Mock provides deterministic local results for testing without an API key.")
@@ -83,7 +83,7 @@ struct GenerationDefaultsView: View {
     private var summarySection: some View {
         Section("Summaries") {
             Picker("Provider", selection: $llmConfig.selectedProvider) {
-                ForEach(LLMProviderID.allCases) { Text($0.title).tag($0) }
+                ForEach(LLMProviderID.selectable) { Text($0.title).tag($0) }
             }
             if llmConfig.selectedProvider == .mock {
                 Text("Mock generates structured summaries locally without an API key or network access.")
@@ -197,7 +197,7 @@ struct GenerationDefaultsView: View {
     private var chatSection: some View {
         Section("Chat") {
             Picker("Provider", selection: $llmConfig.chatProvider) {
-                ForEach(LLMProviderID.allCases) { Text($0.title).tag($0) }
+                ForEach(LLMProviderID.selectable) { Text($0.title).tag($0) }
             }
 
             if llmConfig.chatProvider == .openAI {

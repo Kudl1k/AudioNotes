@@ -61,17 +61,15 @@ final class OpenAILLMClient: @unchecked Sendable {
             throw LLMError.invalidResponse
         }
 
-        let requestId = http.value(forHTTPHeaderField: "x-request-id") ?? "none"
         DebugLogService.shared.info(
             subsystem: "OpenAILLMClient",
-            message: "Response HTTP \(http.statusCode) [request-id: \(requestId)]"
+            message: "Response HTTP \(http.statusCode)"
         )
 
         guard (200..<300).contains(http.statusCode) else {
-            let errorBody = String(data: data, encoding: .utf8) ?? ""
             DebugLogService.shared.error(
                 subsystem: "OpenAILLMClient",
-                message: "HTTP \(http.statusCode) error body: \(errorBody)"
+                message: "Provider HTTP request rejected"
             )
             throw Self.mapHTTPError(status: http.statusCode, data: data)
         }
@@ -90,7 +88,7 @@ final class OpenAILLMClient: @unchecked Sendable {
         }
 
         if let refusal = firstChoice.message.refusal, !refusal.isEmpty {
-            DebugLogService.shared.warning(subsystem: "OpenAILLMClient", message: "Model refusal: \(refusal)")
+            DebugLogService.shared.warning(subsystem: "OpenAILLMClient", message: "Provider declined the request")
             throw ProviderUsageError.preserving(LLMError.refusal(message: refusal), usage: envelope.usage?.normalized)
         }
 
@@ -108,7 +106,7 @@ final class OpenAILLMClient: @unchecked Sendable {
         } catch {
             DebugLogService.shared.error(
                 subsystem: "OpenAILLMClient",
-                message: "Failed to decode summary response DTO: \(error.localizedDescription)\nContent: \(contentString)"
+                message: "Provider response could not be processed"
             )
             throw ProviderUsageError.preserving(LLMError.invalidResponse, usage: envelope.usage?.normalized)
         }
@@ -162,10 +160,9 @@ final class OpenAILLMClient: @unchecked Sendable {
             throw LLMError.invalidResponse
         }
 
-        let requestId = http.value(forHTTPHeaderField: "x-request-id") ?? "none"
         DebugLogService.shared.info(
             subsystem: "OpenAILLMClient",
-            message: "Stream HTTP \(http.statusCode) [request-id: \(requestId)]"
+            message: "Stream HTTP \(http.statusCode)"
         )
 
         guard (200..<300).contains(http.statusCode) else {
@@ -174,10 +171,9 @@ final class OpenAILLMClient: @unchecked Sendable {
                 errorData.append(byte)
                 if errorData.count > 65536 { break }
             }
-            let errorBody = String(data: errorData, encoding: .utf8) ?? ""
             DebugLogService.shared.error(
                 subsystem: "OpenAILLMClient",
-                message: "Chat stream error body: \(errorBody)"
+                message: "Provider response could not be processed"
             )
             throw Self.mapHTTPError(status: http.statusCode, data: errorData)
         }

@@ -5,5 +5,21 @@ build/
 xcuserdata/
 *.xcuserstate
 
-# Developer Google Desktop OAuth configuration (copied into the app by Xcode)
+# Developer OAuth client configuration (ignored locally and excluded from all app bundles)
 AudioNotes/Resources/GoogleOAuth.json
+
+# Release secrets/configuration and generated artifacts
+Configuration/Release.local.xcconfig
+release-artifacts/
+*.xcarchive
+*.dmg
+*.dSYM/
+*.p12
+*.p8
+*.pem
+*.key
+*.store
+*.store-shm
+*.store-wal
+*.log
+.download-*/

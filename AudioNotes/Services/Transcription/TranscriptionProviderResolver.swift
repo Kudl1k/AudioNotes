@@ -51,7 +51,12 @@ struct TranscriptionProviderResolver: TranscriptionProviderResolving {
             if let model = WhisperModelDescriptor.bundled.first(where: { $0.id == (model ?? localConfiguration.whisperModel) }) {
                 return LocalWhisperTranscriptionProvider(model: model, language: localConfiguration.whisperLanguage.isEmpty ? nil : localConfiguration.whisperLanguage, store: whisperStore)
             } else { return MissingLocalWhisperProvider() }
-        case .mock: return MockTranscriptionProvider()
+        case .mock:
+#if DEBUG
+            return MockTranscriptionProvider()
+#else
+            return DisabledDevelopmentTranscriptionProvider()
+#endif
         case .openAI:
             var settings = configuration.openAI
             if let model { settings.model = OpenAITranscriptionModel(rawValue: model) }
@@ -74,5 +79,12 @@ struct FixedTranscriptionProviderResolver: TranscriptionProviderResolving {
     var billingKind: BillingKind { .local }
     func transcribe(audioURL: URL, progress: @escaping TranscriptionProgress) async throws -> Transcript {
         throw LocalAIError.missingModel("Selected Whisper model")
+    }
+}
+
+@MainActor private struct DisabledDevelopmentTranscriptionProvider: TranscriptionProvider {
+    let displayName = "Unavailable development provider"
+    func transcribe(audioURL: URL, progress: @escaping TranscriptionProgress) async throws -> Transcript {
+        throw TranscriptionError.invalidTranscript
     }
 }

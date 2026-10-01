@@ -116,26 +116,9 @@ struct SwiftDataProjectRepository: ProjectEditing {
 
     // Stage only managed files; database failure restores them before returning.
     private func stageAndCommit(_ urls: [URL], mutation: () -> Void) throws {
-        let files = FileManager.default
-        let staging = storage.rootURL.appending(path: "ProjectRemoval-" + UUID().uuidString)
-        var moved: [(URL, URL)] = []
-        do {
-            for url in urls where files.fileExists(atPath: url.path) {
-                try files.createDirectory(at: staging, withIntermediateDirectories: true)
-                let temporary = staging.appending(path: UUID().uuidString)
-                try files.moveItem(at: url, to: temporary)
-                moved.append((url, temporary))
-            }
+        try ManagedFileDeletion(root: storage.rootURL).stageAndCommit(urls) {
             mutation()
             do { try context.save() } catch { context.rollback(); throw error }
-        } catch {
-            for (original, temporary) in moved.reversed() { try files.moveItem(at: temporary, to: original) }
-            try? files.removeItem(at: staging)
-            throw error
-        }
-        if files.fileExists(atPath: staging.path) {
-            do { try files.removeItem(at: staging) }
-            catch { throw WorkspaceDeletionError.cleanupFailed(error) }
         }
     }
 

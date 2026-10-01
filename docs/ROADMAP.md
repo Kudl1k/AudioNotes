@@ -412,3 +412,26 @@ history messages. See the report for component limits and final build validation
 
 See [Local Semantic Retrieval](SEMANTIC_RETRIEVAL.md). The feature is not user-enabled;
 BM25 remains the production behavior. Do not start M12.4 as part of M12.3.5.
+
+
+## M13 — Ship V1 / Release Engineering (in progress; not ready to distribute)
+
+- [x] Record baseline release audit, stable macOS 15/Apple Silicon release identity, build-derived version, Developer Team selection, hardened-runtime/no-sandbox decision
+- [x] Integrate official Sparkle 2 updater, signed-feed configuration seam and standard native menu/settings controls
+- [x] Prepare GitHub Actions Pages feed deployment; validate signed DMG enclosure against actual release URL/bytes before deploy
+- [x] Add privacy/help/licenses, first-launch setup/skip, safe diagnostics and retry/reveal database recovery UX
+- [x] Establish v1 SwiftData schema, synthetic checked-in on-disk migration fixture, pre-migration WAL-aware metadata snapshot
+- [x] Journal recording/project/source file deletion for crash recovery; avoid production provider response-body logging
+- [x] Prepare Release checklist, guide, privacy/license notices and local Developer ID/notarization/DMG workflow
+- [x] Debug app build and optimized Release app build; complete **373 tests in 70 suites** serially; release-tool tests **6/6**; Apple Silicon Release excludes developer OAuth configuration
+- [ ] Enable Pages via repository Settings → Pages → GitHub Actions; add public EdDSA key as repository variable
+- [ ] Install Developer ID certificate and configure notarytool Keychain profile; no production certificate/profile/Sparkle key exists on the audit Mac
+- [ ] Validate notarized/stapled DMG, Gatekeeper and signed Sparkle update against the real public appcast and release assets
+- [ ] Clean-user/quarantine install, complete on-device provider/Local Only/privacy/accessibility/performance/stability bug bash, clear all P0/P1
+- [ ] Publish and accept actual AudioNotes 1.0.0; archive production release artifacts and final per-build acceptance record
+
+See [M13 implementation status](M13_IMPLEMENTATION.md), [release audit](RELEASE_AUDIT.md),
+[release checklist](RELEASE_CHECKLIST.md) and [release guide](RELEASING.md). Public
+repository is `Kudl1k/AudioNotes`; Pages currently reports disabled and the stable
+feed / v1 asset return 404. No production update URL is embedded. The application is
+not ready to distribute until the remaining manual/credential/live gates pass.

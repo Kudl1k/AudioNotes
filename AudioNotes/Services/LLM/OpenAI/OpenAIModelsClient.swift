@@ -76,7 +76,7 @@ public actor OpenAIModelsClient: OpenAIModelsFetching {
         } catch {
             DebugLogService.shared.error(
                 subsystem: "OpenAIModelsClient",
-                message: "Network request failed: \(error.localizedDescription)"
+                message: "Provider response could not be processed"
             )
             throw LLMError.network(code: (error as? URLError)?.errorCode ?? -1)
         }
@@ -94,7 +94,7 @@ public actor OpenAIModelsClient: OpenAIModelsFetching {
             let errorBody = String(data: data, encoding: .utf8) ?? ""
             DebugLogService.shared.error(
                 subsystem: "OpenAIModelsClient",
-                message: "GET /v1/models rejected: HTTP \(http.statusCode) - \(errorBody)"
+                message: "Provider HTTP request rejected"
             )
             throw LLMError.rejected(status: http.statusCode, message: errorBody)
         }

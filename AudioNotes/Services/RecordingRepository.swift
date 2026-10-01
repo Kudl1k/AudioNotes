@@ -42,7 +42,6 @@ struct SwiftDataRecordingRepository: RecordingStoring, WorkspaceEditing {
     }
 
     func delete(_ recording: Recording) throws {
-        let files = FileManager.default
         var ownedURLs = Set(recording.sources.filter { !$0.isPrimaryAudio }.map { storage.sourceDirectory(id: $0.id) })
         if !recording.audioFileName.isEmpty {
             ownedURLs.insert(storage.recordingURL(fileName: recording.audioFileName))
@@ -50,32 +49,10 @@ struct SwiftDataRecordingRepository: RecordingStoring, WorkspaceEditing {
         for source in recording.sources where source.isPrimaryAudio && !source.localFileReference.isEmpty {
             ownedURLs.insert(storage.sourceURL(source))
         }
-        let staging = storage.rootURL.appending(path: "WorkspaceRemoval-" + UUID().uuidString)
-        var moved: [(original: URL, staged: URL)] = []
-        // Keep owned files recoverable until the metadata deletion has committed.
-        do {
-            if ownedURLs.contains(where: { files.fileExists(atPath: $0.path) }) {
-                try files.createDirectory(at: staging, withIntermediateDirectories: true)
-            }
-            for original in ownedURLs where files.fileExists(atPath: original.path) {
-                let staged = staging.appending(path: UUID().uuidString)
-                try files.moveItem(at: original, to: staged)
-                moved.append((original, staged))
-            }
+        try ManagedFileDeletion(root: storage.rootURL).stageAndCommit(Array(ownedURLs)) {
             recording.project?.updatedAt = .now
             context.delete(recording)
-            do { try context.save() }
-            catch { context.rollback(); throw error }
-        } catch {
-            for item in moved.reversed() {
-                try files.moveItem(at: item.staged, to: item.original)
-            }
-            if files.fileExists(atPath: staging.path) { try files.removeItem(at: staging) }
-            throw error
-        }
-        if files.fileExists(atPath: staging.path) {
-            do { try files.removeItem(at: staging) }
-            catch { throw WorkspaceDeletionError.cleanupFailed(error) }
+            do { try context.save() } catch { context.rollback(); throw error }
         }
     }
 
