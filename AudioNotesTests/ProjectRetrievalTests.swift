@@ -48,7 +48,9 @@ struct ProjectRetrievalTests {
         #expect(privacy.policy.localOnly)
         let service = RetrievalService()
         let result = try await service.retrieve(query: "drivers character device major minor", scope: .project(project.id), context: context)
-        #expect(Set(result.matches.map(\.document.sourceID)) == [lecture.id, attachment.id, shared.id, ocr.id])
+        let actualSourceIDs = Set<UUID>(result.matches.map { $0.document.sourceID })
+        let expectedSourceIDs: Set<UUID> = [lecture.id, attachment.id, shared.id, ocr.id]
+        #expect(actualSourceIDs == expectedSourceIDs)
         #expect(result.recordings.contains { $0.id == pending.id && $0.title == "Untranscribed" && !$0.hasTranscript })
         #expect(result.coverage == RetrievalCoverage(searchableRecordings: 1, untranscribedRecordings: 1, searchableSources: 3, processingSources: 1, failedSources: 1))
         #expect(result.matches.allSatisfy { $0.document.projectID == project.id })
