@@ -5,12 +5,20 @@ struct TranscriptView: View {
     var revealedSegmentID: UUID? = nil
     let seek: (TimeInterval) -> Void
     @State private var searchText = ""
+#if os(iOS)
+    @FocusState private var searchFocused: Bool
+#endif
     @State private var model = TranscriptViewModel()
 
     var body: some View {
         if let transcript, !transcript.segments.isEmpty {
             VStack(spacing: 0) {
                 TextField("Search transcript", text: $searchText)
+#if os(iOS)
+                    .focused($searchFocused)
+                    .submitLabel(.search)
+                    .onSubmit { searchFocused = false }
+#endif
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal, WorkspaceSpacing.majorSection)
                     .padding(.top, WorkspaceSpacing.standard)
@@ -40,11 +48,17 @@ struct TranscriptView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(WorkspaceSpacing.majorSection)
                     }
+#if os(iOS)
+                    .scrollDismissesKeyboard(.interactively)
+#endif
                     .onChange(of: revealedSegmentID) { _, id in
                         searchText = ""
                         if let id { proxy.scrollTo(id, anchor: .center) }
                     }
                     .onChange(of: model.visibleSegments) { _, _ in
+#if os(iOS)
+                        if !searchText.isEmpty, let first = model.visibleSegments.first { proxy.scrollTo(first.id, anchor: .top) }
+#endif
                         if let id = revealedSegmentID, searchText.isEmpty { proxy.scrollTo(id, anchor: .center) }
                     }
                     .onAppear {
@@ -74,6 +88,8 @@ struct TranscriptView: View {
             .buttonStyle(.link).monospacedDigit()
 #else
             .buttonStyle(.plain).foregroundStyle(.tint).monospacedDigit()
+            .frame(minWidth: 60, minHeight: 44, alignment: .topLeading)
+            .contentShape(Rectangle())
 #endif
             VStack(alignment: .leading, spacing: 4) {
                 if let speaker = segment.speaker { Text(speaker).font(.caption.bold()) }

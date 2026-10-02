@@ -110,3 +110,20 @@ During M16.2, further cross-platform seams were established:
    - Introduced `SystemBrowserOpener` on iOS utilizing `UIApplication.shared.open(_:)` while preserving `NSWorkspace.shared.open(_:)` on macOS.
 3. **AppKit View Guarding**:
    - macOS-specific views (`ChatInspectorView`, `TranscriptHistoryView`, `ProjectChatSelectionView`, `SourcesView`) guarded cleanly with `#if os(macOS)` to allow root group synchronization across targets without duplicating files or perturbing project references.
+
+
+## M16.3 audio/recording boundary
+
+Native `.fileImporter`, batch UI/task ownership, adaptive detail and foreground
+`AVAudioSession` policy live under `Platform/iOS`. Shared `AudioImportService`,
+`LibraryStorage`, repositories and the real models retain managed-file ownership
+and security-scope handling. Library import accepts optional factual progress/error
+callbacks and returns a batch result; default macOS behavior is retained.
+
+`AudioPlaybackService` remains the common local-file engine. A small engine seam
+supports deterministic tests; iOS prepares its player/session on an actor and uses
+4 Hz leaf UI updates, while macOS retains its existing 10 Hz behavior. The native
+Markdown renderer was extracted unchanged into Shared; iOS reuses the lazy
+transcript/search renderer with conditional keyboard/touch adaptation. No AppKit
+adapter or cloud workflow was ported into iOS. Models/schema, macOS storage and
+release configuration are unchanged. See [M16.3 report](IOS_AUDIO_AND_RECORDING.md).

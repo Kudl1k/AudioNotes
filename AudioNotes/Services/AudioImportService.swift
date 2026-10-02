@@ -10,6 +10,12 @@ struct ImportedAudio: Sendable {
     let duration: TimeInterval
 }
 
+struct AudioImportBatchResult: Sendable {
+    let importedCount: Int
+    let failures: [String]
+    let cancelled: Bool
+}
+
 enum AudioImportError: LocalizedError {
     case notAudio, invalidAudio
 

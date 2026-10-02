@@ -48,6 +48,9 @@ struct OperationProgressView: View {
                 Spacer(minLength: WorkspaceSpacing.standard)
                 if let cancel {
                     Button("Cancel", action: cancel).disabled(!canCancel).controlSize(.small)
+#if os(iOS)
+                        .frame(minHeight: 44).contentShape(Rectangle())
+#endif
                         .accessibilityLabel("Cancel \(title)").accessibilityIdentifier("progress.cancel")
                 }
             }

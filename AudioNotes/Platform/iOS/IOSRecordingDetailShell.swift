@@ -1,166 +1,164 @@
 #if os(iOS)
 import SwiftUI
+import SwiftData
+import AVFoundation
 
+/// Native compact/regular detail; playback observation is confined to its control leaf.
 struct IOSRecordingDetailShell: View {
     let recording: Recording
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @Environment(IOSAudioImportModel.self) private var imports
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var player = IOSRecordingPlaybackModel()
+    @State private var tab = DetailTab.transcript
+    @State private var showDelete = false
+    @State private var showRename = false
+    @State private var name = ""
+    @State private var managementError: String?
+
+    private enum DetailTab: String, CaseIterable { case transcript = "Transcript", summary = "Summary" }
 
     var body: some View {
-        List {
-            headerSection
-            transcriptSection
-            summarySection
-            sourcesSection
-            chatPlaceholderSection
-        }
-        .listStyle(.insetGrouped)
-        .navigationTitle(recording.title)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var headerSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(recording.title)
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(.primary)
-
-                HStack(spacing: 8) {
-                    Label(AudioTime.format(recording.duration), systemImage: "clock")
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.15), in: Capsule())
-
-                    Label(recording.importedAt.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.15), in: Capsule())
-
+        VStack(spacing: 12) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(recording.title).font(.title2.bold())
+                        .lineLimit(3).truncationMode(.middle)
+                        .accessibilityAddTraits(.isHeader)
+                    ViewThatFits(in: .horizontal) {
+                        HStack { metadata }
+                        VStack(alignment: .leading) { metadata }
+                    }
                     if let project = recording.project {
-                        Label(project.name, systemImage: "folder")
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.accentColor.opacity(0.15), in: Capsule())
-                            .foregroundStyle(Color.accentColor)
+                        Label(project.name, systemImage: "folder").font(.caption).lineLimit(2)
                     }
+                    Text(recording.originalFileName).font(.caption).foregroundStyle(.secondary)
+                        .lineLimit(2).truncationMode(.middle)
                 }
-
-                Text("File: \(recording.originalFileName)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.vertical, 4)
-        }
-    }
-
-    private var transcriptSection: some View {
-        Section(header: Label("Transcript", systemImage: "waveform")) {
-            if let transcript = recording.transcript {
-                VStack(alignment: .leading, spacing: 6) {
-                    if let sourceName = transcript.sourceName {
-                        Text(sourceName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("\(transcript.segments.count) segments recorded")
-                        .font(.subheadline)
-                    if let firstSegment = transcript.segments.sorted(by: { $0.position < $1.position }).first {
-                        Text(firstSegment.text)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
-                    }
-                }
-                .padding(.vertical, 2)
-            } else {
-                ContentUnavailableView(
-                    "No Transcript",
-                    systemImage: "waveform.slash",
-                    description: Text("This recording does not have a transcript yet.")
-                )
-                .padding(.vertical, 8)
+            .frame(maxHeight: 150)
+            Picker("Recording content", selection: $tab) {
+                ForEach(DetailTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
-        }
-    }
-
-    private var summarySection: some View {
-        Section(header: Label("Summary", systemImage: "doc.plaintext")) {
-            if let summary = recording.summary {
-                VStack(alignment: .leading, spacing: 6) {
-                    if !summary.title.isEmpty {
-                        Text(summary.title)
-                            .font(.headline)
+            .pickerStyle(.segmented)
+            Group {
+                switch tab {
+                case .transcript:
+                    if let transcript = recording.transcript, !transcript.segments.isEmpty {
+                        TranscriptView(transcript: transcript, seek: player.seek)
+                    } else {
+                        ContentUnavailableView("No transcript yet", systemImage: "text.alignleft",
+                            description: Text("Your audio is ready to play. Transcription will be available in a future update."))
                     }
-                    if !summary.overview.isEmpty {
-                        Text(summary.overview)
-                            .font(.body)
-                            .lineLimit(4)
-                    }
-                    HStack(spacing: 12) {
-                        if !summary.keyPoints.isEmpty {
-                            Label("\(summary.keyPoints.count) key points", systemImage: "list.bullet")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        if !summary.actionItems.isEmpty {
-                            Label("\(summary.actionItems.count) actions", systemImage: "checklist")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .padding(.vertical, 2)
-            } else {
-                ContentUnavailableView(
-                    "No Summary",
-                    systemImage: "doc.badge.ellipsis",
-                    description: Text("No AI summary generated for this recording yet.")
-                )
-                .padding(.vertical, 8)
-            }
-        }
-    }
-
-    private var sourcesSection: some View {
-        Section(header: Label("Sources", systemImage: "paperclip")) {
-            if recording.sources.isEmpty {
-                Text("No attached sources")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(recording.sources) { source in
-                    HStack {
-                        Image(systemName: sourceIconName(for: source))
-                            .foregroundStyle(Color.accentColor)
-                        Text(source.displayName)
-                            .font(.body)
-                    }
+                case .summary:
+                    IOSStoredSummaryView(recording: recording)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-    }
-
-    private var chatPlaceholderSection: some View {
-        Section(header: Label("Chat", systemImage: "bubble.left.and.bubble.right")) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Ask questions about this recording")
-                    .font(.subheadline.weight(.medium))
-                Text("Chat integration will connect grounded Q&A with transcript and source citations.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        .padding(.horizontal, 16).padding(.top, 12)
+        .frame(maxWidth: 960).frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
+            IOSPlaybackControls(model: player).padding()
+                .frame(maxWidth: 800).frame(maxWidth: .infinity).background(.regularMaterial)
+        }
+        .navigationTitle(recording.title).navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Rename", systemImage: "pencil") { name = recording.title; showRename = true }
+                    Button("Delete Recording", systemImage: "trash", role: .destructive) { showDelete = true }
+                } label: { Label("Recording actions", systemImage: "ellipsis.circle") }
             }
-            .padding(.vertical, 4)
+        }
+        .alert("Rename Recording", isPresented: $showRename) {
+            TextField("Recording name", text: $name)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                imports.library.error = nil
+                imports.library.rename(recording, to: name, using: SwiftDataRecordingRepository(context: context))
+                managementError = imports.library.error?.message
+            }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .confirmationDialog("Delete Recording?", isPresented: $showDelete, titleVisibility: .visible) {
+            Button("Delete Recording", role: .destructive) {
+                player.stop()
+                imports.library.error = nil
+                let deleted = imports.library.delete(recording, using: SwiftDataRecordingRepository(context: context))
+                managementError = imports.library.error?.message
+                if deleted { dismiss() }
+            }
+        } message: { Text("This removes the recording, its history, and managed files. The original file is kept.") }
+        .alert("Recording could not be updated", isPresented: Binding(get: { managementError != nil }, set: { if !$0 { managementError = nil } })) {
+            Button("OK") { managementError = nil }
+        } message: { Text(managementError ?? "") }
+        .task(id: recording.id) {
+            await player.load(url: LibraryStorage().recordingURL(fileName: recording.audioFileName))
+        }
+        .onDisappear { player.stop() }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { player.pause() } }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { player.handleInterruption($0) }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { player.handleRouteChange($0) }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.mediaServicesWereResetNotification)) { _ in
+            player.stop()
+            Task { await player.load(url: LibraryStorage().recordingURL(fileName: recording.audioFileName)) }
         }
     }
 
-    private func sourceIconName(for source: RecordingSource) -> String {
-        switch source.type {
-        case .pdf: return "doc.text"
-        case .image: return "photo"
-        case .document: return "doc"
-        case .audio: return "waveform"
+    @ViewBuilder private var metadata: some View {
+        Label(OperationDurationFormatter.string(recording.duration), systemImage: "clock")
+        Text(recording.importedAt.formatted(date: .abbreviated, time: .shortened))
+            .foregroundStyle(.secondary)
+    }
+}
+
+private struct IOSPlaybackControls: View {
+    let model: IOSRecordingPlaybackModel
+    @State private var scrubbing = false
+    @State private var scrubTime: TimeInterval = 0
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Slider(value: Binding(get: { scrubbing ? scrubTime : model.playback.currentTime }, set: {
+                scrubTime = $0
+                if !scrubbing { model.seek(to: $0) }
+            }), in: 0...max(model.playback.duration, 0.01), onEditingChanged: { editing in
+                if editing {
+                    scrubTime = model.playback.currentTime
+                    scrubbing = true
+                } else {
+                    model.seek(to: scrubTime)
+                    scrubbing = false
+                }
+            })
+            .disabled(!model.playback.isLoaded)
+            .accessibilityLabel("Playback position")
+            .accessibilityValue("\(OperationDurationFormatter.string(model.playback.currentTime)) of \(OperationDurationFormatter.string(model.playback.duration))")
+            .accessibilityIdentifier("playback.position")
+            HStack {
+                Text(OperationDurationFormatter.string(scrubbing ? scrubTime : model.playback.currentTime))
+                    .monospacedDigit().accessibilityLabel("Current position")
+                    .accessibilityValue(OperationDurationFormatter.string(scrubbing ? scrubTime : model.playback.currentTime))
+                Spacer()
+                Button(action: model.togglePlayback) {
+                    Label(model.playback.isPlaying ? "Pause" : "Play", systemImage: model.playback.isPlaying ? "pause.fill" : "play.fill")
+                        .frame(minWidth: 80, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent).disabled(!model.playback.isLoaded || model.isActivating)
+                .accessibilityIdentifier("playback.toggle")
+                Spacer()
+                Text(OperationDurationFormatter.string(model.playback.duration))
+                    .monospacedDigit().foregroundStyle(.secondary).accessibilityLabel("Duration")
+                    .accessibilityValue(OperationDurationFormatter.string(model.playback.duration))
+            }
+            if let error = model.sessionError ?? model.playback.errorMessage {
+                InlineErrorLabel(error)
+            }
+        }
+        .onChange(of: model.playback.isPlaying) { _, playing in
+            if !playing { model.pause() }
         }
     }
 }

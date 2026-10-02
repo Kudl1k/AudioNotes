@@ -190,10 +190,11 @@ final class LibraryViewModel {
             .sorted { $0.path < $1.path }
     }
 
-    func delete(_ recording: Recording, using repository: any WorkspaceEditing) {
+    @discardableResult
+    func delete(_ recording: Recording, using repository: any WorkspaceEditing) -> Bool {
         guard canDelete(recording) else {
             showWorkspaceError("Wait for this workspace’s processing to finish before deleting it.")
-            return
+            return false
         }
         let id = recording.id
         do {
@@ -202,13 +203,14 @@ final class LibraryViewModel {
             showWorkspaceError(error.localizedDescription)
         } catch {
             showWorkspaceError(error, fallback: "The recording could not be deleted. Nothing was removed.")
-            return
+            return false
         }
         if selection == id { selection = nil }
         transcriptionModels.removeValue(forKey: id)
         sourcesModels.removeValue(forKey: id)
         summaryModels.removeValue(forKey: id)
         chatModels.removeValue(forKey: id)
+        return true
     }
 
     func transcriptionModel(for recording: Recording, resolver: any TranscriptionProviderResolving,
@@ -224,19 +226,25 @@ final class LibraryViewModel {
         return model
     }
 
-    func importURLs(_ urls: [URL], into repository: any RecordingStoring) async {
-        guard !isImporting else { return }
+    @discardableResult
+    func importURLs(_ urls: [URL], into repository: any RecordingStoring,
+                    failureMessage: ((Error) -> String)? = nil,
+                    progress: ((Int) -> Void)? = nil) async -> AudioImportBatchResult {
+        guard !isImporting else { return AudioImportBatchResult(importedCount: 0, failures: [], cancelled: true) }
         isImporting = true
         defer { isImporting = false }
         var failures: [String] = []
-        for url in urls {
+        var importedCount = 0
+        for (index, url) in urls.enumerated() {
             if Task.isCancelled { break }
+            progress?(index + 1)
             do {
                 let audio = try await importer.importFile(at: url)
                 do {
                     try Task.checkCancellation()
                     try repository.save(audio)
                     selection = audio.id
+                    importedCount += 1
                 } catch {
                     do { try await importer.discard(audio) }
                     catch { failures.append("Could not remove unused copy: \(error.localizedDescription)") }
@@ -245,10 +253,11 @@ final class LibraryViewModel {
             } catch is CancellationError {
                 break
             } catch {
-                failures.append("\(url.lastPathComponent): \(error.localizedDescription)")
+                failures.append("\(url.lastPathComponent): \(failureMessage?(error) ?? error.localizedDescription)")
             }
         }
         if !failures.isEmpty { error = LibraryError(kind: .importFailed, message: failures.joined(separator: "\n\n")) }
+        return AudioImportBatchResult(importedCount: importedCount, failures: failures, cancelled: Task.isCancelled)
     }
 
     /// Imports into a project's queue, or into the library when no project is targeted.

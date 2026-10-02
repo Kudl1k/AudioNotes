@@ -32,8 +32,8 @@ Target-level build settings are isolated in a dedicated configuration file:
 - `PRODUCT_NAME = AudioNotes`
 - `PRODUCT_BUNDLE_IDENTIFIER = cz.stepankudlacek.audionotes.ios` (provisional development identifier)
 - `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon`
-- `SWIFT_VERSION = 5.0`
-- `SWIFT_STRICT_CONCURRENCY = complete`
+- `SWIFT_VERSION = 6.0`
+- `SWIFT_APPROACHABLE_CONCURRENCY = YES`
 
 ### 2.2 Xcode Project Integration
 - **Target**: `AudioNotesiOS` native application target in `AudioNotes.xcodeproj/project.pbxproj`.
@@ -177,11 +177,19 @@ On iOS, the application uses standard sandbox container directories:
 
 ## 6. Artifacts and Uncommitted State
 
-As instructed, all changes remain **uncommitted** in the working directory:
-- Project file: `AudioNotes.xcodeproj/project.pbxproj` (`objectVersion = 77`)
-- Target configuration: `Configuration/iOS.xcconfig`
-- Shared scheme: `AudioNotes.xcodeproj/xcshareddata/xcschemes/AudioNotesiOS.xcscheme`
-- iOS Source Code: `AudioNotes/Platform/iOS/*.swift`
-- Shared UI: `AudioNotes/Features/Shared/FlowLayout.swift`
-- Assets: `Assets.xcassets/AppIcon.appiconset/Contents.json`
-- Documentation: `docs/IOS_TARGET_AND_NAVIGATION.md`
+M16.2 was verified and committed separately on 2026-10-02 as
+`52d62a3284d5cfd777b02a7ad87a7805e551125a` (`feat(ios): add native app target and navigation shell`).
+Nothing was pushed; the working tree was clean before M16.3.
+
+## 7. M16.3 follow-up
+
+The recording shell and import placeholder are now replaced by native multi-file
+Files import, foreground playback, read-only transcript/summary/history, rename
+and confirmed deletion. Compact and split navigation remain native and share the
+same workflow. Project/source/AI/export workflows remain deferred.
+
+M16.2 contained no runnable iOS test target. M16.3 adds `AudioNotesTests-iOS` using
+selected existing portable test files and the shared scheme (26 tests/6 suites).
+macOS now passes 442 tests/79 suites. SwiftData schema and migration are unchanged.
+See [iOS audio and recording report](IOS_AUDIO_AND_RECORDING.md) for exact
+architecture, builds, native acceptance, screenshots and remaining device checks.

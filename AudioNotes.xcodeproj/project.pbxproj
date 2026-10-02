@@ -21,6 +21,13 @@
 			remoteGlobalIDString = E817569E306D0BDF00E1DF07;
 			remoteInfo = AudioNotes;
 		};
+		CC0000000000000000000009 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E8175697306D0BDF00E1DF07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB0000000000000000000003;
+			remoteInfo = AudioNotes;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +36,7 @@
 		AC1300000000000000000004 /* Configuration/App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration/App.xcconfig; sourceTree = SOURCE_ROOT; };
 		BB0000000000000000000001 /* AudioNotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioNotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB0000000000000000000002 /* Configuration/iOS.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration/iOS.xcconfig; sourceTree = SOURCE_ROOT; };
+		CC0000000000000000000001 /* AudioNotesTests-iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = "AudioNotesTests-iOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E817569F306D0BDF00E1DF07 /* AudioNotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioNotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -52,11 +60,99 @@
 			);
 			target = BB0000000000000000000003 /* AudioNotesiOS */;
 		};
+		CC1300000000000000000007 /* Exceptions for "AudioNotesTests" folder in "AudioNotesTests-iOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AIPresetTests.swift,
+				ChatContextBuilderTests.swift,
+				ChatGPTAuthTests.swift,
+				ChatPresentationTests.swift,
+				ChatRenderingTests.swift,
+				ChatStreamingParserTests.swift,
+				ChatUXTests.swift,
+				ChatViewModelTests.swift,
+				ClaudeCLIModelsTests.swift,
+				ClaudeCLITests.swift,
+				ExportTests.swift,
+				FinalQATests.swift,
+				Fixtures/v1/library.sqlite,
+				"Fixtures/v1/library.sqlite-shm",
+				"Fixtures/v1/library.sqlite-wal",
+				GenerationProviderSelectionTests.swift,
+				GoogleGeminiOAuthTests.swift,
+				HierarchicalSummaryGeneratorTests.swift,
+				HybridRetrievalTests.swift,
+				LegacyM8Schema.swift,
+				LegacyM11Schema.swift,
+				LibraryStorageTests.swift,
+				LlamaCppTests.swift,
+				LLMModelCapabilitiesTests.swift,
+				LocalAILiveTests.swift,
+				LocalAITests.swift,
+				M11StabilityTests.swift,
+				MockCredentialStore.swift,
+				MockLLMProviderTests.swift,
+				MockTranscriptionProviderTests.swift,
+				MultiSourceTestSupport.swift,
+				OllamaProviderIntegrationTests.swift,
+				OllamaTests.swift,
+				OpenAIAudioSplitPlanTests.swift,
+				OpenAIAudioUploadTests.swift,
+				OpenAIHTTPErrorTests.swift,
+				OpenAILLMProviderTests.swift,
+				OpenAINetworkStub.swift,
+				OpenAIResponseTests.swift,
+				OpenAISummaryDTOTests.swift,
+				OpenAITranscriptionProviderTests.swift,
+				OperationProgressTests.swift,
+				PerformanceBaselineTests.swift,
+				PlatformBoundaryTests.swift,
+				PresentationBoundaryTests.swift,
+				ProjectChatPerformanceTests.swift,
+				ProjectChatTests.swift,
+				ProjectFoundationTests.swift,
+				ProjectImportTests.swift,
+				ProjectMigrationTests.swift,
+				ProjectPerformanceTests.swift,
+				ProjectRetrievalTests.swift,
+				ProviderConfigurationTests.swift,
+				ProviderSettingsTests.swift,
+				RecordingViewModelTests.swift,
+				ReleaseEngineeringTests.swift,
+				RetrievalEngineTests.swift,
+				RetrievalPerformanceTests.swift,
+				SmallContextSummaryTests.swift,
+				SourceContextTests.swift,
+				SourceImportTests.swift,
+				SourceMultimodalTests.swift,
+				SourcePersistenceTests.swift,
+				SourceProcessingTests.swift,
+				SourceWorkflowTests.swift,
+				SummaryLayoutTests.swift,
+				SummaryPresetTests.swift,
+				SummaryPromptBuilderTests.swift,
+				SummaryRepositoryTests.swift,
+				SummaryViewModelTests.swift,
+				TranscriptChunkingTests.swift,
+				TranscriptionProgressModelTests.swift,
+				TranscriptionStateTests.swift,
+				TranscriptionTestSupport.swift,
+				TranscriptReferenceResolverTests.swift,
+				TranscriptRepositoryTests.swift,
+				UsageCostTests.swift,
+				V1MigrationFixtureTests.swift,
+				WhisperModelDownloadTests.swift,
+			);
+			target = CC0000000000000000000003 /* AudioNotesTests-iOS */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AA0000000000000000000002 /* AudioNotesTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CC1300000000000000000007 /* Exceptions for "AudioNotesTests" folder in "AudioNotesTests-iOS" target */,
+			);
 			path = AudioNotesTests;
 			sourceTree = "<group>";
 		};
@@ -78,6 +174,11 @@
 			);
 		};
 		BB0000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		CC0000000000000000000006 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -111,6 +212,7 @@
 				BB0000000000000000000001 /* AudioNotes.app */,
 				E817569F306D0BDF00E1DF07 /* AudioNotes.app */,
 				AA0000000000000000000001 /* AudioNotesTests.xctest */,
+				CC0000000000000000000001 /* AudioNotesTests-iOS.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -163,6 +265,27 @@
 			productName = AudioNotes;
 			productReference = BB0000000000000000000001 /* AudioNotes.app */;
 			productType = "com.apple.product-type.application";
+		};
+		CC0000000000000000000003 /* AudioNotesTests-iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CC0000000000000000000004 /* Build configuration list for PBXNativeTarget "AudioNotesTests-iOS" */;
+			buildPhases = (
+				CC0000000000000000000005 /* Sources */,
+				CC0000000000000000000006 /* Frameworks */,
+				CC0000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CC0000000000000000000008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AA0000000000000000000002 /* AudioNotesTests */,
+			);
+			name = "AudioNotesTests-iOS";
+			productName = "AudioNotesTests-iOS";
+			productReference = CC0000000000000000000001 /* AudioNotesTests-iOS.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 		E817569E306D0BDF00E1DF07 /* AudioNotes */ = {
 			isa = PBXNativeTarget;
@@ -225,6 +348,7 @@
 			projectRoot = "";
 			targets = (
 				AA0000000000000000000003 /* AudioNotesTests */,
+				CC0000000000000000000003 /* AudioNotesTests-iOS */,
 				BB0000000000000000000003 /* AudioNotesiOS */,
 				E817569E306D0BDF00E1DF07 /* AudioNotes */,
 			);
@@ -241,6 +365,11 @@
 			isa = PBXResourcesBuildPhase;
 			files = (
 				BB0000000000000000000011 /* Assets.xcassets in Resources */,
+			);
+		};
+		CC0000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
 			);
 		};
 		E817569D306D0BDF00E1DF07 /* Resources */ = {
@@ -262,6 +391,11 @@
 			files = (
 			);
 		};
+		CC0000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 		E817569B306D0BDF00E1DF07 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -274,6 +408,11 @@
 			isa = PBXTargetDependency;
 			target = E817569E306D0BDF00E1DF07 /* AudioNotes */;
 			targetProxy = AA0000000000000000000009 /* PBXContainerItemProxy */;
+		};
+		CC0000000000000000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB0000000000000000000003 /* AudioNotesiOS */;
+			targetProxy = CC0000000000000000000009 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -335,6 +474,52 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				DEVELOPMENT_TEAM = 8HTA4B98F5;
 				PRODUCT_NAME = AudioNotes;
+			};
+			name = Release;
+		};
+		CC000000000000000000000A /* Debug configuration for PBXNativeTarget "AudioNotesTests-iOS" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "cz.kudladev.AudioNotesTests-iOS";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AudioNotes.app/AudioNotes";
+			};
+			name = Debug;
+		};
+		CC000000000000000000000B /* Release configuration for PBXNativeTarget "AudioNotesTests-iOS" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "cz.kudladev.AudioNotesTests-iOS";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AudioNotes.app/AudioNotes";
 			};
 			name = Release;
 		};
@@ -540,6 +725,14 @@
 			buildConfigurations = (
 				BB000000000000000000000A /* Debug configuration for PBXNativeTarget "AudioNotesiOS" */,
 				BB000000000000000000000B /* Release configuration for PBXNativeTarget "AudioNotesiOS" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		CC0000000000000000000004 /* Build configuration list for PBXNativeTarget "AudioNotesTests-iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CC000000000000000000000A /* Debug configuration for PBXNativeTarget "AudioNotesTests-iOS" */,
+				CC000000000000000000000B /* Release configuration for PBXNativeTarget "AudioNotesTests-iOS" */,
 			);
 			defaultConfigurationName = Release;
 		};
