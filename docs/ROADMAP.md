@@ -435,3 +435,28 @@ See [M13 implementation status](M13_IMPLEMENTATION.md), [release audit](RELEASE_
 repository is `Kudl1k/AudioNotes`; Pages currently reports disabled and the stable
 feed / v1 asset return 404. No production update URL is embedded. The application is
 not ready to distribute until the remaining manual/credential/live gates pass.
+
+## M14 — SwiftUI-first UI architecture (first pass; desktop acceptance pending)
+
+- [x] UI architecture audit: app was already SwiftUI-first (SwiftUI `App`, `NavigationSplitView`, 53 SwiftUI views, one PDFKit representable); SwiftUI transcript and Markdown renderers retained
+- [x] AppKit classified and confined to `Platform/macOS/AppKit` (file panels, clipboard, Finder/browser, alerts, PDF preview); services no longer import AppKit except the retained CoreText `PDFExporter`
+- [x] Help/Privacy/Licenses windows migrated from manual `NSWindow` controllers to a SwiftUI window scene; composer Shift+Return uses key-event modifiers instead of global `NSEvent` state
+- [x] Debug tests (389/73) and Release build pass; no new warnings; no schema, signing, Sparkle or bundle changes
+- [ ] Desktop acceptance of migrated menus, panels, copy, Finder reveal, composer keys and PDF citation jumps
+- [ ] Presentation-boundary cleanup, single shared chat UI, shared progress component, previews/accessibility identifiers
+
+See [M14 migration report](SWIFTUI_MIGRATION.md).
+
+## M14.2 — Unified Chat UI (implementation; broader desktop acceptance pending)
+
+- [x] Audit and duplication map; separate Recording/Project domain engines retained
+- [x] Shared composed composer, rows, lazy list, thinking/streaming, errors and empty states
+- [x] Native cursor-aware Shift+Return, marked-text gating, keyboard focus and bounded editor
+- [x] Stable assistant identity, retained scroll intent, message-targeted Latest and manual-scroll protection
+- [x] Markdown, authoritative citations/navigation, Copy, provider settings and existing usage semantics retained
+- [x] Cancelled-publisher race fixed; deterministic cancellation tests preserve/strengthen assertions
+- [x] Isolated DEBUG 500-message/long-stream fixtures and native paste/resize/scroll/Stop/Copy checks
+- [ ] Physical IME, VoiceOver, complete full-screen/Reduce Motion and live-provider desktop acceptance
+
+See [M14.2 audit and implementation report](UNIFIED_CHAT_UI.md). M14.1 remains committed
+separately; older manual acceptance is not closed. M14.3 has not started.

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Observation
 import SwiftData
 
@@ -7,9 +8,11 @@ final class ProjectChatViewModel {
     let project: Project
     var session: ChatSession?
     var inputText = ""
+    private(set) var sentQuestionID: UUID?
+    private(set) var assistantMessageID = UUID()
     var selection = ProjectChatSelection()
     var scrollState = ChatScrollState()
-    var scrollAnchor: UUID?
+    var scrollPosition = ScrollPosition(edge: .bottom)
     private(set) var state = ChatGenerationState.idle
     private(set) var streamingDraft: String?
     private(set) var lastError: String?
@@ -44,8 +47,8 @@ final class ProjectChatViewModel {
     var canRetry: Bool { !isGenerating && session?.interruptedProjectQuestionID != nil && hasSelectedContent }
     var statusText: String {
         switch state {
-        case .preparing: elapsedSeconds == 0 ? "Preparing answer…" : "Searching project…"
-        case .waitingForFirstToken: "Thinking…"
+        case .preparing: "Searching project…"
+        case .waitingForFirstToken: "Waiting for AI…"
         case .streaming: "Generating answer…"
         default: ""
         }
@@ -147,6 +150,7 @@ final class ProjectChatViewModel {
                 try repository.appendMessage(message, to: session)
                 session.pendingProjectQuestionID = message.id
                 inputText = ""
+                sentQuestionID = message.id
             case .retry:
                 guard let id = session.interruptedProjectQuestionID else { return }
                 session.pendingProjectQuestionID = id
@@ -171,7 +175,7 @@ final class ProjectChatViewModel {
             try repository.clearMessages(in: session)
             session.pendingProjectQuestionID = nil; session.interruptedProjectQuestionID = nil
             try repository.saveSession(session)
-            lastError = nil; state = .idle; scrollAnchor = nil; scrollState = .init()
+            lastError = nil; state = .idle; scrollPosition = ScrollPosition(edge: .bottom); scrollState = .init()
         } catch { lastError = error.localizedDescription }
     }
 
@@ -181,7 +185,7 @@ final class ProjectChatViewModel {
         guard publishTask == nil else { return }
         publishTask = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(80)) } catch { return }
-            guard let self else { return }
+            guard let self, !Task.isCancelled else { return }
             streamingDraft = ProjectCitationResolver.clean(pendingDraft); publishTask = nil
         }
     }
@@ -227,6 +231,7 @@ final class ProjectChatViewModel {
         generation.generationStrategy = "project_retrieval"
         let tracker = OperationUsageTracker(generation: generation)
         do { try repository.record(generation) } catch { lastError = error.localizedDescription; return }
+        assistantMessageID = UUID()
         state = .preparing; pendingDraft = ""; streamingDraft = nil; lastError = nil; elapsedSeconds = 0
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -279,7 +284,7 @@ final class ProjectChatViewModel {
                         usage = response.usage ?? usage
                         let citations = try await validated(response: response, package: result.context, selected: selected, context: context)
                         try Task.checkCancellation()
-                        let message = ChatMessage(role: .assistant, text: ProjectCitationResolver.clean(response.content))
+                        let message = ChatMessage(id: assistantMessageID, role: .assistant, text: ProjectCitationResolver.clean(response.content))
                         message.projectCitations = citations; message.sourceReferences = citations.map(\.reference)
                         message.generationID = generation.id; generation.chatMessageID = message.id
                         generation.characterCount = message.text.count; generation.wordCount = message.text.split(whereSeparator: \.isWhitespace).count
@@ -301,7 +306,7 @@ final class ProjectChatViewModel {
                 tracker.finish(status: cancelled ? .cancelled : .failed)
                 session.interruptedProjectQuestionID = question.id; session.pendingProjectQuestionID = nil
                 if !pendingDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    let message = ChatMessage(role: .assistant, text: ProjectCitationResolver.clean(pendingDraft), status: .interrupted)
+                    let message = ChatMessage(id: assistantMessageID, role: .assistant, text: ProjectCitationResolver.clean(pendingDraft), status: .interrupted)
                     message.generationID = generation.id; generation.chatMessageID = message.id
                     // Partial Markdown remains readable; only complete validated final citations are persisted.
                     try? repository.appendMessage(message, to: session)

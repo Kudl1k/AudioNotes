@@ -1,4 +1,3 @@
-import AppKit
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -11,7 +10,7 @@ struct ProjectChatView: View {
     @State private var showsUsage = false
     @State private var preview: SourcePreviewTarget?
     @State private var exportError: String?
-    @FocusState private var inputFocused: Bool
+    @State private var focusRequest = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,70 +54,39 @@ struct ProjectChatView: View {
     }
 
     private var conversation: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
-                    if model.session?.messages.isEmpty ?? true { emptyState }
-                    ProjectChatHistory(model: model, open: openCitation)
-                    if model.isGenerating {
-                        if let draft = model.streamingDraft {
-                            AssistantMessageView(markdown: draft, references: [])
-                                .padding(12).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-                        } else {
-                            HStack(spacing: 8) { ProgressView().controlSize(.small); Text(model.statusText).foregroundStyle(.secondary) }
-                                .padding(12).accessibilityLabel(model.statusText)
-                        }
-                    }
-                    if let error = model.lastError {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label(error, systemImage: "exclamationmark.triangle").font(.callout)
-                            if model.canRetry { Button("Retry", action: model.retry) }
-                            SettingsLink { Text("Choose Chat Provider…") }
-                        }.padding(10)
-                    }
-                    Color.clear.frame(height: 1).id("project_chat_bottom")
-                }.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity).padding(20)
-                .scrollTargetLayout()
+        ChatMessageList(scrollState: $model.scrollState, scrollPosition: $model.scrollPosition,
+            messageCount: model.session?.messages.count ?? 0,
+            latestMessageID: model.session?.orderedMessages.last?.id, activeResponseID: model.assistantMessageID, draft: model.streamingDraft,
+            generationState: model.state, sentQuestionID: model.sentQuestionID) {
+            if (model.session?.messages.isEmpty ?? true) && !model.isGenerating { emptyState }
+            let messages = model.session?.orderedMessages ?? []
+            ForEach(messages) { message in
+                ProjectChatMessageRow(message: message, project: model.project,
+                    canRegenerate: message.id == messages.last?.id && !model.isGenerating,
+                    open: openCitation, regenerate: model.regenerate)
+                    .id(message.id)
             }
-            .scrollPosition(id: $model.scrollAnchor, anchor: .top)
-            .defaultScrollAnchor(.bottom, for: .initialOffset)
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentSize.height - (geometry.contentOffset.y + geometry.containerSize.height) <= 64
-            } action: { _, nearBottom in model.scrollState.positionChanged(nearBottom: nearBottom) }
-            .onScrollPhaseChange { _, phase in
-                switch phase {
-                case .tracking, .interacting, .decelerating: model.scrollState.userScrolling(true)
-                case .idle: model.scrollState.userScrolling(false)
-                default: break
-                }
+            if model.isGenerating {
+                ChatActiveResponse(isStreaming: model.state == .streaming,
+                    phase: model.statusText, elapsedSeconds: model.elapsedSeconds) {
+                    AssistantMessageView(markdown: model.streamingDraft ?? "", references: [])
+                }.id("active-\(model.assistantMessageID)")
             }
-            .overlay(alignment: .bottom) {
-                if model.scrollState.hasUnseenContent {
-                    Button("Jump to Latest", systemImage: "arrow.down") {
-                        model.scrollState.jumpToLatest(); proxy.scrollTo("project_chat_bottom", anchor: .bottom)
-                    }.buttonStyle(.borderedProminent).padding(8)
-                }
-            }
-            .onChange(of: model.streamingDraft) { _, _ in
-                if model.scrollState.contentArrived() { proxy.scrollTo("project_chat_bottom", anchor: .bottom) }
-            }
-            .onChange(of: model.session?.messages.count) { _, _ in
-                if model.scrollState.contentArrived() { proxy.scrollTo("project_chat_bottom", anchor: .bottom) }
+            if let error = model.lastError {
+                ChatErrorView(error: error, canRetry: model.canRetry, onRetry: model.retry)
             }
         }
     }
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Ask about \(model.project.name)").font(.title2.bold())
-            Text(model.hasSelectedContent ? "Chat across your searchable recordings and sources." : "This project doesn’t have searchable content in the selected scope yet. Transcribe a recording or add a document to start chatting.")
-                .foregroundStyle(.secondary)
+        ChatEmptyState(title: "Ask about \(model.project.name)",
+            description: model.hasSelectedContent ? "Chat across your searchable recordings and sources." : "This project doesn’t have searchable content in the selected scope yet. Transcribe a recording or add a document to start chatting.") {
             if model.hasSelectedContent {
                 Text("Try asking").font(.caption).foregroundStyle(.secondary)
                 ForEach(model.suggestions, id: \.self) { prompt in
-                    Button(prompt) { model.inputText = prompt; inputFocused = true }.buttonStyle(.link)
+                    Button(prompt) { model.inputText = prompt; focusRequest += 1 }.buttonStyle(.link)
                 }
             }
-        }.padding(.vertical, 24)
+        }
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -129,17 +97,9 @@ struct ProjectChatView: View {
                 SettingsLink { Text(model.providerDescription).font(.caption).lineLimit(2) }
                     .help("Uses the same Chat provider, model and generation settings as Recording Chat")
             }.buttonStyle(.borderless)
-            HStack(alignment: .bottom) {
-                TextField("Ask about \(model.project.name)…", text: $model.inputText, axis: .vertical)
-                    .textFieldStyle(.roundedBorder).lineLimit(1...5).focused($inputFocused)
-                    .onKeyPress(.return) {
-                        if NSEvent.modifierFlags.contains(.shift) { return .ignored }
-                        if model.canSend { model.send() }; return .handled
-                    }
-                if model.isGenerating {
-                    Button("Cancel", systemImage: "stop.circle.fill", action: model.cancel).keyboardShortcut(.cancelAction)
-                } else { Button("Send", systemImage: "arrow.up.circle.fill", action: model.send).disabled(!model.canSend) }
-            }
+            ChatComposer(text: $model.inputText, focusRequest: $focusRequest,
+                placeholder: "Ask about \(model.project.name)…", canSend: model.canSend,
+                isGenerating: model.isGenerating, onSend: model.send, onStop: model.cancel)
         }.frame(maxWidth: 760).frame(maxWidth: .infinity).padding(12)
     }
     private func openCitation(_ citation: ProjectCitation) {
@@ -151,25 +111,12 @@ struct ProjectChatView: View {
         }
     }
     private func export() {
-        let panel = NSSavePanel(); panel.allowedContentTypes = [.plainText]; panel.nameFieldStringValue = model.project.name + " Chat.md"
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
+        Task {
+            let types = [UTType(filenameExtension: "md") ?? .plainText]
+            guard let url = await FilePanels.chooseSaveDestination(fileName: model.project.name + " Chat.md", types: types) else { return }
             let content = model.exportContent()
             let options = ExportOptions(format: .markdown, includeMetadata: false, includeSummary: false, includeTranscript: false, includeChat: true)
-            Task { do { try await NativeExportService().write(content: content, options: options, to: url) } catch { exportError = error.localizedDescription } }
-        }
-    }
-}
-
-private struct ProjectChatHistory: View {
-    let model: ProjectChatViewModel
-    let open: (ProjectCitation) -> Void
-    var body: some View {
-        let messages = model.session?.orderedMessages ?? []
-        ForEach(messages) { message in
-            ProjectChatMessageRow(message: message, project: model.project,
-                canRegenerate: message.id == messages.last?.id && !model.isGenerating, open: open, regenerate: model.regenerate)
-                .id(message.id)
+            do { try await NativeExportService().write(content: content, options: options, to: url) } catch { exportError = error.localizedDescription }
         }
     }
 }
@@ -181,12 +128,8 @@ private struct ProjectChatMessageRow: View {
     let open: (ProjectCitation) -> Void
     let regenerate: () -> Void
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(message.role == .user ? "You" : "AudioNotes").font(.caption.bold()).foregroundStyle(.secondary)
-                if message.role == .assistant { GenerationDetailsButton(generationID: message.generationID) }
-                if message.status == .interrupted { Text("Interrupted").font(.caption).foregroundStyle(.secondary) }
-            }
+        ChatMessageRow(presentation: ChatMessagePresentation(message), canRegenerate: canRegenerate,
+            onCopy: copy, onRegenerate: regenerate) {
             if message.role == .assistant {
                 AssistantMessageView(markdown: message.text, references: [])
                 if !message.projectCitations.isEmpty {
@@ -207,17 +150,7 @@ private struct ProjectChatMessageRow: View {
                     }.font(.caption)
                 }
             } else { Text(message.text).font(.callout).textSelection(.enabled) }
-            HStack {
-                Button("Copy", systemImage: "doc.on.doc", action: copy).font(.caption)
-                if message.role == .assistant && canRegenerate { Button("Regenerate", systemImage: "arrow.clockwise", action: regenerate).font(.caption) }
-            }.buttonStyle(.borderless)
-        }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(message.role == .user ? Color.accentColor.opacity(0.12) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-            .accessibilityElement(children: .contain).accessibilityLabel(message.role == .user ? "User message" : "Assistant message")
-            .contextMenu {
-                Button("Copy", action: copy)
-                if message.role == .assistant && canRegenerate { Button("Regenerate", action: regenerate) }
-            }
+        }
     }
-    private func copy() { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(message.text, forType: .string) }
+    private func copy() { Clipboard.copy(message.text) }
 }

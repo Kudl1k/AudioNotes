@@ -1,5 +1,3 @@
-import AppKit
-import PDFKit
 import SwiftUI
 
 struct SourcePreviewTarget: Identifiable {
@@ -26,7 +24,7 @@ struct SourcePreviewView: View {
             }.padding()
             Divider()
             switch target.source.type {
-            case .pdf: NativePDFPreview(url: url, locator: target.locator)
+            case .pdf: PDFPreviewRepresentable(url: url, locator: target.locator)
             case .image:
                 if let image = previewImage {
                     Image(decorative: image, scale: 1).resizable().scaledToFit().padding()
@@ -71,25 +69,5 @@ struct SourcePreviewView: View {
                    }) { proxy.scrollTo(unit.id, anchor: .top) }
             }
         }
-    }
-}
-
-private final class ReadOnlyPDFView: PDFView {
-    // Imported PDF actions never launch URLs, embedded files, scripts, or applications.
-    override func perform(_ action: PDFAction) {
-        if action is PDFActionGoTo { super.perform(action) }
-    }
-}
-private struct NativePDFPreview: NSViewRepresentable {
-    let url: URL
-    let locator: SourceLocator?
-    func makeNSView(context: Context) -> PDFView {
-        let view = ReadOnlyPDFView()
-        view.autoScales = true
-        view.document = PDFDocument(url: url)
-        return view
-    }
-    func updateNSView(_ view: PDFView, context: Context) {
-        if case .pdf(let index) = locator, let page = view.document?.page(at: index) { view.go(to: page) }
     }
 }

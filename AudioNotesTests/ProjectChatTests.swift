@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import SwiftData
 import Testing
 @testable import AudioNotes
@@ -20,6 +21,7 @@ struct ProjectChatTests {
         var fail = false
         var delay: Duration = .zero
         var beforeCompletion: (() -> Void)?
+        var holdCompletion = false
         func generateSummary(transcript: Transcript, configuration: SummaryConfiguration) async throws -> Summary { throw LLMError.invalidResponse }
         func streamChat(messages: [LLMChatMessage], context: ChatContext) async throws -> AsyncThrowingStream<ChatStreamEvent, Error> {
             calls.append((messages, context))
@@ -28,7 +30,15 @@ struct ProjectChatTests {
                 let task = Task {
                     do {
                         continuation.yield(.textDelta("## Answer\n\nGrounded answer [S1]"))
-                        try await Task.sleep(for: delay)
+                        if holdCompletion {
+                            // Cancellation of the consumer terminates this gate; no wall-clock race.
+                            let gate = AsyncStream<Void>.makeStream()
+                            defer { gate.continuation.finish() }
+                            for await _ in gate.stream { }
+                            try Task.checkCancellation()
+                        } else {
+                            try await Task.sleep(for: delay)
+                        }
                         beforeCompletion?()
                         let chunks = context.sourceChunks ?? []
                         let refs = SourceReferenceResolver().resolve(chunkIDs: ["S1", "S2", "S1", "S999"], against: chunks)
@@ -97,11 +107,14 @@ struct ProjectChatTests {
         let vm = f.model(p)
         vm.inputText = "How are character devices registered?"
         vm.send()
+        let assistantID = vm.assistantMessageID
+        #expect(vm.sentQuestionID == vm.session?.orderedMessages.first?.id)
         #expect(vm.isGenerating)
         #expect(vm.inputText.isEmpty)
         #expect(vm.session?.messages.first?.role == .user)
         try await finished(vm)
         #expect(vm.state == .completed)
+        #expect(vm.session?.orderedMessages.last?.id == assistantID)
         #expect(p.calls.count == 1)
         let call = try #require(p.calls.first)
         #expect(Set(call.context.sourceChunks?.map(\.sourceID) ?? []) == [f.lectures[3].id, f.slides.id])
@@ -148,7 +161,7 @@ struct ProjectChatTests {
         #expect(vm.selection == model.selection)
     }
 
-    @Test func retryReretrievesWithoutDuplicatingQuestionAndCancellationPersistsPartial() async throws {
+    @Test(.timeLimit(.minutes(1))) func retryReretrievesWithoutDuplicatingQuestionAndCancellationPersistsPartial() async throws {
         let f = try Fixture(); defer { f.workspace.cleanUp() }
         let p = CapturingProvider(); p.fail = true
         let model = f.model(p)
@@ -158,13 +171,25 @@ struct ProjectChatTests {
         p.fail = false; model.retry(); try await finished(model)
         #expect(p.calls.count == 2 && model.session?.messages.filter { $0.role == .user }.count == 1)
         #expect(p.calls.last?.context.projectEvidence?.contains("changedfixturetoken") == true)
-        p.delay = .seconds(10)
+        p.holdCompletion = true
         model.inputText = "character device cleanup"; model.send()
-        for _ in 0..<100 where model.streamingDraft == nil { try await Task.sleep(for: .milliseconds(10)) }
-        #expect(model.streamingDraft != nil)
+        while model.streamingDraft == nil && model.isGenerating {
+            await withCheckedContinuation { continuation in
+                withObservationTracking {
+                    _ = model.streamingDraft
+                    _ = model.state
+                } onChange: {
+                    continuation.resume()
+                }
+            }
+        }
+        #expect(model.streamingDraft?.trimmingCharacters(in: .whitespacesAndNewlines) == "## Answer\n\nGrounded answer")
+        let interruptedID = model.assistantMessageID
         await model.cancelAndWait()
         #expect(model.state == .cancelled && model.canRetry)
         #expect(model.session?.orderedMessages.last?.status == .interrupted)
+        #expect(model.session?.orderedMessages.last?.id == interruptedID)
+        #expect(model.session?.orderedMessages.last?.text == "## Answer\n\nGrounded answer")
         #expect(model.session?.orderedMessages.last?.text.contains("[S") == false)
         #expect(f.project.generationRecords.last?.statusRaw != "inProgress")
     }

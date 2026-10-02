@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import Security
 
@@ -141,7 +140,7 @@ actor GoogleGeminiOAuthService {
     private let now: @Sendable () -> Date
     private let scopes = ["openid", "email", "https://www.googleapis.com/auth/generative-language.retriever"]
 
-    init(configuration: @escaping @Sendable () throws -> GoogleOAuthConfiguration = { try GoogleOAuthConfiguration.load() }, store: any GoogleOAuthCredentialStoring = GoogleOAuthKeychainStore(), clientSecretStore: (any GoogleOAuthClientSecretStoring)? = nil, listener: any ChatGPTLoopbackListening = ChatGPTLoopbackListener(), session: URLSession = .shared, openURL: @escaping @Sendable (URL) async -> Bool = { url in NSWorkspace.shared.open(url) }, now: @escaping @Sendable () -> Date = Date.init) {
+    init(configuration: @escaping @Sendable () throws -> GoogleOAuthConfiguration = { try GoogleOAuthConfiguration.load() }, store: any GoogleOAuthCredentialStoring = GoogleOAuthKeychainStore(), clientSecretStore: (any GoogleOAuthClientSecretStoring)? = nil, listener: any ChatGPTLoopbackListening = ChatGPTLoopbackListener(), session: URLSession = .shared, openURL: @escaping @Sendable (URL) async -> Bool = { url in SystemBrowserOpener().open(url) }, now: @escaping @Sendable () -> Date = Date.init) {
         self.configuration = configuration
         self.store = store
         self.clientSecretStore = clientSecretStore ?? (store as? any GoogleOAuthClientSecretStoring) ?? GoogleOAuthKeychainStore()

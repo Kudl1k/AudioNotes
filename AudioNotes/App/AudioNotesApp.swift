@@ -34,6 +34,13 @@ struct AudioNotesApp: App {
             SidebarCommands()
             ReleaseCommands(updates: updates, startup: startup)
         }
+        WindowGroup("Information", id: ReleaseInformationView.windowID, for: ReleaseInformationView.Page.self) { $page in
+            if let page { ReleaseInformationView(page: page) }
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+        .restorationBehavior(.disabled)
+        .commandsRemoved()
         Settings {
             if let container {
                 ProviderSettingsView(

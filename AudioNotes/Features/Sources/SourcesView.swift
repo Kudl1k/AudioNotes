@@ -1,4 +1,3 @@
-import AppKit
 import SwiftData
 import SwiftUI
 
@@ -126,7 +125,7 @@ struct SourcesView: View {
         .padding(.vertical, 6)
         .contextMenu {
             Button("Open") { preview = .init(source: source) }
-            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([model.url(for: source)]) }
+            Button("Reveal in Finder") { Workspace.revealInFinder([model.url(for: source)]) }
             Button("Rename…") { renaming = source; newName = source.displayName }
             if source.type != .audio { Button("Reprocess") { model.reprocess(source, context: context) }.disabled(model.isProcessing(source)) }
             Divider()
@@ -146,11 +145,9 @@ struct SourcesView: View {
         return prefix + source.status.rawValue.capitalized
     }
     private func showImporter() {
-        let panel = NSOpenPanel()
-        panel.title = "Add Sources"
-        panel.allowedContentTypes = SourceImportService.supportedTypes
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        Task { if await panel.begin() == .OK { await model.importURLs(panel.urls, context: context) } }
+        Task {
+            let urls = await FilePanels.chooseFiles(title: "Add Sources", types: SourceImportService.supportedTypes)
+            if !urls.isEmpty { await model.importURLs(urls, context: context) }
+        }
     }
 }

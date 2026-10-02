@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct AssistantMessageView: View {
@@ -117,8 +116,7 @@ private struct MarkdownCodeBlock: View {
     }
 
     private func copy() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(code, forType: .string)
+        Clipboard.copy(code)
     }
 }
 

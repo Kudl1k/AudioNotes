@@ -2,9 +2,9 @@ import SwiftUI
 
 /// Native, selectable local help/privacy/license text; no web-based primary UI.
 struct ReleaseInformationView: View {
-    enum Page: String, Identifiable { case help = "AudioNotes Help", privacy = "Privacy", licenses = "Third-Party Licenses"; var id: String { rawValue } }
+    enum Page: String, Identifiable, Codable, Hashable { case help = "AudioNotes Help", privacy = "Privacy", licenses = "Third-Party Licenses"; var id: String { rawValue } }
+    static let windowID = "information"
     let page: Page
-    var onDone: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
 
     private var content: String {
@@ -19,7 +19,7 @@ struct ReleaseInformationView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(page.rawValue).font(.title2)
             ScrollView { Text(content).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(.trailing, 8) }
-            HStack { Spacer(); Button("Done") { if let onDone { onDone() } else { dismiss() } }.keyboardShortcut(.defaultAction) }
-        }.padding(24).frame(width: 600, height: 520)
+            HStack { Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
+        }.padding(24).frame(width: 600, height: 520).navigationTitle(page.rawValue)
     }
 }

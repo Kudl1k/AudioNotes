@@ -366,7 +366,7 @@ final class ProviderSettingsViewModel: ObservableObject {
     }
 
     func copyLogs() {
-        DebugLogService.shared.copyToClipboard()
+        Clipboard.copy(DebugLogService.shared.formattedLogs())
         copiedLogsNotice = true
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 2_000_000_000)

@@ -184,7 +184,7 @@ struct ProviderSettingsView: View {
                 }
             }
             Section("Storage & Privacy") {
-                Button("Reveal Data Folder") { NSWorkspace.shared.open(AppStorageLocations.applicationSupport()) }
+                Button("Reveal Data Folder") { Workspace.open(AppStorageLocations.applicationSupport()) }
                 Button("Privacy") { information = .privacy }
                 Button("AudioNotes Help") { information = .help }
                 Button("Third-Party Licenses") { information = .licenses }

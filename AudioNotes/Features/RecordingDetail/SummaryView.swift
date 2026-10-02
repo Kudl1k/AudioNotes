@@ -34,10 +34,17 @@ struct SummaryView: View {
             }
         }
         .sheet(isPresented: $showingHistory) {
-            SummaryHistorySheet(recording: recording) { historicalSummary = $0 }
+            SummaryHistorySheet(recording: recording, model: model, repository: repository) { historicalSummary = $0 }
                 .frame(minWidth: 440, minHeight: 360)
         }
+        // While the history sheet is open, it presents its own version errors.
+        .alert("Summary history", isPresented: Binding(get: { model.historyError != nil && !showingHistory },
+                                                       set: { if !$0 { model.historyError = nil } })) {
+            Button("OK", role: .cancel) { model.historyError = nil }
+        } message: { Text(model.historyError ?? "") }
     }
+
+    private var repository: SwiftDataSummaryRepository { SwiftDataSummaryRepository(context: modelContext) }
 
     private var emptyStateGenerator: some View {
         ScrollView {
@@ -234,8 +241,7 @@ struct SummaryView: View {
 
                     if historicalSummary != nil {
                         Button("Make Current") {
-                            try? SwiftDataSummaryRepository(context: modelContext).makeCurrent(summary, for: recording)
-                            historicalSummary = nil
+                            if model.makeCurrent(summary, using: repository) { historicalSummary = nil }
                         }
                     }
                     Button("History") { showingHistory = true }
@@ -472,15 +478,15 @@ struct SummaryView: View {
     }
 
     private func startGeneration() {
-        let repo = SwiftDataSummaryRepository(context: modelContext)
-        model.generateSummary(using: repo)
+        model.generateSummary(using: repository)
     }
 }
 
 private struct SummaryHistorySheet: View {
     let recording: Recording
+    let model: SummaryViewModel
+    let repository: any SummaryStoring
     let select: (Summary) -> Void
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var deleteCandidate: Summary?
 
@@ -514,10 +520,14 @@ private struct SummaryHistorySheet: View {
         ), titleVisibility: .visible) {
             Button("Delete Version", role: .destructive) {
                 guard let candidate = deleteCandidate else { return }
-                try? SwiftDataSummaryRepository(context: modelContext).delete(candidate, for: recording)
+                model.deleteVersion(candidate, using: repository)
                 deleteCandidate = nil
             }
         } message: { Text("This cannot be undone.") }
+        .alert("Summary history", isPresented: Binding(get: { model.historyError != nil },
+                                                       set: { if !$0 { model.historyError = nil } })) {
+            Button("OK", role: .cancel) { model.historyError = nil }
+        } message: { Text(model.historyError ?? "") }
     }
 }
 
