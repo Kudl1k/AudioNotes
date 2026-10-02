@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// Finder and default-application integration.
@@ -19,3 +20,4 @@ struct SystemBrowserOpener: BrowserOpening {
         Workspace.open(url)
     }
 }
+#endif

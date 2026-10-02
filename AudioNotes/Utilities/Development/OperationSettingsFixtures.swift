@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG && os(macOS)
 import CryptoKit
 import Foundation
 import SwiftUI

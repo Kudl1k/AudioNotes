@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -191,3 +192,4 @@ struct ChatTextEditorRepresentable: NSViewRepresentable {
         NSSize(width: NSView.noIntrinsicMetric, height: editorHeight(width: max(1, bounds.width)))
     }
 }
+#endif

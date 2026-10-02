@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -97,3 +98,5 @@ struct ExportSheetView: View {
         }
     }
 }
+
+#endif

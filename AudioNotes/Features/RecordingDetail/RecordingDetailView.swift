@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftData
 import SwiftUI
 
@@ -285,3 +286,5 @@ struct RecordingDetailView: View {
         model.startTranscription(using: SwiftDataTranscriptRepository(context: modelContext))
     }
 }
+
+#endif

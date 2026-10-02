@@ -1,8 +1,8 @@
 # M16 — iOS / iPadOS port: architecture and portability audit
 
-Status: M16.0 audit completed; M16.1 platform boundary preparation completed (2026-10-02).
+Status: M16.0 audit completed; M16.1 platform boundary preparation completed; M16.2 iOS target and navigation shell completed (2026-10-02).
 Shared/platform boundaries prepared with zero macOS behavior change (see `docs/IOS_PLATFORM_BOUNDARIES.md`).
-No iOS target, module, entitlement, bundle identifier, deployment target, or signing created yet (scheduled for M16.2).
+iOS target and adaptive navigation shell operational on iPhone/iPad simulators (see `docs/IOS_TARGET_AND_NAVIGATION.md`).
 SwiftData schema remains 100% frozen; project.pbxproj remains on objectVersion = 77.
 M15 (macOS release candidate, signing, notarization) is reserved and not part of M16.
 
@@ -655,8 +655,8 @@ evidence.
   neutral colors for the three `nsColor` sites; small modifiers for `.link`/`.radioGroup`; CGContext PDF-page
   thumbnail; protocol seams where shared code calls the platform (clipboard, external URL, file import/export
   presentation, audio session). Full macOS tests/Release must stay green; no schema/target/signing changes.
-- **M16.2 — iOS target + library/navigation shell.** Target, scheme, plist, assets, shared membership,
-  `AudioNotesiOS/` app entry, mock-provider library, iPhone stack / iPad split, Settings screen with API-key entry.
+- [x] **M16.2 — iOS target + library/navigation shell.** Target, scheme, plist, assets, shared membership,
+  `AudioNotesiOSApp` entry, adaptive iPhone NavigationStack / iPad NavigationSplitView, native Settings sheet, zero macOS regressions (see `docs/IOS_TARGET_AND_NAVIGATION.md`).
 - **M16.3 — Audio import + recording detail.** `.fileImporter`, copy-in-scope import, playback with
   `AVAudioSession`, header/player/tabs, transcript view.
 - **M16.4 — Cloud AI + chats (OpenAI).** Foreground transcription with progress/cancel/interrupted states,

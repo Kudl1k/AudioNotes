@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftData
 import SwiftUI
 
@@ -328,3 +329,5 @@ struct ProjectWorkspaceView: View {
         return kind + " · " + status
     }
 }
+
+#endif

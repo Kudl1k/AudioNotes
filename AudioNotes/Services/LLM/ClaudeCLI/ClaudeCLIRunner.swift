@@ -172,9 +172,13 @@ private final class ClaudeCLIInvocation: @unchecked Sendable {
 #else
 /// Inert stub for non-macOS platforms where Process is unavailable.
 struct ClaudeCLIRunner: ClaudeCLIRunning {
+    var timeout: Duration = .seconds(300)
+    init(timeout: Duration = .seconds(300)) {
+        self.timeout = timeout
+    }
     func run(executable: String, arguments: [String], input: Data, systemPrompt: String?) -> AsyncThrowingStream<Data, Error> {
         AsyncThrowingStream { continuation in
-            continuation.finish(throwing: ClaudeCLIError.launchFailed)
+            continuation.finish(throwing: ClaudeCLIError.notInstalled)
         }
     }
 }

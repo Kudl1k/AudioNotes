@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 
 struct ChatComposer: View {
@@ -42,3 +43,4 @@ struct ChatComposer: View {
         }
     }
 }
+#endif

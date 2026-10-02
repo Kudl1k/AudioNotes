@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 import SwiftData
 
@@ -131,3 +132,5 @@ private struct ExportCommands: Commands {
         }
     }
 }
+
+#endif

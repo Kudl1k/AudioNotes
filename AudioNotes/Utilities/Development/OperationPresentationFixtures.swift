@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG && os(macOS)
 import AVFoundation
 import Foundation
 import SwiftData

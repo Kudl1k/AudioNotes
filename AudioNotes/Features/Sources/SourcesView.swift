@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftData
 import SwiftUI
 
@@ -139,7 +140,9 @@ struct SourcesView: View {
         .padding(.vertical, 6)
         .contextMenu {
             Button("Open") { preview = .init(source: source) }
+            #if os(macOS)
             Button("Reveal in Finder") { Workspace.revealInFinder([model.url(for: source)]) }
+#endif
             Button("Rename…") { renaming = source; newName = source.displayName }
             if source.type != .audio { Button("Reprocess") { model.reprocess(source, context: context) }.disabled(model.isProcessing(source)) }
             Divider()
@@ -165,3 +168,5 @@ struct SourcesView: View {
         }
     }
 }
+
+#endif

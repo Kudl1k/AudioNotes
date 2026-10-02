@@ -507,7 +507,7 @@ Goal: deliver native iPhone and iPad companion targets sharing core models, pers
 
 - [x] M16.0 — Architecture and portability audit ([audit report](IOS_PORT_AUDIT.md))
 - [x] M16.1 — Shared/platform boundary preparation (zero behavior change on macOS; [boundary report](IOS_PLATFORM_BOUNDARIES.md))
-- [ ] M16.2 — iOS target + library and navigation shell
+- [x] M16.2 — iOS target + library and navigation shell ([implementation report](IOS_TARGET_AND_NAVIGATION.md))
 - [ ] M16.3 — Audio import + recording detail (header, playback, transcript)
 - [ ] M16.4 — Cloud AI + chats (OpenAI transcription, summaries, Recording Chat, iOS composer)
 - [ ] M16.5 — Projects, sources, OCR, citations, Project Chat
@@ -516,4 +516,4 @@ Goal: deliver native iPhone and iPad companion targets sharing core models, pers
 - [ ] M16.8 — iPad polish (adaptive split, inspector, keyboard shortcuts, drag & drop)
 - [ ] M16.9 — iOS QA, accessibility, memory, performance, and validation
 
-See [iOS Port Architecture and Portability Audit](IOS_PORT_AUDIT.md) and [iOS Platform Boundaries](IOS_PLATFORM_BOUNDARIES.md).
+See [iOS Port Architecture and Portability Audit](IOS_PORT_AUDIT.md), [iOS Platform Boundaries](IOS_PLATFORM_BOUNDARIES.md), and [iOS Target & Navigation Shell](IOS_TARGET_AND_NAVIGATION.md).

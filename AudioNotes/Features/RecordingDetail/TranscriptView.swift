@@ -70,7 +70,11 @@ struct TranscriptView: View {
         let time = AudioTime.string(segment.startTime)
         return HStack(alignment: .top, spacing: 16) {
             Button(time) { seek(segment.startTime) }
-                .buttonStyle(.link).monospacedDigit()
+                #if os(macOS)
+            .buttonStyle(.link).monospacedDigit()
+#else
+            .buttonStyle(.plain).foregroundStyle(.tint).monospacedDigit()
+#endif
             VStack(alignment: .leading, spacing: 4) {
                 if let speaker = segment.speaker { Text(speaker).font(.caption.bold()) }
                 Text(segment.text).textSelection(.enabled)

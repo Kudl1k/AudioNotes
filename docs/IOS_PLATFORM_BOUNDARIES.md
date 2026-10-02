@@ -46,8 +46,7 @@ Eliminated AppKit `Color(nsColor: .controlBackgroundColor)` references in shared
 
 ### 2.5 CoreGraphics PDF Thumbnail Rendering (`SourceProcessingService.swift`)
 Refactored PDF thumbnail rendering from AppKit `NSImage` (`page.thumbnail(of:for:)` and `NSImage.cgImage(forProposedRect:...)`) to platform-neutral CoreGraphics:
-- Implemented `NativeSourceProcessingService.renderPage(_:targetSize:box:)`:
-  - Directly creates a bitmap context via `CGContext(data:width:height:bitsPerComponent:bytesPerRow:space:bitmapInfo:)`.
+- Implemented `NativeSourceProcessingService.renderPage(_:targetSize:box:)`:\n  - Directly creates a bitmap context via `CGContext(data:width:height:bitsPerComponent:bytesPerRow:space:bitmapInfo:)`.
   - Computes scale preserving aspect ratio.
   - Applies CoreGraphics PDF coordinate transformations: translates by `(targetSize - scaledSize) / 2`, scales context, applies `page.transform(for: box)`.
   - Renders directly with `page.draw(with: box, to: context)`.
@@ -64,8 +63,7 @@ Sparkle is a macOS-only update framework.
 Claude CLI utilizes Foundation `Process`, which is unavailable on iOS.
 - Guarded `Process` execution in `ClaudeCLIRunner` behind `#if os(macOS)`.
 - Maintained internal `UnavailableLLMProvider` throwing typed `.providerUnavailable("Claude CLI")` error when queried on unsupported platforms.
-- `LLMProviderResolver` checks `PlatformCapabilities.current.supportsClaudeCLI` when resolving `.anthropic`.
-- Settings UI (`ProviderConnectionsView`, `GenerationDefaultsView`) conditionally adapts Claude CLI options based on platform capability.
+- `LLMProviderResolver` checks `PlatformCapabilities.current.supportsClaudeCLI` when resolving `.anthropic`.\n- Settings UI (`ProviderConnectionsView`, `GenerationDefaultsView`) conditionally adapts Claude CLI options based on platform capability.
 
 ---
 
@@ -100,3 +98,15 @@ All remaining `import AppKit` occurrences are intentionally isolated and justifi
   - `xcodebuild build -scheme AudioNotes -configuration Release -destination 'platform=macOS'` **SUCCEEDED**.
 - **PBXPROJ Integrity**:
   - `objectVersion = 77` preserved in `AudioNotes.xcodeproj/project.pbxproj`. Zero git diff.
+
+---
+
+## 5. M16.2 Additions: Target & UI Boundary Refinement
+
+During M16.2, further cross-platform seams were established:
+1. **FlowLayout Extraction (`Features/Shared/FlowLayout.swift`)**:
+   - Extracted `FlowLayout` from macOS-specific view hierarchies into a shared layout utility for both macOS and iOS tag clouds.
+2. **Browser Opening Seam (`BrowserOpening`)**:
+   - Introduced `SystemBrowserOpener` on iOS utilizing `UIApplication.shared.open(_:)` while preserving `NSWorkspace.shared.open(_:)` on macOS.
+3. **AppKit View Guarding**:
+   - macOS-specific views (`ChatInspectorView`, `TranscriptHistoryView`, `ProjectChatSelectionView`, `SourcesView`) guarded cleanly with `#if os(macOS)` to allow root group synchronization across targets without duplicating files or perturbing project references.

@@ -24,7 +24,11 @@ struct SourcePreviewView: View {
             }.padding()
             Divider()
             switch target.source.type {
+#if os(macOS)
             case .pdf: PDFPreviewRepresentable(url: url, locator: target.locator)
+#else
+            case .pdf: ContentUnavailableView("PDF Preview", systemImage: "doc.text", description: Text("PDF preview arrives in M16.5."))
+#endif
             case .image:
                 if let image = previewImage {
                     Image(decorative: image, scale: 1).resizable().scaledToFit().padding()
@@ -48,26 +52,18 @@ struct SourcePreviewView: View {
         .onAppear {
             if target.source.type == .audio {
                 playback.load(url: url)
-                if case .audio(_, let start, _) = target.locator { playback.seek(to: start) }
             }
         }
         .onDisappear { playback.stop() }
     }
+
     private var documentText: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    ForEach(target.source.textUnits.sorted { $0.position < $1.position }) { unit in
-                        Text(unit.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).id(unit.id)
-                    }
-                }.padding(20)
-            }.onAppear {
-                if case .document(_, let start, _) = target.locator,
-                   let unit = target.source.textUnits.first(where: {
-                       if case .document(_, let lower, let upper) = $0.locator { return start >= lower && start < upper }
-                       return false
-                   }) { proxy.scrollTo(unit.id, anchor: .top) }
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(target.source.textUnits.sorted { $0.position < $1.position }) { unit in
+                    Text(unit.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }.padding()
         }
     }
 }

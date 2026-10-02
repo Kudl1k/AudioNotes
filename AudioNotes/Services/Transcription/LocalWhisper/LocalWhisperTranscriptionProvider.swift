@@ -9,6 +9,20 @@ protocol LocalWhisperRunning: Sendable {
                     status: @escaping LocalWhisperStatusReporter) async throws -> LocalWhisperResult
 }
 
+#if !os(macOS)
+struct UnavailableWhisperRuntime: LocalWhisperRunning {
+    func transcribe(audioURL: URL, modelFolder: URL, language: String?,
+                    status: @escaping LocalWhisperStatusReporter) async throws -> LocalWhisperResult {
+        throw LocalAIError.unsupportedHardware
+    }
+}
+
+enum LocalWhisperRuntimeCapabilities {
+    static var languageCodes: Set<String> { [] }
+    static var isSupported: Bool { false }
+}
+#endif
+
 @MainActor final class LocalWhisperTranscriptionProvider: TranscriptionProvider {
     let displayName = "Local Whisper"
     let providerID: String? = "localWhisper"
@@ -20,9 +34,17 @@ protocol LocalWhisperRunning: Sendable {
     let language: String?
     let runtime: any LocalWhisperRunning
     let store: WhisperModelStore
+
+#if os(macOS)
     init(model: WhisperModelDescriptor, language: String?, runtime: any LocalWhisperRunning = WhisperKitRuntime(), store: WhisperModelStore) {
         self.model = model; self.language = language; self.runtime = runtime; self.store = store
     }
+#else
+    init(model: WhisperModelDescriptor, language: String?, runtime: any LocalWhisperRunning = UnavailableWhisperRuntime(), store: WhisperModelStore) {
+        self.model = model; self.language = language; self.runtime = runtime; self.store = store
+    }
+#endif
+
     func transcribe(audioURL: URL, progress: @escaping TranscriptionProgress) async throws -> Transcript {
         try await transcribe(audioURL: audioURL, progress: progress, status: { _ in })
     }

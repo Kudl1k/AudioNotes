@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 
 struct ProviderSettingsView: View {
@@ -256,3 +257,5 @@ struct ProviderSettingsView: View {
         .padding(16)
     }
 }
+
+#endif

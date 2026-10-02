@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -334,3 +335,5 @@ struct LibraryView: View {
         Task { await model.importFiles(urls, to: project, context: modelContext) }
     }
 }
+
+#endif

@@ -1,3 +1,4 @@
+#if os(macOS)
 #if DEBUG
 import SwiftData
 import SwiftUI
@@ -117,4 +118,6 @@ private struct WorkspaceHost: View {
     TranscriptView(transcript: try? PerformanceFixtures.recording(.small).transcript, seek: { _ in })
         .frame(width: 640, height: 420)
 }
+#endif
+
 #endif

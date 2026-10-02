@@ -1,3 +1,4 @@
+#if os(macOS)
 import PDFKit
 import SwiftUI
 
@@ -34,3 +35,4 @@ struct PDFPreviewRepresentable: NSViewRepresentable {
         if case .pdf(let index) = locator, let page = view.document?.page(at: index) { view.go(to: page) }
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 
 struct WelcomeView: View {
@@ -48,3 +49,5 @@ struct WelcomePresentation: ViewModifier {
         }
     }
 }
+
+#endif

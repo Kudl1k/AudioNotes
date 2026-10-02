@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import CoreGraphics
 import CoreText
@@ -425,3 +426,4 @@ public struct PDFExporter: Sendable {
         return pdfData as Data
     }
 }
+#endif

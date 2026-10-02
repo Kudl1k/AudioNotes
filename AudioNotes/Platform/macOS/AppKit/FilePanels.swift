@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import UniformTypeIdentifiers
 
@@ -30,3 +31,4 @@ enum FilePanels {
         return panel.url
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 
 struct ReleaseCommands: Commands {
@@ -35,3 +36,4 @@ struct ReleaseCommands: Commands {
         }
     }
 }
+#endif

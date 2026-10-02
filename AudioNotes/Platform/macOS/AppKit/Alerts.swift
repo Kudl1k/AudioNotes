@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// Modal alerts for menu commands, which have no SwiftUI view to attach `.alert` to.
@@ -9,3 +10,4 @@ enum Alerts {
         alert.runModal()
     }
 }
+#endif

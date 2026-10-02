@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 
 struct AllRecordingsView: View {
@@ -74,3 +75,5 @@ struct AllRecordingsView: View {
         }.sheet(item: $exporting) { ExportSheetView(recording: $0) }
     }
 }
+
+#endif

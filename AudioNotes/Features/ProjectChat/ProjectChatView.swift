@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -163,3 +164,5 @@ private struct ProjectChatMessageRow: View {
     }
     private func copy() { Clipboard.copy(message.text) }
 }
+
+#endif

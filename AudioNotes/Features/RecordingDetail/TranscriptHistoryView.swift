@@ -1,3 +1,4 @@
+#if os(macOS)
 import Observation
 import SwiftData
 import SwiftUI
@@ -97,3 +98,5 @@ struct TranscriptHistoryView: View {
         } message: { Text("This cannot be undone. Generation usage and cost history are retained.") }
     }
 }
+
+#endif

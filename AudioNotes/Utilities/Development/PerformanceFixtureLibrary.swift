@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG && os(macOS)
 import CoreGraphics
 import CoreText
 import ImageIO

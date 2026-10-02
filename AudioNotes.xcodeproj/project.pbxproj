@@ -10,6 +10,7 @@
 		AA0000000000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000010 /* Assets.xcassets */; };
 		AB1000000000000000000001 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = AB1000000000000000000002 /* WhisperKit */; };
 		AC1300000000000000000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = AC1300000000000000000002 /* Sparkle */; };
+		BB0000000000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000010 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -26,6 +27,8 @@
 		AA0000000000000000000001 /* AudioNotesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = AudioNotesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		AC1300000000000000000004 /* Configuration/App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration/App.xcconfig; sourceTree = SOURCE_ROOT; };
+		BB0000000000000000000001 /* AudioNotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioNotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB0000000000000000000002 /* Configuration/iOS.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration/iOS.xcconfig; sourceTree = SOURCE_ROOT; };
 		E817569F306D0BDF00E1DF07 /* AudioNotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioNotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -36,6 +39,18 @@
 				Resources/GoogleOAuth.json,
 			);
 			target = E817569E306D0BDF00E1DF07 /* AudioNotes */;
+		};
+		BB1300000000000000000007 /* Exceptions for "AudioNotes" folder in "AudioNotesiOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				App/AudioNotesApp.swift,
+				Features/Release/ReleaseCommands.swift,
+				Resources/GoogleOAuth.json,
+				Services/Export/PDFExporter.swift,
+				Services/Transcription/LocalWhisper/WhisperKitRuntime.swift,
+				Utilities/Development/PerformanceFixtureApplicationDelegate.swift,
+			);
+			target = BB0000000000000000000003 /* AudioNotesiOS */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -48,6 +63,7 @@
 		E81756A1306D0BDF00E1DF07 /* AudioNotes */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				BB1300000000000000000007 /* Exceptions for "AudioNotes" folder in "AudioNotesiOS" target */,
 				AC1300000000000000000007 /* Exceptions for "AudioNotes" folder in "AudioNotes" target */,
 			);
 			path = AudioNotes;
@@ -57,6 +73,11 @@
 
 /* Begin PBXFrameworksBuildPhase section */
 		AA0000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		BB0000000000000000000006 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -76,6 +97,7 @@
 			children = (
 				AA0000000000000000000010 /* Assets.xcassets */,
 				AC1300000000000000000004 /* Configuration/App.xcconfig */,
+				BB0000000000000000000002 /* Configuration/iOS.xcconfig */,
 				E81756A1306D0BDF00E1DF07 /* AudioNotes */,
 				AA0000000000000000000002 /* AudioNotesTests */,
 				E81756A0306D0BDF00E1DF07 /* Products */,
@@ -86,6 +108,7 @@
 		E81756A0306D0BDF00E1DF07 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				BB0000000000000000000001 /* AudioNotes.app */,
 				E817569F306D0BDF00E1DF07 /* AudioNotes.app */,
 				AA0000000000000000000001 /* AudioNotesTests.xctest */,
 			);
@@ -123,6 +146,24 @@
 			productReference = AA0000000000000000000001 /* AudioNotesTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		BB0000000000000000000003 /* AudioNotesiOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB0000000000000000000004 /* Build configuration list for PBXNativeTarget "AudioNotesiOS" */;
+			buildPhases = (
+				BB0000000000000000000005 /* Sources */,
+				BB0000000000000000000006 /* Frameworks */,
+				BB0000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				E81756A1306D0BDF00E1DF07 /* AudioNotes */,
+			);
+			name = AudioNotesiOS;
+			productName = AudioNotes;
+			productReference = BB0000000000000000000001 /* AudioNotes.app */;
+			productType = "com.apple.product-type.application";
+		};
 		E817569E306D0BDF00E1DF07 /* AudioNotes */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E81756AA306D0BE000E1DF07 /* Build configuration list for PBXNativeTarget "AudioNotes" */;
@@ -155,6 +196,11 @@
 				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
+					BB0000000000000000000003 = {
+						CreatedOnToolsVersion = 27.0;
+						DevelopmentTeam = 8HTA4B98F5;
+						ProvisioningStyle = Automatic;
+					};
 					E817569E306D0BDF00E1DF07 = {
 						CreatedOnToolsVersion = 27.0;
 					};
@@ -179,6 +225,7 @@
 			projectRoot = "";
 			targets = (
 				AA0000000000000000000003 /* AudioNotesTests */,
+				BB0000000000000000000003 /* AudioNotesiOS */,
 				E817569E306D0BDF00E1DF07 /* AudioNotes */,
 			);
 		};
@@ -188,6 +235,12 @@
 		AA0000000000000000000007 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
+			);
+		};
+		BB0000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				BB0000000000000000000011 /* Assets.xcassets in Resources */,
 			);
 		};
 		E817569D306D0BDF00E1DF07 /* Resources */ = {
@@ -200,6 +253,11 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		AA0000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		BB0000000000000000000005 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
 			);
@@ -255,6 +313,28 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 6.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AudioNotes.app/Contents/MacOS/AudioNotes";
+			};
+			name = Release;
+		};
+		BB000000000000000000000A /* Debug configuration for PBXNativeTarget "AudioNotesiOS" */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = BB0000000000000000000002 /* Configuration/iOS.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				DEVELOPMENT_TEAM = 8HTA4B98F5;
+				PRODUCT_NAME = AudioNotes;
+			};
+			name = Debug;
+		};
+		BB000000000000000000000B /* Release configuration for PBXNativeTarget "AudioNotesiOS" */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = BB0000000000000000000002 /* Configuration/iOS.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				DEVELOPMENT_TEAM = 8HTA4B98F5;
+				PRODUCT_NAME = AudioNotes;
 			};
 			name = Release;
 		};
@@ -452,6 +532,14 @@
 			buildConfigurations = (
 				AA000000000000000000000A /* Debug configuration for PBXNativeTarget "AudioNotesTests" */,
 				AA000000000000000000000B /* Release configuration for PBXNativeTarget "AudioNotesTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		BB0000000000000000000004 /* Build configuration list for PBXNativeTarget "AudioNotesiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB000000000000000000000A /* Debug configuration for PBXNativeTarget "AudioNotesiOS" */,
+				BB000000000000000000000B /* Release configuration for PBXNativeTarget "AudioNotesiOS" */,
 			);
 			defaultConfigurationName = Release;
 		};
