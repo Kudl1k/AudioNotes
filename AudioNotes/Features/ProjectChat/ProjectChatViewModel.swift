@@ -18,7 +18,7 @@ final class ProjectChatViewModel {
     private(set) var lastError: String?
     private(set) var coverage = RetrievalCoverage()
     private(set) var searchableIDs = Set<UUID>()
-    private(set) var elapsedSeconds = 0
+    private(set) var operationStartedAt: Date?
     var confirmingClear = false
     var confirmingCloud = false
     private var pendingAction: Action?
@@ -29,7 +29,6 @@ final class ProjectChatViewModel {
     @ObservationIgnored private let resolver: any LLMProviderResolving
     @ObservationIgnored private var activeTask: Task<Void, Never>?
     @ObservationIgnored private var publishTask: Task<Void, Never>?
-    @ObservationIgnored private var timerTask: Task<Void, Never>?
     @ObservationIgnored private var pendingDraft = ""
     @ObservationIgnored private var lastGeneration: GenerationRecord?
     private var cloudConsentProvider: String?
@@ -232,19 +231,12 @@ final class ProjectChatViewModel {
         let tracker = OperationUsageTracker(generation: generation)
         do { try repository.record(generation) } catch { lastError = error.localizedDescription; return }
         assistantMessageID = UUID()
-        state = .preparing; pendingDraft = ""; streamingDraft = nil; lastError = nil; elapsedSeconds = 0
-        timerTask = Task { [weak self] in
-            while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(1)) } catch { return }
-                self?.elapsedSeconds += 1
-            }
-        }
+        state = .preparing; pendingDraft = ""; streamingDraft = nil; lastError = nil; operationStartedAt = .now
         activeTask = Task { [self] in
             var requestID: UUID?, usage: GenerationUsage?
             let started = Date.now
             defer {
                 publishTask?.cancel(); publishTask = nil
-                timerTask?.cancel(); timerTask = nil
                 streamingDraft = nil; activeTask = nil
             }
             do {

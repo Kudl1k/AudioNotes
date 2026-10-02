@@ -61,7 +61,7 @@ final class RecordingViewModel {
         let components = monotonicStart.duration(to: ContinuousClock.now).components
         return max(0, Double(components.seconds) + Double(components.attoseconds) / 1e18)
     }
-    var completionDurationText: String { AudioTime.string(completedDuration ?? 0) }
+    var completionDurationText: String { OperationDurationFormatter.string(completedDuration ?? 0) }
     var showsCompletion: Bool { completedDuration != nil }
 
     /// The view model owns task lifetime; returning the task permits deterministic tests.

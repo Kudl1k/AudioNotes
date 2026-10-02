@@ -12,8 +12,8 @@ struct TranscriptView: View {
             VStack(spacing: 0) {
                 TextField("Search transcript", text: $searchText)
                     .textFieldStyle(.roundedBorder)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
+                    .padding(.horizontal, WorkspaceSpacing.majorSection)
+                    .padding(.top, WorkspaceSpacing.standard)
                     .accessibilityLabel("Search transcript")
                 if model.isLoading {
                     ProgressView("Loading transcript…").controlSize(.small).padding(8)
@@ -22,11 +22,11 @@ struct TranscriptView: View {
                     Text("\(model.visibleSegments.count) matches")
                         .font(.caption).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 18).padding(.top, 6)
+                        .padding(.horizontal, WorkspaceSpacing.majorSection).padding(.top, WorkspaceSpacing.compact)
                 }
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 20) {
+                        LazyVStack(alignment: .leading, spacing: WorkspaceSpacing.majorSection) {
                             if transcript.isMock {
                                 Label("Sample transcript · Mock provider · Not actual speech recognition", systemImage: "info.circle")
                                     .font(.callout).foregroundStyle(.secondary)
@@ -37,9 +37,8 @@ struct TranscriptView: View {
                                 segmentRow(segment).id(segment.id)
                             }
                         }
-                        .frame(maxWidth: 860, alignment: .leading)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(WorkspaceSpacing.majorSection)
                     }
                     .onChange(of: revealedSegmentID) { _, id in
                         searchText = ""

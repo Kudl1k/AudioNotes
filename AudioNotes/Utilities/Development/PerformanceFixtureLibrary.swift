@@ -14,18 +14,22 @@ struct PerformanceFixtureLibrary: View {
 
     var body: some View {
         Group {
-            if isReady {
-                LibraryView(transcriptionResolver: FixedTranscriptionProviderResolver(provider: MockTranscriptionProvider()),
+            if ProcessInfo.processInfo.arguments.contains("--performance-operation-settings") {
+                OperationSettingsFixtureView()
+            } else if isReady {
+                LibraryView(transcriptionResolver: FixedTranscriptionProviderResolver(provider: ProcessInfo.processInfo.arguments.contains("--performance-layout") ? OperationFixtureTranscriptionProvider() : MockTranscriptionProvider()),
                     llmResolver: FixedLLMProviderResolver(provider: ProcessInfo.processInfo.arguments.contains("--performance-chat-stress") ? ChatPresentationFixtureProvider() : MockLLMProvider()))
             } else if let failure { Text("Fixture setup failed: " + failure).padding() }
             else { ProgressView("Preparing development fixtures…") }
         }
         .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--performance-light") ? .light : nil)
         .task {
+            guard !ProcessInfo.processInfo.arguments.contains("--performance-operation-settings") else { return }
             guard !isReady else { return }
             do {
                 if ProcessInfo.processInfo.arguments.contains("--performance-project-chat") {
                     try ProjectChatFixtures.prepare(context: context)
+                    if ProcessInfo.processInfo.arguments.contains("--performance-layout") { try OperationPresentationFixtures.prepare(context: context) }
                     if ProcessInfo.processInfo.arguments.contains("--performance-chat-stress") { try ChatPresentationFixtures.prepare(context: context) }
                     isReady = true
                     return

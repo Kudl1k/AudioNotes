@@ -29,6 +29,7 @@ final class SummaryViewModel {
     var generationSettings: LLMGenerationSettings?
     var outputLength: OutputLength = .medium
     private(set) var progressMessage: String?
+    private(set) var operationStartedAt: Date?
 
     @ObservationIgnored private let resolver: any LLMProviderResolving
     @ObservationIgnored private var activeProvider: (any LLMProvider)?
@@ -122,6 +123,7 @@ final class SummaryViewModel {
         attemptID = id
         state = .generating
         let startedAt = Date.now
+        operationStartedAt = startedAt
 
         var effectiveSettings = generationSettings ?? resolver.summarySettings()
         effectiveSettings.outputLength = outputLength

@@ -385,3 +385,27 @@ actual stable message IDs in the lazy history. The renderer's separate-block tex
 selection limitation remains. Schema, migration and release settings are unchanged.
 Physical IME, VoiceOver narration, full-screen and live-provider acceptance remain
 open; fixture/component checks do not close the older M11/M14 acceptance lists.
+
+## M14.3 — Workspace density and operation progress
+
+Project identity/navigation now stay at the top, with an expanding content region
+and responsive title/filename filtering. Recording Detail uses compact insets and
+keeps its project breadcrumb inside the native inspector's content stack, avoiding
+title overlap/blur. Transcript alignment and the summary introduction are tighter;
+M14.2 shared chat, native Settings/history/usage and renderers remain intact.
+At minimum height, the recording column scrolls with a measured, usable tab viewport
+instead of compressing native TabView constraints or pushing the title into the toolbar.
+
+Shared SwiftUI progress/time views present real completed work, native indeterminate
+states, existing cancellation and timestamp-based elapsed time. Transcription keeps
+its measured/smoothed ETA, removes synthetic phase weighting, and attachment rows
+relay existing provider progress. Chat no longer updates the whole model on timer
+ticks. Model download uses actual bytes without inventing ETA. No new AppKit,
+schema, operation registry, provider or release configuration changes.
+
+The full suite passes 424 tests and the Release build passes. Native offline review
+covers minimum/normal/large/full-screen, Light/Dark, multipart navigation/resize,
+cancel/failure, summary/chat and synthetic model download. Physical accessibility,
+live-provider and prolonged extraction/import acceptance remain open. See
+[the audit, progress inventory, screenshots, validation and limitations](UX_LAYOUT_AND_PROGRESS.md).
+M14.3 is a separate uncommitted candidate; M14.4 has not started.

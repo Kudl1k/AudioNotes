@@ -41,7 +41,7 @@ final class ChatViewModel {
     var lastError: String? = nil
     var canRetry: Bool = false
     var confirmingClearChat: Bool = false
-    var elapsedSeconds: Int = 0
+    private(set) var operationStartedAt: Date?
     private(set) var presentationPhase = "Preparing recording context…"
 
     // Accumulate every token, but publish at most once per display interval.
@@ -57,7 +57,6 @@ final class ChatViewModel {
     private let resolver: any LLMProviderResolving
     private var storage: ChatRepository?
     private var activeTask: Task<Void, Never>?
-    private var timerTask: Task<Void, Never>?
 
     // MARK: - Initializer
 
@@ -163,8 +162,6 @@ final class ChatViewModel {
 
     func stopGeneration() {
         guard isGenerating else { return }
-        timerTask?.cancel()
-        timerTask = nil
 
         draftPublishTask?.cancel()
         draftPublishTask = nil
@@ -220,19 +217,6 @@ final class ChatViewModel {
         }
     }
 
-    private func startTimer() {
-        elapsedSeconds = 0
-        timerTask?.cancel()
-        timerTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard !Task.isCancelled else { break }
-                guard let self else { break }
-                self.elapsedSeconds += 1
-            }
-        }
-    }
-
     private func generateAssistantResponse(for session: ChatSession, transcript: Transcript, isRetry: Bool = false) {
         guard let storage = storage else { return }
 
@@ -244,7 +228,7 @@ final class ChatViewModel {
         generationState = .preparing
         streamingDraft = nil
         streamingReferences = []
-        startTimer()
+        operationStartedAt = .now
 
         let provider = resolver.resolveChat()
         let settings = resolver.chatSettings()
@@ -372,8 +356,6 @@ final class ChatViewModel {
                         self.streamingDraft = nil
                         self.streamingReferences = []
                         self.generationState = .completed
-                        self.timerTask?.cancel()
-                        self.timerTask = nil
                         self.activeTask = nil
                         return
                     }
@@ -385,8 +367,6 @@ final class ChatViewModel {
                 self.streamingDraft = nil
                 self.streamingReferences = []
                 self.generationState = .cancelled
-                self.timerTask?.cancel()
-                self.timerTask = nil
                 self.activeTask = nil
             } catch {
                 if let requestID {
@@ -411,8 +391,6 @@ final class ChatViewModel {
                 self.streamingDraft = nil
                 self.streamingReferences = []
                 self.generationState = .failed(message)
-                self.timerTask?.cancel()
-                self.timerTask = nil
                 self.activeTask = nil
             }
         }

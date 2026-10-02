@@ -77,23 +77,26 @@ struct SourcesView: View {
                 Text(source.displayName).font(.headline)
                 Text(statusText(source)).font(.caption).foregroundStyle(.secondary)
                 if let error = source.processingError { Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-                if let started = model.startedAt[source.id] {
-                    TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Elapsed \(Int(max(0, timeline.date.timeIntervalSince(started))))s").font(.caption).foregroundStyle(.secondary)
-                            if timeline.date.timeIntervalSince(started) > 15 && source.type != .audio {
-                                Text("Local OCR can take longer on first use. You can continue using other ready sources or cancel.")
-                                    .font(.caption).foregroundStyle(.secondary)
+                if model.isProcessing(source) {
+                    let update = model.progress[source.id]
+                    let audio = model.transcriptionProgress[source.id]
+                    OperationProgressView(title: audio?.phase.message ?? "Processing locally…",
+                        status: audio.map { snapshot in
+                            if let part = snapshot.partDescription {
+                                return "\(part) · \(snapshot.completedParts) completed"
                             }
-                        }
-                    }
+                            return snapshot.phase.message
+                        } ?? update?.phase,
+                        progress: audio.map { OperationProgressValue(fraction: $0.overallProgress) }
+                            ?? OperationProgressValue(completed: update?.completed, total: update?.total),
+                        startedAt: model.startedAt[source.id], estimatedRemaining: audio?.estimatedRemainingTime,
+                        cancel: { model.cancel(source) })
+
                 }
+
             }
             Spacer()
-            if model.isProcessing(source) {
-                ProgressView().controlSize(.small)
-                Button("Cancel") { model.cancel(source) }
-            } else if source.type == .audio, !source.isContextReady {
+            if !model.isProcessing(source), source.type == .audio, !source.isContextReady {
                 Button("Transcribe…") { transcriptionOptionsSourceID = source.id }
                     .disabled(source.isPrimaryAudio && primaryTranscriptionBusy)
                     .popover(isPresented: Binding(
@@ -117,7 +120,7 @@ struct SourcesView: View {
                             }
                         }.padding().frame(width: 390)
                     }
-            } else if source.status == .failed || source.status == .partial {
+            } else if !model.isProcessing(source), source.status == .failed || source.status == .partial {
                 Button("Retry") { model.reprocess(source, context: context) }
             }
             Button("Open", systemImage: "eye") { preview = .init(source: source) }.labelStyle(.iconOnly).buttonStyle(.borderless)

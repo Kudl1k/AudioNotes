@@ -56,12 +56,11 @@ struct LocalAISettingsView: View {
                         }
                     }
                     if let progress = model.progress {
-                        ProgressView(value: progress.fraction)
-                        HStack {
-                            Text("Downloading · \(ByteCountFormatter.string(fromByteCount: progress.completedBytes, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: progress.totalBytes, countStyle: .file))")
-                            Spacer()
-                            Button("Cancel", action: model.cancelDownload)
-                        }.font(.caption)
+                        OperationProgressView(title: "Downloading Whisper model…",
+                            status: "\(ByteCountFormatter.string(fromByteCount: progress.completedBytes, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: progress.totalBytes, countStyle: .file))",
+                            progress: OperationProgressValue(fraction: progress.totalBytes > 0 ? progress.fraction : nil),
+                            startedAt: model.downloadStartedAt, cancel: model.cancelDownload)
+
                     }
                     if let error = model.error { Text("Download or model operation failed: " + error).foregroundStyle(.red).textSelection(.enabled) }
                 } else { Text("Local Whisper requires Apple Silicon.") }

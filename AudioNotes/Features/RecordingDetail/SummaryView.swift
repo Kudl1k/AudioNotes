@@ -50,7 +50,7 @@ struct SummaryView: View {
         ScrollView {
             generatorForm
                 .frame(maxWidth: .infinity)
-                .padding(24)
+                .padding(WorkspaceSpacing.majorSection)
         }
         .sheet(isPresented: $showingSavePreset) {
             PresetEditorView(
@@ -70,10 +70,7 @@ struct SummaryView: View {
     // Keep the form's natural height independent of the TabView's available
     // height. Native controls must not be compressed to fit a short detail pane.
     private var generatorForm: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 40))
-                .foregroundStyle(.secondary)
+        VStack(spacing: WorkspaceSpacing.section) {
             Text("No summary yet")
                 .font(.title2.bold())
             Text("Select a summary preset to generate a structured analysis of the transcript.")
@@ -126,12 +123,7 @@ struct SummaryView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if model.state.isGenerating {
-                        HStack(alignment: .top, spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text(model.progressMessage ?? "Generating summary…")
-                                .font(.callout)
-                            Button("Cancel", action: model.cancelGeneration)
-                        }
+                        summaryProgress
                     } else {
                         HStack {
                             Spacer(minLength: 0)
@@ -155,6 +147,11 @@ struct SummaryView: View {
                     .padding(.horizontal)
             }
         }
+    }
+
+    private var summaryProgress: some View {
+        OperationProgressView(title: "Generating summary…", status: model.progressMessage,
+            startedAt: model.operationStartedAt, cancel: model.cancelGeneration)
     }
 
     private var presetMenu: some View {
@@ -246,16 +243,7 @@ struct SummaryView: View {
                     }
                     Button("History") { showingHistory = true }
 
-                    if model.state.isGenerating {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text(model.progressMessage ?? "Regenerating…")
-                                .font(.caption)
-                            Button("Cancel", action: model.cancelGeneration)
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                        }
-                    } else {
+                    if !model.state.isGenerating {
                         Button {
                             showsRegenerateOptions.toggle()
                         } label: {
@@ -267,6 +255,8 @@ struct SummaryView: View {
                         }
                     }
                 }
+
+                if model.state.isGenerating { summaryProgress }
 
                 SourceReferenceChips(references: SourceReferenceResolver().validate(summary.sourceReferences, recording: recording), onOpen: onOpenSource)
 

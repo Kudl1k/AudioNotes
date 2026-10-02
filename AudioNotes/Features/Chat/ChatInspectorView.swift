@@ -122,7 +122,7 @@ struct ChatInspectorView: View {
             }
             if model.isGenerating {
                 ChatActiveResponse(isStreaming: model.generationState == .streaming,
-                    phase: model.presentationPhase, elapsedSeconds: model.elapsedSeconds) {
+                    phase: model.presentationPhase, startedAt: model.operationStartedAt) {
                     AssistantMessageView(
                         markdown: ChatContentNormalizer.clean(model.streamingDraft ?? "", references: model.streamingReferences, streaming: true, internalSegmentIDs: model.streamingSegmentIDs + model.sourceContextInternalIDs),
                         references: validatedReferences(model.streamingReferences), onSeek: onSeek)

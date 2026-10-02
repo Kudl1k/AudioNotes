@@ -31,57 +31,71 @@ struct ProjectWorkspaceView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(project.name).font(.largeTitle.bold()).textSelection(.enabled)
-                Text("\(project.recordings.count) recordings · \(project.sources.count) sources").foregroundStyle(.secondary)
-                if let description = project.projectDescription { Text(description).foregroundStyle(.secondary).textSelection(.enabled) }
-                HStack {
-                    Picker("Project section", selection: $tab) {
-                        Text("Overview").tag(WorkspaceTab.overview)
-                        Text("Recordings").tag(WorkspaceTab.recordings)
-                        Text("Sources").tag(WorkspaceTab.sources)
-                        Text("Chat").tag(WorkspaceTab.chat)
-                    }.pickerStyle(.segmented).frame(maxWidth: 360)
-                    Spacer()
-                    TextField("Filter titles and filenames", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 230)
+            VStack(alignment: .leading, spacing: WorkspaceSpacing.section) {
+                VStack(alignment: .leading, spacing: WorkspaceSpacing.compact) {
+                    Text(project.name).font(.title.bold()).textSelection(.enabled)
+                    Text("\(project.recordings.count) recordings · \(project.sources.count) sources")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    if let description = project.projectDescription {
+                        Text(description).font(.subheadline).foregroundStyle(.secondary)
+                            .lineLimit(2).textSelection(.enabled).help(description)
+                    }
                 }
-            }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-            Divider()
-            if tab == .chat {
-                ProjectChatView(model: library.projectChatModel(for: project, resolver: llmResolver), library: library)
-            } else if project.recordings.isEmpty && project.sources.isEmpty {
-                ContentUnavailableView {
-                    Label("This project is empty", systemImage: "folder")
-                } description: {
-                    Text("Add recordings, PDFs, documents, images and notes. You can also drop files here.")
-                } actions: { Button("Import Files…", action: importFiles) }
-            } else {
-                List {
-                    switch tab {
-                    case .overview:
-                        Section("Recent Recordings") { ForEach(Array(recordings.prefix(8))) { recordingRow($0) } }
-                        Section("Recent Sources · Shared with this project") { ForEach(Array(sources.prefix(8))) { sourceRow($0) } }
-                        let active = queue.items.filter { $0.projectID == project.id && $0.isActive }
-                        if !active.isEmpty {
-                            Section("Processing") {
-                                ForEach(active) { item in
-                                    VStack(alignment: .leading) { Text(item.filename); Text(item.statusText).font(.caption).foregroundStyle(.secondary) }
-                                }
-                            }
-                        }
-                        let operations = library.activeOperations.filter { activity in project.recordings.contains { $0.id == activity.recordingID } }
-                        if !operations.isEmpty {
-                            Section("Recording Activity") {
-                                ForEach(operations) { activity in Button(activity.title) { openRecording(activity.recordingID) } }
-                            }
-                        }
-                    case .recordings: ForEach(recordings) { recordingRow($0) }
-                    case .chat: EmptyView()
-                    case .sources:
-                        Section("Shared with this project") { ForEach(sources) { sourceRow($0) } }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: WorkspaceSpacing.section) {
+                        sectionPicker
+                        Spacer(minLength: WorkspaceSpacing.section)
+                        if tab != .chat { searchField.frame(width: 230) }
+                    }
+                    VStack(alignment: .leading, spacing: WorkspaceSpacing.standard) {
+                        sectionPicker
+                        if tab != .chat { searchField }
                     }
                 }
             }
+            .padding(WorkspaceSpacing.majorSection)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+            Divider()
+            Group {
+                if tab == .chat {
+                    ProjectChatView(model: library.projectChatModel(for: project, resolver: llmResolver), library: library)
+                } else if project.recordings.isEmpty && project.sources.isEmpty {
+                    ContentUnavailableView {
+                        Label("This project is empty", systemImage: "folder")
+                    } description: {
+                        Text("Add recordings, PDFs, documents, images and notes. You can also drop files here.")
+                    } actions: { Button("Import Files…", action: importFiles) }
+                } else {
+                    List {
+                        switch tab {
+                        case .overview:
+                            Section("Recent Recordings") { ForEach(Array(recordings.prefix(8))) { recordingRow($0) } }
+                            Section("Recent Sources · Shared with this project") { ForEach(Array(sources.prefix(8))) { sourceRow($0) } }
+                            let active = queue.items.filter { $0.projectID == project.id && $0.isActive }
+                            if !active.isEmpty {
+                                Section("Processing") {
+                                    ForEach(active) { item in
+                                        projectImportProgress(item)
+                                    }
+                                }
+                            }
+                            let operations = library.activeOperations.filter { activity in project.recordings.contains { $0.id == activity.recordingID } }
+                            if !operations.isEmpty {
+                                Section("Recording Activity") {
+                                    ForEach(operations) { activity in Button(activity.title) { openRecording(activity.recordingID) } }
+                                }
+                            }
+                        case .recordings: ForEach(recordings) { recordingRow($0) }
+                        case .chat: EmptyView()
+                        case .sources:
+                            Section("Shared with this project") { ForEach(sources) { sourceRow($0) } }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+
         }
         .dropDestination(for: RecordingDragItem.self) { items, _ in
             let ids = Array(Set(items.map(\.recordingID)))
@@ -129,6 +143,33 @@ struct ProjectWorkspaceView: View {
         .alert("Project could not be updated", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) { model.errorMessage = nil }
         } message: { Text(model.errorMessage ?? "") }
+    }
+
+    private var sectionPicker: some View {
+        Picker("Project section", selection: $tab) {
+            Text("Overview").tag(WorkspaceTab.overview)
+            Text("Recordings").tag(WorkspaceTab.recordings)
+            Text("Sources").tag(WorkspaceTab.sources)
+            Text("Chat").tag(WorkspaceTab.chat)
+        }
+        .pickerStyle(.segmented).labelsHidden()
+        .fixedSize(horizontal: true, vertical: true)
+        .accessibilityLabel("Project section")
+    }
+
+    private var searchField: some View {
+        TextField("Filter titles and filenames", text: $query)
+            .textFieldStyle(.roundedBorder).accessibilityLabel("Filter project titles and filenames")
+    }
+
+    @ViewBuilder private func projectImportProgress(_ item: ProjectImportItem) -> some View {
+        if item.state == .waiting {
+            Label(item.filename + " · Waiting", systemImage: "clock").font(.caption).foregroundStyle(.secondary)
+        } else {
+            OperationProgressView(title: item.filename, status: item.statusText,
+                progress: OperationProgressValue(completed: item.progress?.completed, total: item.progress?.total),
+                startedAt: item.startedAt)
+        }
     }
 
     private var projectRepository: SwiftDataProjectRepository {
@@ -202,10 +243,7 @@ struct ProjectWorkspaceView: View {
                 Text(source.displayName).lineLimit(1)
                 Text(sourceDescription(source)).font(.caption).foregroundStyle(.secondary)
                 if let item = queue.items.last(where: { $0.sourceID == source.id && $0.isActive }) {
-                    Text(item.statusText).font(.caption).foregroundStyle(.secondary)
-                    if let progress = item.progress, progress.total > 0 {
-                        ProgressView(value: Double(progress.completed), total: Double(progress.total)).frame(maxWidth: 240)
-                    }
+                    projectImportProgress(item)
                 } else if let problem = source.processingError { Text(problem).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
             }
             Spacer()

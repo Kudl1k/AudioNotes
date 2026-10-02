@@ -57,22 +57,16 @@ struct LibraryView: View {
                     sourcesModel: model.sourcesModel(for: selectedRecording),
                     summaryModel: model.summaryModel(for: selectedRecording, resolver: llmResolver),
                     chatModel: model.chatModel(for: selectedRecording, resolver: llmResolver),
-                    projectCitation: model.pendingProjectCitation
+                    projectCitation: model.pendingProjectCitation,
+                    projects: projects,
+                    openProject: {
+                        guard let project = selectedRecording.project else { return }
+                        model.pendingProjectCitation = nil
+                        model.selectProject(project.id)
+                    },
+                    moveToProject: { move(selectedRecording, to: $0) }
                 )
                 .id(selectedRecording.id)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    if let project = selectedRecording.project {
-                        HStack {
-                            Button(project.name, systemImage: "folder") { model.pendingProjectCitation = nil; model.selectProject(project.id) }.buttonStyle(.link)
-                            Image(systemName: "chevron.right").font(.caption)
-                            Text(selectedRecording.title).lineLimit(1)
-                            Spacer()
-                            Menu("Organize") {
-                                RecordingProjectMenu(recording: selectedRecording, projects: projects) { move(selectedRecording, to: $0) }
-                            }
-                        }.font(.caption).padding(.horizontal, 24).padding(.vertical, 8)
-                    }
-                }
             } else {
                 AllRecordingsView(recordings: recordings, projects: projects, library: model, showsCost: showsCost, costs: costs,
                     open: { model.selectRecording($0.id) }, move: { move($0, to: $1) },
@@ -253,7 +247,8 @@ struct LibraryView: View {
                         Label(recording.title, systemImage: "waveform")
                             .lineLimit(1)
                         if let transcription = model.activeTranscriptionModel(for: recording) {
-                            Text("Transcribing · \(transcription.progressSnapshot?.currentPart ?? 1) of \(transcription.progressSnapshot?.totalParts ?? 1)")
+                            Text(transcription.progressSnapshot?.partDescription.map { "Transcribing · \($0)" }
+                                ?? transcription.progressSnapshot?.phase.message ?? transcription.state.title)
                                 .font(.caption).foregroundStyle(.secondary)
                         } else {
                             Text(recording.importedAt, format: .dateTime.month(.abbreviated).day().year())

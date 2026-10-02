@@ -11,6 +11,7 @@ import Observation
     private(set) var checking = false
     private(set) var installed: Set<String> = []
     private(set) var downloadModelID: String?
+    private(set) var downloadStartedAt: Date?
     private(set) var progress: LocalModelDownloadProgress?
     private(set) var error: String?
     @ObservationIgnored private var downloadOperationID: UUID?
@@ -51,12 +52,12 @@ import Observation
     }
     func download(_ model: WhisperModelDescriptor) {
         guard task == nil else { return }
-        error = nil; downloadModelID = model.id
+        error = nil; downloadModelID = model.id; downloadStartedAt = .now
         progress = .init(completedBytes: 0, totalBytes: model.downloadBytes)
         let operationID = UUID()
         downloadOperationID = operationID
         task = Task { [self] in
-            defer { downloadOperationID = nil; downloadModelID = nil; progress = nil; task = nil }
+            defer { downloadOperationID = nil; downloadModelID = nil; downloadStartedAt = nil; progress = nil; task = nil }
             do {
                 try await store.install(model) { [self] update in Task { @MainActor [self] in if downloadOperationID == operationID { progress = update } } }
                 await refreshInstalled()

@@ -2,14 +2,16 @@ import SwiftUI
 
 struct ChatThinkingIndicator: View {
     let phase: String
-    let elapsedSeconds: Int
+    let startedAt: Date?
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("AudioNotes").font(.caption.bold()).foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text(elapsedSeconds > 0 ? "\(phase) · \(elapsedSeconds)s" : phase)
-                    .font(.callout).foregroundStyle(.secondary)
+                Text(phase).font(.callout).foregroundStyle(.secondary)
+            }
+            if let startedAt {
+                OperationElapsedTimeView(startedAt: startedAt)
             }
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
@@ -18,12 +20,15 @@ struct ChatThinkingIndicator: View {
 }
 
 struct ChatStreamingIndicator<Content: View>: View {
+    var startedAt: Date? = nil
     @ViewBuilder var content: () -> Content
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Text("AudioNotes").font(.caption.bold()).foregroundStyle(.secondary)
                 ProgressView().controlSize(.mini).accessibilityLabel("Generating answer")
+                Spacer(minLength: 0)
+                if let startedAt { OperationElapsedTimeView(startedAt: startedAt) }
             }
             content()
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
@@ -66,13 +71,13 @@ struct ChatEmptyState<Actions: View>: View {
 struct ChatActiveResponse<Content: View>: View {
     let isStreaming: Bool
     let phase: String
-    let elapsedSeconds: Int
+    let startedAt: Date?
     @ViewBuilder var content: () -> Content
     var body: some View {
         if isStreaming {
-            ChatStreamingIndicator(content: content)
+            ChatStreamingIndicator(startedAt: startedAt, content: content)
         } else {
-            ChatThinkingIndicator(phase: phase, elapsedSeconds: elapsedSeconds)
+            ChatThinkingIndicator(phase: phase, startedAt: startedAt)
         }
     }
 }

@@ -68,7 +68,7 @@ struct ProjectChatView: View {
             }
             if model.isGenerating {
                 ChatActiveResponse(isStreaming: model.state == .streaming,
-                    phase: model.statusText, elapsedSeconds: model.elapsedSeconds) {
+                    phase: model.statusText, startedAt: model.operationStartedAt) {
                     AssistantMessageView(markdown: model.streamingDraft ?? "", references: [])
                 }.id("active-\(model.assistantMessageID)")
             }
