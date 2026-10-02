@@ -30,6 +30,10 @@ final class ChatViewModel {
     var supportsImageInput: Bool { resolver.resolveChat().inputCapabilities.supportsImageInput }
     var session: ChatSession?
     var inputText: String = ""
+    var scrollState = ChatScrollState()
+    var scrollPosition = ScrollPosition(edge: .bottom)
+    private(set) var sentQuestionID: UUID?
+    private(set) var assistantMessageID = UUID()
     var generationState: ChatGenerationState = .idle
     var isGenerating: Bool { generationState.isGenerating }
     var streamingDraft: String? = nil
@@ -38,6 +42,7 @@ final class ChatViewModel {
     var canRetry: Bool = false
     var confirmingClearChat: Bool = false
     var elapsedSeconds: Int = 0
+    private(set) var presentationPhase = "Preparing recording context…"
 
     // Accumulate every token, but publish at most once per display interval.
     @ObservationIgnored private var pendingDraft = ""
@@ -118,6 +123,8 @@ final class ChatViewModel {
             return
         }
 
+        sentQuestionID = userMessage.id
+
         // Start generation
         generateAssistantResponse(for: session, transcript: transcript)
     }
@@ -164,6 +171,7 @@ final class ChatViewModel {
         let partial = pendingDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         if !partial.isEmpty, let session = session, let storage = storage {
             let interruptedMsg = ChatMessage(
+                id: assistantMessageID,
                 role: .assistant,
                 text: ChatContentNormalizer.clean(partial, references: streamingReferences, streaming: true, internalSegmentIDs: streamingSegmentIDs + sourceContextInternalIDs),
                 status: .interrupted,
@@ -188,6 +196,8 @@ final class ChatViewModel {
             lastError = nil
             canRetry = false
             generationState = .idle
+            scrollState = .init()
+            scrollPosition = ScrollPosition(edge: .bottom)
         } catch {
             lastError = "Failed to clear chat: \(error.localizedDescription)"
         }
@@ -204,7 +214,7 @@ final class ChatViewModel {
         draftPublishTask = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(80)) }
             catch { return }
-            guard let self else { return }
+            guard let self, !Task.isCancelled else { return }
             self.streamingDraft = self.pendingDraft
             self.draftPublishTask = nil
         }
@@ -229,6 +239,8 @@ final class ChatViewModel {
         draftPublishTask?.cancel()
         draftPublishTask = nil
         pendingDraft = ""
+        assistantMessageID = UUID()
+        presentationPhase = "Preparing recording context…"
         generationState = .preparing
         streamingDraft = nil
         streamingReferences = []
@@ -315,6 +327,7 @@ final class ChatViewModel {
                 self.sourceContextInternalIDs = (effectiveContext.sourceChunks ?? []).flatMap { [$0.id, $0.sourceID] }
                 generation.imageInputCount += effectiveContext.images.count
                 requestID = tracker.beginRequest()
+                self.presentationPhase = "Waiting for AI…"
                 let stream = try await provider.streamChat(messages: history, context: effectiveContext)
 
                 for try await event in stream {
@@ -340,6 +353,7 @@ final class ChatViewModel {
                             response.references = []
                         }
                         let assistantMessage = ChatMessage(
+                            id: self.assistantMessageID,
                             role: .assistant,
                             text: response.content,
                             status: .completed,

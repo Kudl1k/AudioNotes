@@ -11,8 +11,7 @@ struct ChatInspectorView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var model: ChatViewModel
     @State private var showsUsage = false
-    @State private var scrollState = ChatScrollState()
-    @FocusState private var isInputFocused: Bool
+    @State private var focusRequest = 0
 
     init(
         recording: Recording,
@@ -107,159 +106,42 @@ struct ChatInspectorView: View {
     }
 
     private var chatContentView: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
-                    let hasMessages = !(model.session?.messages.isEmpty ?? true)
-                    let isWorking = model.generationState == .preparing || model.generationState == .waitingForFirstToken || model.generationState == .streaming
-
-                    if !hasMessages && !isWorking {
-                        emptyStateView
-                    } else if model.session != nil {
-                        ChatHistoryView(model: model, recording: recording, onSeek: onSeek, onOpenSource: onOpenSource)
-
-                        if model.generationState == .preparing || model.generationState == .waitingForFirstToken {
-                            thinkingBubble
-                                .id("thinking_state")
-                        } else if let draft = model.streamingDraft {
-                            streamingBubble(draft)
-                                .id("streaming_draft")
-                        }
-
-                        if let error = model.lastError {
-                            errorBanner(error)
-                                .id("chat_error")
-                        }
-                    }
-                    Color.clear.frame(height: 1).id("chat_bottom")
-                }
-                .padding(14)
+        ChatMessageList(scrollState: $model.scrollState, scrollPosition: $model.scrollPosition,
+            messageCount: model.session?.messages.count ?? 0,
+            latestMessageID: model.session?.orderedMessages.last?.id, activeResponseID: model.assistantMessageID, draft: model.streamingDraft,
+            generationState: model.generationState, sentQuestionID: model.sentQuestionID) {
+            if (model.session?.messages.isEmpty ?? true) && !model.isGenerating {
+                emptyStateView
             }
-            .defaultScrollAnchor(.bottom, for: .initialOffset)
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentSize.height - (geometry.contentOffset.y + geometry.containerSize.height) <= 64
-            } action: { _, nearBottom in
-                scrollState.positionChanged(nearBottom: nearBottom)
+            let messages = model.session?.orderedMessages ?? []
+            ForEach(messages) { message in
+                ChatMessageBubble(message: message, recording: recording,
+                    canRegenerate: message.id == messages.last?.id && !model.isGenerating,
+                    onSeek: onSeek, onOpenSource: onOpenSource, onRegenerate: model.regenerateLastAssistantResponse)
+                    .id(message.id)
             }
-            .onScrollPhaseChange { _, phase in
-                switch phase {
-                case .tracking, .interacting, .decelerating: scrollState.userScrolling(true)
-                case .idle:
-                    if scrollState.isUserScrolling { scrollState.userScrolling(false) }
-                default: break
-                }
+            if model.isGenerating {
+                ChatActiveResponse(isStreaming: model.generationState == .streaming,
+                    phase: model.presentationPhase, elapsedSeconds: model.elapsedSeconds) {
+                    AssistantMessageView(
+                        markdown: ChatContentNormalizer.clean(model.streamingDraft ?? "", references: model.streamingReferences, streaming: true, internalSegmentIDs: model.streamingSegmentIDs + model.sourceContextInternalIDs),
+                        references: validatedReferences(model.streamingReferences), onSeek: onSeek)
+                }.id("active-\(model.assistantMessageID)")
             }
-            .overlay(alignment: .bottom) {
-                if scrollState.hasUnseenContent {
-                    Button("Jump to Latest", systemImage: "arrow.down") {
-                        scrollState.jumpToLatest()
-                        proxy.scrollTo("chat_bottom", anchor: .bottom)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .padding(8)
-                    .accessibilityHint("Resume following new answers")
-                }
-            }
-            .onChange(of: model.generationState) { _, state in
-                if state.isGenerating && scrollState.contentArrived() {
-                    proxy.scrollTo("chat_bottom", anchor: .bottom)
-                }
-            }
-            .onChange(of: model.streamingDraft) { _, _ in
-                if scrollState.contentArrived() { proxy.scrollTo("chat_bottom", anchor: .bottom) }
-            }
-            .onChange(of: model.session?.messages.count) { _, _ in
-                if scrollState.contentArrived() { proxy.scrollTo("chat_bottom", anchor: .bottom) }
+            if let error = model.lastError {
+                ChatErrorView(error: error, canRetry: model.canRetry, onRetry: model.retry)
             }
         }
     }
 
     private var emptyStateView: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Chat about this recording")
-                    .font(.subheadline.bold())
-                Text("Answers use your selected ready sources with clickable references.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        ChatEmptyState(title: "Chat about this recording",
+            description: "Answers use your selected ready sources with clickable references.") {
+            Text("Suggested questions").font(.caption.bold()).foregroundStyle(.secondary)
+            ForEach(ChatViewModel.suggestedPrompts, id: \.self) { prompt in
+                Button(prompt) { model.sendSuggestedPrompt(prompt) }
+                    .buttonStyle(.link).font(.caption).multilineTextAlignment(.leading)
             }
-            .padding(.bottom, 6)
-
-            Text("Suggested questions")
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(ChatViewModel.suggestedPrompts, id: \.self) { prompt in
-                    Button {
-                        model.sendSuggestedPrompt(prompt)
-                    } label: {
-                        HStack(alignment: .center, spacing: 6) {
-                            Image(systemName: "sparkles")
-                                .font(.caption2)
-                                .foregroundStyle(.tint)
-                            Text(prompt)
-                                .font(.caption)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(.vertical, 8)
-    }
-
-    private var thinkingBubble: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("AudioNotes")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-
-            HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                Text(model.elapsedSeconds > 0 ? "Thinking… \(model.elapsedSeconds)s" : "Thinking…")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-        }
-    }
-
-    private func streamingBubble(_ draft: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("AudioNotes")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                ProgressView()
-                    .controlSize(.mini)
-                Spacer()
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                AssistantMessageView(
-                    markdown: ChatContentNormalizer.clean(draft, references: model.streamingReferences, streaming: true, internalSegmentIDs: model.streamingSegmentIDs + model.sourceContextInternalIDs),
-                    references: validatedReferences(model.streamingReferences), onSeek: onSeek
-                )
-            }
-            .padding(10)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
 
@@ -271,36 +153,6 @@ struct ChatInspectorView: View {
         )
     }
 
-    private func errorBanner(_ error: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-            if model.canRetry {
-                Button("Retry") {
-                    model.retry()
-                }
-                .font(.caption.bold())
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-            SettingsLink {
-                Label("Choose Chat Provider…", systemImage: "slider.horizontal.3")
-                    .font(.caption.bold())
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        }
-        .padding(8)
-        .background(Color.red.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
     private var composerView: some View {
         VStack(alignment: .leading, spacing: 8) {
             SourceSelectionView(recording: recording, selectedSourceIDs: $model.selectedSourceIDs,
@@ -309,45 +161,9 @@ struct ChatInspectorView: View {
                 Text(model.allowImageUpload && model.supportsImageInput ? model.imageInputDescription : "Images: local OCR text only")
                     .font(.caption).foregroundStyle(.secondary)
             }
-        HStack(alignment: .bottom, spacing: 8) {
-            TextField("Ask about this recording…", text: $model.inputText, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1...5)
-                .focused($isInputFocused)
-                .onKeyPress(.return, phases: [.down, .repeat]) { press in
-                    if press.modifiers.contains(.shift) {
-                        // A vertical TextField ends editing on Return, so insert the line break here.
-                        model.inputText.append("\n")
-                        return .handled
-                    } else if model.canSend {
-                        model.sendMessage()
-                        return .handled
-                    }
-                    return .handled
-                }
-
-            if model.isGenerating {
-                Button {
-                    model.stopGeneration()
-                } label: {
-                    Image(systemName: "stop.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.red)
-                }
-                .buttonStyle(.plain)
-                .help("Stop generating").accessibilityLabel("Stop generating").keyboardShortcut(.cancelAction)
-            } else {
-                Button {
-                    model.sendMessage()
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                }
-                .buttonStyle(.plain)
-                .disabled(!model.canSend)
-                .help("Send message (Return)").accessibilityLabel("Send message")
-            }
-        }
+            ChatComposer(text: $model.inputText, focusRequest: $focusRequest,
+                placeholder: "Ask about this recording…", canSend: model.canSend,
+                isGenerating: model.isGenerating, onSend: model.sendMessage, onStop: model.stopGeneration)
         }
         .padding(12)
     }
@@ -404,27 +220,6 @@ struct FlowLayout: Layout {
     }
 }
 
-/// This subtree observes history and generation state, never the streaming draft.
-private struct ChatHistoryView: View {
-    let model: ChatViewModel
-    let recording: Recording
-    var onSeek: ((TimeInterval) -> Void)?
-    var onOpenSource: ((SourceReference) -> Void)?
-
-    var body: some View {
-        let messages = model.session?.orderedMessages ?? []
-        let lastID = messages.last?.id
-        ForEach(messages) { message in
-            ChatMessageBubble(
-                message: message, recording: recording,
-                canRegenerate: message.id == lastID && !model.isGenerating,
-                onSeek: onSeek, onOpenSource: onOpenSource, onRegenerate: model.regenerateLastAssistantResponse
-            )
-            .id(message.id)
-        }
-    }
-}
-
 /// Persistent rows do not observe token updates from the active response.
 private struct ChatMessageBubble: View {
     let message: ChatMessage
@@ -435,76 +230,15 @@ private struct ChatMessageBubble: View {
     let onRegenerate: () -> Void
 
     var body: some View {
-        VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                if message.role == .user {
-                    Spacer(minLength: 24)
-                    Text("You")
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                } else {
-                    GenerationDetailsButton(generationID: message.generationID)
-                    Text("AudioNotes")
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                    if message.status == .interrupted {
-                        Text("(interrupted)")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    Spacer(minLength: 24)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                if message.role == .assistant {
-                    AssistantMessageView(
-                        markdown: ChatContentNormalizer.clean(message.text, references: message.references, internalSegmentIDs: recording.transcript?.segments.map(\.id) ?? []),
-                        references: validatedReferences(message.references), onSeek: onSeek
-                    )
-                    SourceReferenceChips(references: SourceReferenceResolver().validate(message.sourceReferences, recording: recording)) { onOpenSource?($0) }
-                } else {
-                    Text(message.text).textSelection(.enabled).font(.callout)
-                }
-
-                if message.role == .assistant {
-                    HStack(spacing: 12) {
-                        Button {
-                            Clipboard.copy(copyContent(message))
-                        } label: {
-                            Label("Copy", systemImage: "doc.on.doc")
-                                .font(.caption2)
-                        }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.secondary)
-
-                        if canRegenerate {
-                            Button {
-                                onRegenerate()
-                            } label: {
-                                Label("Regenerate", systemImage: "arrow.clockwise")
-                                    .font(.caption2)
-                            }
-                            .buttonStyle(.borderless)
-                            .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-                    }
-                    .padding(.top, 4)
-                }
-            }
-            .padding(10)
-            .background(
-                message.role == .user
-                    ? Color.accentColor.opacity(0.15)
-                    : Color(nsColor: .controlBackgroundColor)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .contextMenu {
-                Button("Copy Message") {
-                    Clipboard.copy(copyContent(message))
-                }
+        ChatMessageRow(presentation: ChatMessagePresentation(message), canRegenerate: canRegenerate,
+            onCopy: { Clipboard.copy(copyContent(message)) }, onRegenerate: onRegenerate) {
+            if message.role == .assistant {
+                AssistantMessageView(
+                    markdown: ChatContentNormalizer.clean(message.text, references: message.references, internalSegmentIDs: recording.transcript?.segments.map(\.id) ?? []),
+                    references: validatedReferences(message.references), onSeek: onSeek)
+                SourceReferenceChips(references: SourceReferenceResolver().validate(message.sourceReferences, recording: recording)) { onOpenSource?($0) }
+            } else {
+                Text(message.text).textSelection(.enabled).font(.callout)
             }
         }
     }

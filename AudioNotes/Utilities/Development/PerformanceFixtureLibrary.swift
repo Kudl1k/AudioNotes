@@ -16,15 +16,17 @@ struct PerformanceFixtureLibrary: View {
         Group {
             if isReady {
                 LibraryView(transcriptionResolver: FixedTranscriptionProviderResolver(provider: MockTranscriptionProvider()),
-                    llmResolver: FixedLLMProviderResolver(provider: MockLLMProvider()))
+                    llmResolver: FixedLLMProviderResolver(provider: ProcessInfo.processInfo.arguments.contains("--performance-chat-stress") ? ChatPresentationFixtureProvider() : MockLLMProvider()))
             } else if let failure { Text("Fixture setup failed: " + failure).padding() }
             else { ProgressView("Preparing development fixtures…") }
         }
+        .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--performance-light") ? .light : nil)
         .task {
             guard !isReady else { return }
             do {
                 if ProcessInfo.processInfo.arguments.contains("--performance-project-chat") {
                     try ProjectChatFixtures.prepare(context: context)
+                    if ProcessInfo.processInfo.arguments.contains("--performance-chat-stress") { try ChatPresentationFixtures.prepare(context: context) }
                     isReady = true
                     return
                 }
@@ -70,6 +72,7 @@ struct PerformanceFixtureLibrary: View {
                             thumbnailURL: storage.sourceDirectory(id: source.id).appending(path: "thumbnail.jpg")))
                     }
                 }
+                if ProcessInfo.processInfo.arguments.contains("--performance-chat-stress") { try ChatPresentationFixtures.prepare(context: context) }
                 try context.save()
                 try await Task.detached { try PerformanceFixtureAssets.write(assets) }.value
                 isReady = true

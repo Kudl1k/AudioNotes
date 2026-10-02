@@ -363,3 +363,25 @@ Opening Settings refreshes the OpenAI model list with the configured key.
 
 VoiceOver, full keyboard Tab order, Light Mode, window size extremes, Sparkle update
 installation, and all open M11–M13 acceptance items remain open.
+
+## M14.2 — Shared chat presentation
+
+Recording Chat and Project Chat now share composed SwiftUI rows, list/scroll wiring,
+composer, thinking/streaming, error and empty-state presentation. Their library-owned
+models, context/retrieval, consent, citations/navigation and generation/usage engines
+remain separate. See [the audit, duplication map and implementation report](UNIFIED_CHAT_UI.md).
+
+The intentional new AppKit exception is
+`Platform/macOS/AppKit/ChatTextEditorRepresentable.swift`: an NSTextView/NSScrollView
+adapter limited to text, selection, keyboard/IME, focus and sizing. macOS 15 SwiftUI
+selection APIs alone do not expose the marked-text state required to intercept Send
+safely. Shift+Return now inserts at the cursor/selection; unmodified Return sends
+outside composition. The outer UI and Markdown renderer remain SwiftUI. Proposal
+measurement uses a separate text layout, and document sizing is controlled outside
+drawing to avoid the large-paste/shrink hosting-constraint crash found during smoke tests.
+
+Both scopes use retained ScrollPosition/ChatScrollState; following and Latest target
+actual stable message IDs in the lazy history. The renderer's separate-block text
+selection limitation remains. Schema, migration and release settings are unchanged.
+Physical IME, VoiceOver narration, full-screen and live-provider acceptance remain
+open; fixture/component checks do not close the older M11/M14 acceptance lists.

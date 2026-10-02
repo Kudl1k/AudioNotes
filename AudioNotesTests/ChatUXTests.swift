@@ -212,6 +212,8 @@ struct ChatUXTests {
 
         viewModel.inputText = "What was discussed?"
         viewModel.sendMessage()
+        let assistantID = viewModel.assistantMessageID
+        #expect(viewModel.sentQuestionID == viewModel.session?.orderedMessages.first?.id)
 
         #expect(viewModel.generationState == .waitingForFirstToken)
 
@@ -225,6 +227,7 @@ struct ChatUXTests {
 
         #expect(viewModel.generationState == .streaming)
         #expect(viewModel.streamingDraft == "First chunk")
+        #expect(viewModel.assistantMessageID == assistantID)
 
         // Complete response
         continuation.yield(.completed(LLMChatResponse(content: "First chunk and final.", references: [])))
@@ -239,6 +242,7 @@ struct ChatUXTests {
         let messages = viewModel.session?.orderedMessages ?? []
         #expect(messages.count == 2)
         #expect(messages.last?.text == "First chunk and final.")
+        #expect(messages.last?.id == assistantID)
         _ = container
     }
 
