@@ -15,7 +15,9 @@ struct ChatThinkingIndicator: View {
             }
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-            .accessibilityElement(children: .combine).accessibilityIdentifier("chat.thinking")
+            // Elapsed time is deliberately not part of the label: it would change every second.
+            .accessibilityElement(children: .ignore).accessibilityLabel("Assistant is working: \(phase)")
+            .accessibilityIdentifier("chat.thinking")
     }
 }
 
@@ -26,13 +28,16 @@ struct ChatStreamingIndicator<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Text("AudioNotes").font(.caption.bold()).foregroundStyle(.secondary)
-                ProgressView().controlSize(.mini).accessibilityLabel("Generating answer")
+                ProgressView().controlSize(.mini)
                 Spacer(minLength: 0)
                 if let startedAt { OperationElapsedTimeView(startedAt: startedAt) }
             }
             content()
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+            // Partial text changes every few milliseconds. VoiceOver reads the finished message instead.
+            .accessibilityElement(children: .ignore).accessibilityLabel("Assistant is responding")
+            .accessibilityIdentifier("chat.streaming")
     }
 }
 
@@ -43,6 +48,7 @@ struct ChatErrorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.red)
+                .accessibilityLabel("Error: \(error)")
             if canRetry {
                 Button("Retry", action: onRetry).accessibilityLabel("Retry answer").accessibilityIdentifier("chat.retry")
             }
@@ -60,7 +66,7 @@ struct ChatEmptyState<Actions: View>: View {
     @ViewBuilder var actions: () -> Actions
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.headline)
+            Text(title).font(.headline).accessibilityAddTraits(.isHeader)
             Text(description).font(.callout).foregroundStyle(.secondary)
             actions()
         }.padding(.vertical, 16)

@@ -32,7 +32,7 @@ struct ChatComposer: View {
             if isGenerating {
                 Button("Stop", systemImage: "stop.circle.fill", action: onStop)
                     .labelStyle(.iconOnly).font(.title2).foregroundStyle(.red).buttonStyle(.plain)
-                    .keyboardShortcut(.cancelAction).help("Stop generating")
+                    .help("Stop generating (Escape while typing)")
                     .accessibilityLabel("Stop generating").accessibilityIdentifier("chat.stop")
             } else {
                 Button("Send", systemImage: "arrow.up.circle.fill", action: send)

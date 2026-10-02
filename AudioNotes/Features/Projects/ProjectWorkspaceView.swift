@@ -34,13 +34,20 @@ struct ProjectWorkspaceView: View {
             VStack(alignment: .leading, spacing: WorkspaceSpacing.section) {
                 VStack(alignment: .leading, spacing: WorkspaceSpacing.compact) {
                     Text(project.name).font(.title.bold()).textSelection(.enabled)
-                    Text("\(project.recordings.count) recordings · \(project.sources.count) sources")
+                        .lineLimit(2).truncationMode(.tail).help(project.name)
+                    Text("^[\(project.recordings.count) recording](inflect: true) · ^[\(project.sources.count) source](inflect: true)")
                         .font(.subheadline).foregroundStyle(.secondary)
                     if let description = project.projectDescription {
                         Text(description).font(.subheadline).foregroundStyle(.secondary)
                             .lineLimit(2).textSelection(.enabled).help(description)
                     }
                 }
+                // Title, counts and description are read as one project summary.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Self.headerLabel(name: project.name, recordings: project.recordings.count,
+                    sources: project.sources.count, description: project.projectDescription))
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("project.header")
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: WorkspaceSpacing.section) {
                         sectionPicker
@@ -66,12 +73,14 @@ struct ProjectWorkspaceView: View {
                     } description: {
                         Text("Add recordings, PDFs, documents, images and notes. You can also drop files here.")
                     } actions: { Button("Import Files…", action: importFiles) }
+                } else if tab != .chat && tabIsEmpty {
+                    emptyTabState
                 } else {
                     List {
                         switch tab {
                         case .overview:
-                            Section("Recent Recordings") { ForEach(Array(recordings.prefix(8))) { recordingRow($0) } }
-                            Section("Recent Sources · Shared with this project") { ForEach(Array(sources.prefix(8))) { sourceRow($0) } }
+                            if !recordings.isEmpty { Section("Recent Recordings") { ForEach(Array(recordings.prefix(8))) { recordingRow($0) } } }
+                            if !sources.isEmpty { Section("Recent Sources · Shared with this project") { ForEach(Array(sources.prefix(8))) { sourceRow($0) } } }
                             let active = queue.items.filter { $0.projectID == project.id && $0.isActive }
                             if !active.isEmpty {
                                 Section("Processing") {
@@ -145,6 +154,10 @@ struct ProjectWorkspaceView: View {
         } message: { Text(model.errorMessage ?? "") }
     }
 
+    static func headerLabel(name: String, recordings: Int, sources: Int, description: String?) -> String {
+        ["\(name)", "\(recordings) \(recordings == 1 ? "recording" : "recordings"), \(sources) \(sources == 1 ? "source" : "sources")", description].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: ". ")
+    }
+
     private var sectionPicker: some View {
         Picker("Project section", selection: $tab) {
             Text("Overview").tag(WorkspaceTab.overview)
@@ -154,12 +167,13 @@ struct ProjectWorkspaceView: View {
         }
         .pickerStyle(.segmented).labelsHidden()
         .fixedSize(horizontal: true, vertical: true)
-        .accessibilityLabel("Project section")
+        .accessibilityIdentifier("project.tabs")
     }
 
     private var searchField: some View {
         TextField("Filter titles and filenames", text: $query)
             .textFieldStyle(.roundedBorder).accessibilityLabel("Filter project titles and filenames")
+            .accessibilityIdentifier("project.search")
     }
 
     @ViewBuilder private func projectImportProgress(_ item: ProjectImportItem) -> some View {
@@ -211,18 +225,48 @@ struct ProjectWorkspaceView: View {
         }
     }
 
+    /// A tab with nothing to show: either the filter excludes everything, or this kind of content is absent.
+    private var tabIsEmpty: Bool {
+        switch tab {
+        case .overview: recordings.isEmpty && sources.isEmpty
+        case .recordings: recordings.isEmpty
+        case .sources: sources.isEmpty
+        case .chat: false
+        }
+    }
+
+    @ViewBuilder private var emptyTabState: some View {
+        if !query.isEmpty {
+            ContentUnavailableView.search(text: query)
+        } else if tab == .recordings {
+            ContentUnavailableView {
+                Label("No recordings in this project", systemImage: "waveform")
+            } description: {
+                Text("Import audio here, or drag a recording from the library onto this project.")
+            } actions: { Button("Import Files…", action: importFiles).accessibilityIdentifier("project.import") }
+        } else {
+            ContentUnavailableView {
+                Label("No shared sources", systemImage: "doc.on.doc")
+            } description: {
+                Text("Add PDFs, documents, images and notes that every recording in this project can use.")
+            } actions: { Button("Import Files…", action: importFiles).accessibilityIdentifier("project.import") }
+        }
+    }
+
     private func recordingRow(_ recording: Recording) -> some View {
         Button { openRecording(recording.id) } label: {
             HStack {
                 Image(systemName: "waveform").foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(recording.title).foregroundStyle(.primary)
+                    Text(recording.title).foregroundStyle(.primary).lineLimit(1).truncationMode(.middle).help(recording.title)
                     Text(AudioTime.string(recording.duration) + " · " + recordingStatus(recording)).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text(recording.importedAt, format: .dateTime.month(.abbreviated).day()).font(.caption).foregroundStyle(.secondary)
             }.padding(.vertical, 4).contentShape(Rectangle())
         }.buttonStyle(.plain)
+        .accessibilityElement(children: .combine).accessibilityHint("Opens the recording")
+        .accessibilityIdentifier("project.recording.\(recording.id.uuidString)")
         .contextMenu {
             Button("Open") { openRecording(recording.id) }
             RecordingProjectMenu(recording: recording, projects: projects) { model.move(recording, to: $0, using: projectRepository) }
@@ -248,10 +292,13 @@ struct ProjectWorkspaceView: View {
             }
             Spacer()
             Button("Open") { preview = .init(source: source) }
+                .accessibilityLabel("Open \(source.displayName)")
             if source.status == .failed || source.status == .partial {
                 Button("Retry") { queue.retry(source, in: project, context: context) }.disabled(queue.isProcessing(source.id))
+                    .accessibilityLabel("Retry \(source.displayName)")
             }
         }.padding(.vertical, 4).accessibilityElement(children: .contain)
+        .accessibilityIdentifier("project.source.\(source.id.uuidString)")
         .contextMenu {
             Button("Open") { preview = .init(source: source) }
             Button("Rename…") { model.requestRename(source) }
@@ -264,7 +311,7 @@ struct ProjectWorkspaceView: View {
         let kind: String
         switch source.type {
         case .pdf:
-            if case .pdf(let count, _) = source.metadata { kind = "PDF · \(count) pages" } else { kind = "PDF" }
+            if case .pdf(let count, _) = source.metadata { kind = "PDF · \(count) \(count == 1 ? "page" : "pages")" } else { kind = "PDF" }
         case .image: kind = "Image"
         case .document: kind = "Text / Markdown"
         case .audio: kind = "Audio"

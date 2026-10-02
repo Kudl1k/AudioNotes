@@ -51,7 +51,8 @@ struct ChatMessageList<Content: View>: View {
                     scrollState.jumpToLatest()
                     scrollToLatest()
                 }.buttonStyle(.borderedProminent).padding(8)
-                    .accessibilityHint("Resume following new answers").accessibilityIdentifier("chat.latest")
+                    .accessibilityLabel("Jump to latest message").accessibilityHint("Resumes following new answers")
+                    .accessibilityIdentifier("chat.latest")
             }
         }
         .onChange(of: sentQuestionID) { _, _ in
@@ -64,7 +65,9 @@ struct ChatMessageList<Content: View>: View {
         .onChange(of: messageCount) { _, _ in
             if scrollState.contentArrived() { scrollToLatest() }
         }
-        .onChange(of: generationState) { _, state in
+        .onChange(of: generationState) { old, state in
+            // One short announcement per answer: streamed text is hidden from VoiceOver while it grows.
+            if old.isGenerating && state == .completed { AccessibilityNotification.Announcement("Answer ready").post() }
             if (state.isGenerating || state == .completed || state == .cancelled) && scrollState.contentArrived() { scrollToLatest() }
         }
     }

@@ -21,9 +21,12 @@ struct ProjectChatView: View {
                 }
                 Spacer()
                 Button("Usage & Cost", systemImage: "dollarsign.circle") { showsUsage = true }.labelStyle(.iconOnly)
+                    .help("Project chat usage & cost").accessibilityIdentifier("chat.usage")
                 Button("Export Chat…", systemImage: "square.and.arrow.up") { export() }.labelStyle(.iconOnly)
                     .disabled(model.session?.messages.isEmpty ?? true)
+                    .help("Export chat as Markdown").accessibilityIdentifier("chat.export")
                 Button("Clear Conversation…", systemImage: "trash") { model.confirmingClear = true }.labelStyle(.iconOnly).disabled(model.isGenerating)
+                    .help("Clear conversation").accessibilityIdentifier("chat.clear")
             }.buttonStyle(.borderless).padding(12)
             Divider()
             conversation
@@ -93,9 +96,15 @@ struct ProjectChatView: View {
             HStack {
                 Button(model.selection.entireProject ? "Entire Project" : "Selected Sources", systemImage: "line.3.horizontal.decrease") { showsSelection = true }
                     .disabled(model.isGenerating)
+                    .accessibilityLabel("Search scope: \(model.selection.entireProject ? "entire project" : "selected sources")")
+                    .accessibilityHint("Choose which recordings and sources the assistant can search")
+                    .accessibilityIdentifier("chat.scope")
                 Spacer()
                 SettingsLink { Text(model.providerDescription).font(.caption).lineLimit(2) }
                     .help("Uses the same Chat provider, model and generation settings as Recording Chat")
+                    .accessibilityLabel("Chat provider: \(model.providerDescription)")
+                    .accessibilityHint("Opens chat provider settings")
+                    .accessibilityIdentifier("chat.settings")
             }.buttonStyle(.borderless)
             ChatComposer(text: $model.inputText, focusRequest: $focusRequest,
                 placeholder: "Ask about \(model.project.name)…", canSend: model.canSend,
@@ -143,7 +152,7 @@ private struct ProjectChatMessageRow: View {
                                         Label(label + (available ? "" : " · Unavailable"), systemImage: group.primary.sourceType.icon)
                                             .font(.caption).padding(6).background(Color.accentColor.opacity(0.1), in: Capsule())
                                     }.buttonStyle(.plain).disabled(!available).help(group.excerpt)
-                                        .accessibilityLabel("Source: " + label + (available ? "" : ", unavailable"))
+                                        .accessibilityLabel((available ? "Open citation, " : "Citation unavailable, ") + label)
                                 }
                             }
                         }.padding(.top, 6)

@@ -52,6 +52,23 @@ struct AudioImportServiceTests {
         #expect(try workspace.importedFiles().isEmpty)
     }
 
+    @Test func undecodableAudioReportsUserFacingError() async throws {
+        let workspace = try TestWorkspace()
+        defer { workspace.cleanUp() }
+        for name in ["broken.m4a", "broken.wav"] {
+            let source = workspace.root.appending(path: name)
+            try Data("not audio data".utf8).write(to: source)
+            let service = AudioImportService(storage: workspace.storage)
+            do {
+                _ = try await service.importFile(at: source)
+                Issue.record("Expected \(name) to be rejected")
+            } catch let error as AudioImportError {
+                #expect(error.localizedDescription == "This file does not contain playable audio.")
+            }
+        }
+        #expect(try workspace.importedFiles().isEmpty)
+    }
+
     @Test func cancellationPreventsImport() async throws {
         let workspace = try TestWorkspace()
         defer { workspace.cleanUp() }

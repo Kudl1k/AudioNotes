@@ -16,7 +16,6 @@ struct LibraryView: View {
     @State private var showsActivity = false
     @SceneStorage("library.selection") private var restoredSelection = ""
     @AppStorage("libraryShowsCost") private var showsCost = false
-    @Query private var generations: [GenerationRecord]
     @State private var costs = UsageDashboardSnapshot()
 
     init(
@@ -84,7 +83,9 @@ struct LibraryView: View {
                 if ProcessInfo.processInfo.arguments.contains("--performance-fixtures"), model.selection == nil {
                     let args = ProcessInfo.processInfo.arguments
                     let size = args.firstIndex(of: "--performance-recording").flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil } ?? "large"
-                    if args.contains("--performance-project-chat") {
+                    if args.contains("--performance-long-names") {
+                        model.selectProject(ProjectChatFixtures.longNamesProjectID)
+                    } else if args.contains("--performance-project-chat") {
                         model.projectChatTabs.insert(ProjectChatFixtures.projectID)
                         model.selectProject(ProjectChatFixtures.projectID)
                     } else if args.contains("--performance-projects") { model.selectProject(PerformanceFixtures.id("project-0")) }
@@ -111,9 +112,7 @@ struct LibraryView: View {
             } message: { error in
                 Text(error.message)
             }
-            .task(id: generations.map { "\($0.id)-\($0.requestUsageData?.hashValue ?? 0)-\($0.statusRaw)" }.joined()) {
-                costs = UsageRepository().snapshot(records: generations)
-            }
+            .background(UsageSnapshotRefresher(costs: $costs).equatable())
             .toolbar {
                 ToolbarItem {
                     if !model.activeOperations.isEmpty || model.projectImports.items.contains(where: \.isActive) {
@@ -141,10 +140,11 @@ struct LibraryView: View {
                 }
                 ToolbarItem {
                     Button("New Project", systemImage: "folder.badge.plus") { editingProject = nil; showsProjectEditor = true }
+                        .accessibilityIdentifier("toolbar.newProject")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button(activeImportProject == nil ? "Import Audio" : "Import Files", systemImage: "square.and.arrow.down", action: showImporter)
-                        .disabled(model.isImporting)
+                        .disabled(model.isImporting).accessibilityIdentifier("import.files")
                 }
             }
             .overlay {
@@ -222,13 +222,17 @@ struct LibraryView: View {
 
     private var sidebar: some View {
         List(selection: sidebarSelection) {
-            Section("Library") { Label("All Recordings", systemImage: "waveform").tag(LibraryDestination.allRecordings) }
+            Section("Library") {
+                Label("All Recordings", systemImage: "waveform").tag(LibraryDestination.allRecordings)
+                    .accessibilityIdentifier("sidebar.allRecordings")
+            }
             Section("Projects") {
                 ForEach(projects) { project in
                     ProjectSidebarRow(project: project,
                         importURLs: { urls in Task { await model.importFiles(urls, to: project, context: modelContext) } },
                         moveRecordingIDs: { move($0, to: project) })
                         .tag(LibraryDestination.project(project.id))
+                        .accessibilityIdentifier("sidebar.project.\(project.id.uuidString)")
                         .contextMenu {
                             Button("Rename…") { editingProject = project; showsProjectEditor = true }
                             Button("Import Files…") { showImporter(for: project) }
@@ -236,6 +240,7 @@ struct LibraryView: View {
                         }
                 }
                 Button("New Project…", systemImage: "plus") { editingProject = nil; showsProjectEditor = true }
+                    .accessibilityIdentifier("sidebar.newProject")
             }
             Section("Recent Recordings") {
                 ForEach(Array(recordings.prefix(8))) { recording in
@@ -245,7 +250,7 @@ struct LibraryView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         Label(recording.title, systemImage: "waveform")
-                            .lineLimit(1)
+                            .lineLimit(1).truncationMode(.middle)
                         if let transcription = model.activeTranscriptionModel(for: recording) {
                             Text(transcription.progressSnapshot?.partDescription.map { "Transcribing · \($0)" }
                                 ?? transcription.progressSnapshot?.phase.message ?? transcription.state.title)
@@ -256,6 +261,8 @@ struct LibraryView: View {
                         }
                     }
                     .padding(.vertical, 4)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("sidebar.recording.\(recording.id.uuidString)")
                     .tag(LibraryDestination.recording(recording.id))
                     .draggable(RecordingDragItem(recordingID: recording.id)) {
                         Label(recording.title, systemImage: "waveform").padding(10)
@@ -285,16 +292,18 @@ struct LibraryView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 HStack {
-                    Text("\(recordings.count) recordings").font(.caption).foregroundStyle(.secondary)
+                    Text("^[\(recordings.count) recording](inflect: true)").font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button("Usage & Cost", systemImage: "dollarsign.circle") { showsUsage = true }
                         .labelStyle(.iconOnly).buttonStyle(.borderless).help("Library Usage & Cost")
-                    if model.isImporting { ProgressView().controlSize(.small) }
+                        .accessibilityIdentifier("sidebar.usage")
+                    if model.isImporting { ProgressView().controlSize(.small).accessibilityLabel("Importing") }
                     Button(action: showImporter) { Image(systemName: "plus") }
                         .help("Import audio (⌘O)").accessibilityLabel("Import audio")
+                        .accessibilityIdentifier("sidebar.import")
                         .disabled(model.isImporting)
                 }
-            }.padding(12)
+            }.padding(12).background(.bar)
         }
     }
 

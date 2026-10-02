@@ -459,4 +459,44 @@ See [M14 migration report](SWIFTUI_MIGRATION.md).
 - [ ] Physical IME, VoiceOver, complete full-screen/Reduce Motion and live-provider desktop acceptance
 
 See [M14.2 audit and implementation report](UNIFIED_CHAT_UI.md). M14.1 remains committed
-separately; older manual acceptance is not closed. M14.3 has not started.
+separately; older manual acceptance is not closed.
+
+## M14.3 — Workspace density and operation progress (committed)
+
+- [x] Compact project/recording workspace layout, shared progress and elapsed-time presentation, factual multipart transcription progress and ETA
+- [x] Native fixture review (sizes, Light/Dark, multipart, cancel/failure, model download)
+- [x] Committed separately from M14.4 (`refactor(ui): improve workspace layout and progress UX`); 424 tests in 76 suites, Release build
+
+See [UX layout and progress report](UX_LAYOUT_AND_PROGRESS.md).
+
+## M14.4 — Accessibility, previews, performance and final UX QA (committed)
+
+- [x] Accessibility audit and fixes: labels, grouping, selection, citations, progress, errors, identifiers; 0 unlabeled controls on the surfaces swept
+- [x] SwiftUI previews on deterministic in-memory fixtures (DEBUG only)
+- [x] Fixed: Export… disabled with composer focus, window-wide Escape stop, raw AVFoundation import error, usage-cost key rebuilt per render
+- [x] Narrow-window Recording Chat crash **mitigated** (release-safety guard: Chat unavailable in a detail pane narrower than ~640 pt, with an explanation); the underlying constraint loop is not fixed
+- [x] Search/empty states, long-name truncation, pluralization; no performance regression against M14.2
+- [x] 431 tests in 77 suites (twice), Release build, no new warnings, Xcode 16 project format kept
+- [x] Committed separately from M14.3 (`refactor(ui): improve accessibility and final QA`)
+
+## M14 — closed
+
+M14 (initial architecture pass, M14.1 presentation boundaries, M14.2 unified chat, M14.3 layout and progress,
+M14.4 accessibility and QA) is **complete as an engineering milestone**. It is not a statement that physical
+acceptance was performed. Explicitly deferred and still open (none of these was completed):
+
+- [ ] Physical VoiceOver validation (narration and focus order)
+- [ ] Physical IME composition validation
+- [ ] Reduce Motion validation
+- [ ] Increase Contrast validation
+- [ ] Real/live provider acceptance
+- [ ] Prolonged OCR/import acceptance
+- [ ] Real model-download acceptance
+- [ ] Ollama fixture discrepancy
+- [ ] **Technical debt:** investigate the underlying AppKit constraint loop in narrow Recording Chat (the < ~640 pt guard is a mitigation only)
+- [ ] Markdown streaming CPU profiling
+- [ ] UI-test target
+- [ ] Menu equivalents for context-menu-only Rename/Delete
+- [ ] Older M11–M13 acceptance debt (see those milestones)
+
+See [M14.4 report](ACCESSIBILITY_AND_QA.md) and the [M14 migration report](SWIFTUI_MIGRATION.md).

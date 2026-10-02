@@ -26,7 +26,9 @@ struct ChatMessageRow<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
+                // The row's accessibility label already names the speaker.
                 Text(presentation.role == .user ? "You" : "AudioNotes").font(.caption.bold()).foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 if presentation.role == .assistant { GenerationDetailsButton(generationID: presentation.generationID) }
                 if presentation.interrupted { Text("Interrupted").font(.caption).foregroundStyle(.secondary) }
                 Spacer(minLength: 0)
@@ -42,7 +44,7 @@ struct ChatMessageRow<Content: View>: View {
             }.font(.caption).buttonStyle(.borderless).foregroundStyle(.secondary)
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(presentation.role == .user ? Color.accentColor.opacity(0.12) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-            .accessibilityElement(children: .contain).accessibilityLabel(presentation.role == .user ? "User message" : "Assistant message")
+            .accessibilityElement(children: .contain).accessibilityLabel(presentation.role == .user ? "Your message" : "Assistant message")
             .contextMenu {
                 Button("Copy Message", action: onCopy)
                 if presentation.role == .assistant && canRegenerate { Button("Regenerate", action: onRegenerate) }

@@ -64,13 +64,13 @@ struct ChatInspectorView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading) {
-                Label("Chat", systemImage: "bubble.left.and.bubble.right").font(.headline)
+                Label("Chat", systemImage: "bubble.left.and.bubble.right").font(.headline).accessibilityAddTraits(.isHeader)
                 Text(model.providerDescription).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
 
             Spacer()
             Button("Chat usage", systemImage: "dollarsign.circle") { showsUsage = true }
-                .labelStyle(.iconOnly).buttonStyle(.plain).help("Chat usage & cost")
+                .labelStyle(.iconOnly).buttonStyle(.plain).help("Chat usage & cost").accessibilityIdentifier("chat.usage")
 
             if let session = model.session, !session.messages.isEmpty {
                 Button {
@@ -80,7 +80,7 @@ struct ChatInspectorView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help("Clear chat history").accessibilityLabel("Clear chat history")
+                .help("Clear chat history").accessibilityLabel("Clear chat history").accessibilityIdentifier("chat.clear")
             }
         }
         .padding(.horizontal, 16)

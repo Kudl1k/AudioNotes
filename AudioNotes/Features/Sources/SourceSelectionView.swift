@@ -11,6 +11,8 @@ struct SourceSelectionView: View {
     private var count: Int { selectedSourceIDs.map { ids in ready.filter { ids.contains($0.id) }.count } ?? ready.count }
     var body: some View {
         Button("Sources: \(selectedSourceIDs == nil ? "All " : "")\(count)", systemImage: "doc.on.doc") { expanded.toggle() }
+            .accessibilityHint("Choose which sources the assistant can use")
+            .accessibilityIdentifier("chat.sources")
             .popover(isPresented: $expanded) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("AI context sources").font(.headline)
@@ -57,10 +59,12 @@ struct SourceReferenceChips: View {
                         Button { onOpen(group.primary) } label: {
                             Label(group.label, systemImage: group.primary.sourceType.icon).font(.caption).lineLimit(1)
                         }.buttonStyle(.bordered).controlSize(.small).help(group.excerpt)
+                            .accessibilityLabel("Open citation, \(group.label)")
                     }
                     if groups.count > 5 {
                         Button(expanded ? "Show fewer" : "+\(groups.count - 5) more") { expanded.toggle() }
                             .font(.caption).buttonStyle(.borderless)
+                            .accessibilityLabel(expanded ? "Show fewer sources" : "Show \(groups.count - 5) more sources")
                     }
                 }
             }

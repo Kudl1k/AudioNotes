@@ -15,7 +15,7 @@ struct OperationElapsedTimeView: View {
             .font(.caption).foregroundStyle(.secondary).monospacedDigit()
         }
         // A changing duration is readable on demand, never a live announcement.
-        .accessibilityElement(children: .contain)
+        .accessibilityElement(children: .contain).accessibilityAddTraits(.updatesFrequently)
     }
 
     private func elapsed(_ now: Date) -> some View {
@@ -48,7 +48,7 @@ struct OperationProgressView: View {
                 Spacer(minLength: WorkspaceSpacing.standard)
                 if let cancel {
                     Button("Cancel", action: cancel).disabled(!canCancel).controlSize(.small)
-                        .accessibilityLabel("Cancel \(title)")
+                        .accessibilityLabel("Cancel \(title)").accessibilityIdentifier("progress.cancel")
                 }
             }
             if let fraction = progress.fraction {

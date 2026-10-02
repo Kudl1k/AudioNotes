@@ -62,6 +62,8 @@ actor AudioImportService: AudioImporting {
                                  originalFileName: source.lastPathComponent, fileName: fileName, duration: duration)
         } catch {
             try? FileManager.default.removeItem(at: destination)
+            // AVFoundation describes undecodable files with text such as "Cannot Open".
+            if (error as NSError).domain == AVFoundationErrorDomain { throw AudioImportError.invalidAudio }
             throw error
         }
     }

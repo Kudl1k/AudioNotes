@@ -408,4 +408,34 @@ covers minimum/normal/large/full-screen, Light/Dark, multipart navigation/resize
 cancel/failure, summary/chat and synthetic model download. Physical accessibility,
 live-provider and prolonged extraction/import acceptance remain open. See
 [the audit, progress inventory, screenshots, validation and limitations](UX_LAYOUT_AND_PROGRESS.md).
-M14.3 is a separate uncommitted candidate; M14.4 has not started.
+M14.3 is a separate commit; M14.4 (below) followed it as its own commit.
+
+## M14.4 — Final M14 acceptance
+
+Details, measurements and the test matrix are in [ACCESSIBILITY_AND_QA.md](ACCESSIBILITY_AND_QA.md). Summary:
+
+**Architecture achieved.** SwiftUI-first scenes, typed navigation, `@Observable` presentation models over
+library-owned operations, platform calls behind intent-named adapters, one shared chat presentation for
+Recording and Project Chat, one shared progress presentation, compact workspace layout. No schema, storage,
+provider, signing or release change in any M14 pass.
+
+**Retained AppKit (intentional):** open/save panels, pasteboard, Finder/browser, alerts from `Commands`, the
+PDFKit view, the chat text editor (marked-text gating for IME-safe Send), `PDFExporter`, and the DEBUG fixture
+host window. A source-tree check found no other AppKit imports.
+
+**M14.4 results.** Accessibility labels, grouping, selection, citation, progress and error semantics were
+audited and fixed; stable identifiers were added for future UI tests (no UI-test target was created); 0
+unlabeled interactive controls remain on the surfaces swept. Previews exist for the reusable surfaces on
+deterministic in-memory fixtures. Three real defects were fixed: a pre-existing crash when opening Recording
+Chat in a narrow window (now gated), File → Export… disabled while the composer had focus, and Escape
+stopping generation from anywhere. Performance showed no regression against M14.2.
+
+**Known limitations.** Markdown and transcript selection do not span blocks/segments; streaming a long
+Markdown answer is CPU-heavy while it renders (same as M14.2); Recording Chat needs a 640 pt detail pane.
+Not physically validated: VoiceOver narration, IME, Reduce Motion, Increase Contrast, live providers,
+prolonged import/OCR, real model downloads.
+
+**Remaining future work (post-M14).** Physical VoiceOver/IME/Reduce Motion/Increase Contrast passes; a UI-test
+target using the new identifiers; keyboard/menu equivalents for recording Rename/Delete; a measured decision on
+Markdown streaming cost (block-level diffing) before any renderer change; the M11–M13 desktop acceptance debt;
+presentation-boundary debt listed under M14.1 (inline repository wrappers, `queue.retry` in a view).

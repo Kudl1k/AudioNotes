@@ -50,9 +50,7 @@ struct ExportSheetView: View {
                 }
                 if let errorMessage = model.errorMessage {
                     Section {
-                        Text(errorMessage)
-                            .foregroundStyle(.red)
-                            .font(.callout)
+                        InlineErrorLabel(errorMessage, font: .callout)
                     }
                 }
             }

@@ -29,6 +29,8 @@ struct TranscriptDisplaySegment: Identifiable, Sendable, Equatable {
 final class TranscriptViewModel {
     private(set) var visibleSegments: [TranscriptDisplaySegment] = []
     private(set) var isLoading = false
+    /// The query that produced `visibleSegments`; lets the view tell "no matches" from "search pending".
+    private(set) var searchedQuery = ""
     @ObservationIgnored private var segments: [TranscriptDisplaySegment] = []
     @ObservationIgnored private var query = ""
     @ObservationIgnored private var revision = UUID()
@@ -54,6 +56,7 @@ final class TranscriptViewModel {
             let results = await Task.detached(priority: .userInitiated) { TranscriptDisplaySegment.matching(query, in: rows) }.value
             guard !Task.isCancelled, self.revision == revision, self.query == query else { return }
             visibleSegments = results
+            searchedQuery = query
         } catch { /* Cancelled/superseded searches leave the displayed rows intact. */ }
     }
 }

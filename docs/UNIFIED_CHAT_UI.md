@@ -231,3 +231,18 @@ acceptance remains open for physical IME, VoiceOver narration, full-screen/Reduc
 live providers/costs and production-history/performance checks. Existing renderer
 cross-block selection and unmeasured desktop performance remain technical debt. No
 M14.1 commit was altered; no M14.3 work was started.
+
+## M14.4 — Chat accessibility and keyboard follow-up
+
+Rows are announced "Your message" and "Assistant message" (the visible "You / AudioNotes" header is hidden
+from VoiceOver to avoid repeating it). While an answer streams, the partial text is not exposed: one element,
+"Assistant is working: <phase>" and then "Assistant is responding", and a single "Answer ready" announcement
+at completion, so VoiceOver never rereads a growing response. Elapsed time is excluded from labels. Citation
+chips read "Open citation, <authoritative label>" or "Citation unavailable, <label>"; the composer is
+"Message" with the scope-specific placeholder as its placeholder value. Errors read "Error: …".
+
+Escape stops generation only while the composer has focus (its `cancelOperation`, which discards marked text
+first). The window-wide `.cancelAction` shortcut on Stop was removed because it stopped answers from unrelated
+focus. File → Export… now stays enabled while the composer holds first responder (`focusedSceneValue`).
+Verified in the isolated fixture; physical IME and VoiceOver remain open. See
+[ACCESSIBILITY_AND_QA.md](ACCESSIBILITY_AND_QA.md).

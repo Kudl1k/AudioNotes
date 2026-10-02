@@ -281,9 +281,9 @@ Modified (Swift paths relative to AudioNotes):
 
 ## Remaining acceptance / commit status
 
-Implementation and automated checks are ready as a **separate, uncommitted M14.3
-candidate**. M14.2 was already committed by the user; no previous commits amended.
-M14.4/iOS/architecture or operation-engine rewrites were not started.
+Implementation and automated checks are committed as a **separate M14.3 commit**
+(424 tests in 76 suites, Release build). M14.2 was already committed; no previous
+commits were amended. M14.4 followed as its own commit.
 
 Physical VoiceOver narration/focus order, IME and text selection, toggled system
 Reduce Motion, live remote/local providers and billing, prolonged production
@@ -295,3 +295,15 @@ require scrolling/balancing inspectors; no responsive claim is made below the
 supported minimum. The native import rejection above is retained as an acceptance
 limitation, not silently treated as a successful check. This report does not label
 the entire desktop acceptance milestone complete.
+
+## M14.4 — UX QA follow-up
+
+Layout and progress architecture are unchanged. Runtime QA added: search-vs-empty states everywhere a filter can
+exclude content (no more blank lists), explicit empty Recordings/Sources tabs, middle truncation with tooltips for
+long project/recording/source names (checked with worst-case strings at 760×552), correct pluralization, a sidebar
+footer background, and a fix for the narrow-window Recording Chat crash (the Chat toggle is disabled below a 640 pt
+detail pane, with a tooltip). Cancelling a transcription moves straight to "Transcription cancelled" with Retry.
+Progress accessibility: determinate progress has a label and percentage value, elapsed time is
+`updatesFrequently` and not part of any label, step rows expose Completed / In progress / Waiting. Details,
+screenshots and limits: [ACCESSIBILITY_AND_QA.md](ACCESSIBILITY_AND_QA.md). Prolonged import/OCR, real model
+downloads and live providers are still manual acceptance.

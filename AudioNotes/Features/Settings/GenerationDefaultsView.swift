@@ -67,7 +67,7 @@ struct GenerationDefaultsView: View {
                     }
                 }
                 if let err = model.transcriptionModelsError {
-                    Text(err).font(.caption).foregroundStyle(.red)
+                    InlineErrorLabel(err)
                 }
                 Text("Whisper-1 supplies segment timestamps for playback seeking. Runs in OpenAI's cloud.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -117,7 +117,7 @@ struct GenerationDefaultsView: View {
                         }
                     }
                     if let err = model.chatGPTModelsError {
-                        Text(err).font(.caption).foregroundStyle(.red)
+                        InlineErrorLabel(err)
                     }
                 }
 
@@ -238,7 +238,7 @@ struct GenerationDefaultsView: View {
                         }
                     }
                     if let error = model.chatGPTModelsError {
-                        Text(error).font(.caption).foregroundStyle(.red)
+                        InlineErrorLabel(error)
                     }
                     Text("Chat uses your ChatGPT account. It will not fall back to API-key billing.")
                         .font(.caption).foregroundStyle(.secondary)

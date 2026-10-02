@@ -62,7 +62,7 @@ struct LocalAISettingsView: View {
                             startedAt: model.downloadStartedAt, cancel: model.cancelDownload)
 
                     }
-                    if let error = model.error { Text("Download or model operation failed: " + error).foregroundStyle(.red).textSelection(.enabled) }
+                    if let error = model.error { InlineErrorLabel("Download or model operation failed: " + error, font: .body) }
                 } else { Text("Local Whisper requires Apple Silicon.") }
             }
         }

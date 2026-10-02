@@ -28,7 +28,7 @@ struct ClaudeCLIConnectionView: View {
                 }
             }
             if let error = settings.claudeModelsError {
-                Text(error).font(.caption).foregroundStyle(.red)
+                InlineErrorLabel(error)
             }
             HStack {
                 Button("Sign in with Claude Code…") { model.signIn(path: configuration.claudeExecutablePath) }

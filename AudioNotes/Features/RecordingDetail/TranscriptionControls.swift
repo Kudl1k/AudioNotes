@@ -23,12 +23,15 @@ struct TranscriptionControls: View {
                 }
                 Spacer()
                 SettingsLink { Image(systemName: "gearshape") }.help("Transcription settings")
+                    .accessibilityLabel("Transcription settings").accessibilityIdentifier("transcription.settings")
                 if model.state.isProcessing {
                     Button("Cancel", action: model.cancelTranscription)
                         .disabled(!model.state.canCancel)
+                        .accessibilityLabel("Cancel transcription").accessibilityIdentifier("progress.cancel")
                 } else if model.canTranscribe {
                     Button(model.state == .idle ? "Transcribe" : "Retry", action: transcribe)
                         .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier(model.state == .idle ? "transcription.start" : "transcription.retry")
                 } else if model.canRegenerate, let regenerate {
                     Button("Regenerate…", action: regenerate)
                 }
@@ -68,7 +71,7 @@ struct TranscriptionControls: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(accessibilityProgress(snapshot))
             } else if model.state == .completed {
-                Label("Transcription complete · \(AudioTime.string(model.recording.duration)) · \(max(1, model.progressSnapshot?.completedParts ?? 1)) part · completed in \(model.completionDurationText)", systemImage: "checkmark.circle.fill")
+                Label("Transcription complete · \(AudioTime.string(model.recording.duration)) · ^[\(max(1, model.progressSnapshot?.completedParts ?? 1)) part](inflect: true) · completed in \(model.completionDurationText)", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.subheadline)
             }
@@ -76,6 +79,7 @@ struct TranscriptionControls: View {
             if case .failed(let message) = model.state {
                 Label(message, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red).textSelection(.enabled)
+                    .accessibilityLabel("Transcription failed: \(message)")
                 if let snapshot = model.progressSnapshot {
                     VStack(alignment: .leading, spacing: 3) {
                         if let part = snapshot.currentPart {
@@ -161,5 +165,7 @@ struct TranscriptionControls: View {
     private func detailRow(_ title: String, done: Bool, active: Bool) -> some View {
         Label(title, systemImage: done ? "checkmark.circle.fill" : (active ? "arrow.trianglehead.2.clockwise.rotate.90" : "circle"))
             .foregroundStyle(done ? .secondary : (active ? .primary : .tertiary))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(title).accessibilityValue(done ? "Completed" : (active ? "In progress" : "Waiting"))
     }
 }

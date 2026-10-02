@@ -29,6 +29,7 @@ struct PerformanceFixtureLibrary: View {
             do {
                 if ProcessInfo.processInfo.arguments.contains("--performance-project-chat") {
                     try ProjectChatFixtures.prepare(context: context)
+                    if ProcessInfo.processInfo.arguments.contains("--performance-long-names") { try ProjectChatFixtures.prepareLongNames(context: context) }
                     if ProcessInfo.processInfo.arguments.contains("--performance-layout") { try OperationPresentationFixtures.prepare(context: context) }
                     if ProcessInfo.processInfo.arguments.contains("--performance-chat-stress") { try ChatPresentationFixtures.prepare(context: context) }
                     isReady = true

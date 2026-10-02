@@ -144,6 +144,7 @@ struct SummaryView: View {
                 Label(message, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
+                    .accessibilityLabel("Summary failed: \(message)")
                     .padding(.horizontal)
             }
         }
@@ -200,7 +201,7 @@ struct SummaryView: View {
                 }
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary).accessibilityHidden(true)
             }
         }
     }
@@ -270,7 +271,7 @@ struct SummaryView: View {
                 if !summary.overview.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Overview")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                         Text(summary.overview)
                             .textSelection(.enabled)
                             .lineSpacing(3)
@@ -281,7 +282,7 @@ struct SummaryView: View {
                 if !summary.keyPoints.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Key Points")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                         ForEach(summary.keyPoints) { point in
                             HStack(alignment: .top, spacing: 8) {
                                 Text("•")
@@ -298,12 +299,12 @@ struct SummaryView: View {
                 if !summary.decisions.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Decisions")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                         ForEach(summary.decisions) { decision in
                             HStack(alignment: .top, spacing: 8) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
-                                    .padding(.top, 2)
+                                    .padding(.top, 2).accessibilityHidden(true)
                                 Text(decision.text)
                                     .textSelection(.enabled)
                                 Spacer()
@@ -321,13 +322,13 @@ struct SummaryView: View {
                 if !summary.actionItems.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Action Items")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                         ForEach(summary.actionItems) { item in
                             HStack(alignment: .top, spacing: 10) {
                                 Image(systemName: "square")
                                     .font(.body)
                                     .foregroundStyle(.secondary)
-                                    .padding(.top, 2)
+                                    .padding(.top, 2).accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(item.text)
                                         .textSelection(.enabled)
@@ -359,12 +360,12 @@ struct SummaryView: View {
                 if !summary.openQuestions.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Open Questions")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                         ForEach(summary.openQuestions) { question in
                             HStack(alignment: .top, spacing: 8) {
                                 Image(systemName: "questionmark.circle")
                                     .foregroundStyle(.orange)
-                                    .padding(.top, 2)
+                                    .padding(.top, 2).accessibilityHidden(true)
                                 Text(question.text)
                                     .textSelection(.enabled)
                                 Spacer()
@@ -382,7 +383,7 @@ struct SummaryView: View {
                 if !summary.importantQuotes.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Important Quotes")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                         ForEach(summary.importantQuotes) { quote in
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack(alignment: .top) {
@@ -412,7 +413,7 @@ struct SummaryView: View {
                     if !section.items.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(section.title)
-                                .font(.title3.bold())
+                                .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                             ForEach(section.items, id: \.self) { item in
                                 HStack(alignment: .top, spacing: 8) {
                                     Text("•")

@@ -25,8 +25,12 @@ struct RecordingDetailView: View {
     @State private var showsTranscriptHistory = false
     @State private var showsRegenerationOptions = false
     @State private var headerHeight: CGFloat = 0
+    @State private var detailFitsChat = true
 
     private enum DetailTab: Hashable { case summary, transcript, sources }
+
+    /// Inspector ideal width (350) plus the narrowest detail content that still lays out (about 280), with margin.
+    nonisolated static let minimumDetailWidthForChat: CGFloat = 640
 
     init(
         recording: Recording,
@@ -89,6 +93,9 @@ struct RecordingDetailView: View {
             }
         }
         .navigationTitle(recording.title)
+        // Opening the inspector while the detail pane cannot fit beside it makes AppKit's constraint pass loop
+        // until it aborts. The width is observed while the inspector is closed, so the toggle is simply unavailable.
+        .onGeometryChange(for: Bool.self) { $0.size.width >= Self.minimumDetailWidthForChat } action: { detailFitsChat = $0 }
         .sheet(isPresented: $showsTranscriptHistory) {
             TranscriptHistoryView(recording: recording, isProcessing: model.state.isProcessing) { playback.seek(to: $0) }
         }
@@ -96,6 +103,7 @@ struct RecordingDetailView: View {
         .toolbar {
             ToolbarItem {
                 Button("Usage & Cost", systemImage: "dollarsign.circle") { showsUsage = true }
+                    .accessibilityIdentifier("toolbar.usage")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -104,6 +112,7 @@ struct RecordingDetailView: View {
                     Label("Export…", systemImage: "square.and.arrow.up")
                 }
                 .help("Export recording summary and transcript (⌘E)")
+                .accessibilityIdentifier("toolbar.export")
             }
 
             ToolbarItem(placement: .primaryAction) {
@@ -113,10 +122,13 @@ struct RecordingDetailView: View {
                     Label("Chat", systemImage: "sidebar.right")
                 }
                 .keyboardShortcut("c", modifiers: [.command, .option])
-                .help(showsChat ? "Hide chat (⌘⌥C)" : "Show chat (⌘⌥C)")
+                .disabled(!showsChat && !detailFitsChat)
+                .help(showsChat ? "Hide chat (⌘⌥C)" : detailFitsChat ? "Show chat (⌘⌥C)" : "Make the window wider or hide the sidebar to show chat")
+                .accessibilityValue(showsChat ? "Shown" : "Hidden")
+                .accessibilityIdentifier("toolbar.chat")
             }
         }
-        .focusedValue(\.exportAction) {
+        .focusedSceneValue(\.exportAction) {
             showingExportSheet = true
         }
         .sheet(isPresented: $showingExportSheet) {
@@ -155,8 +167,11 @@ struct RecordingDetailView: View {
             if let project = recording.project, let openProject {
                 HStack {
                     Button(project.name, systemImage: "folder", action: openProject).buttonStyle(.link)
-                    Image(systemName: "chevron.right").font(.caption)
-                    Text(recording.title).lineLimit(1)
+                        .lineLimit(1).truncationMode(.tail)
+                        .accessibilityLabel("Project \(project.name)").accessibilityHint("Opens the project")
+                        .accessibilityIdentifier("recording.project")
+                    Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
+                    Text(recording.title).lineLimit(1).truncationMode(.middle)
                     Spacer()
                     Menu("Organize") {
                         RecordingProjectMenu(recording: recording, projects: projects, move: moveToProject)
@@ -168,9 +183,12 @@ struct RecordingDetailView: View {
             }
             VStack(alignment: .leading, spacing: WorkspaceSpacing.standard) {
                 Text(recording.title).font(.title.bold()).textSelection(.enabled)
+                    .lineLimit(2).truncationMode(.middle).help(recording.title)
+                    .accessibilityAddTraits(.isHeader)
                 HStack {
                     Button("Sources: \(recording.sources.count)") { selectedTab = .sources }.buttonStyle(.link)
-                    Text("•")
+                        .accessibilityHint("Shows the Sources tab")
+                    Text("•").accessibilityHidden(true)
                     Text(recording.importedAt, format: .dateTime.month().day().year())
                 }
                 .font(.subheadline).foregroundStyle(.secondary)

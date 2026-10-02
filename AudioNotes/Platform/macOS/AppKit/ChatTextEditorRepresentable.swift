@@ -28,7 +28,6 @@ struct ChatTextEditorRepresentable: NSViewRepresentable {
         editor.autoresizingMask = [.width]
         editor.textContainer?.widthTracksTextView = true
         editor.textContainer?.heightTracksTextView = false
-        editor.setAccessibilityLabel(placeholder)
         editor.setAccessibilityIdentifier("chat.composer")
         editor.delegate = context.coordinator
         scroll.documentView = editor
@@ -74,7 +73,8 @@ struct ChatTextEditorRepresentable: NSViewRepresentable {
             guard let coordinator, coordinator.parent.isComposing != marked else { return }
             coordinator.parent.isComposing = marked
         }
-        editor.setAccessibilityLabel(placeholder)
+        editor.setAccessibilityLabel("Message")
+        editor.setAccessibilityPlaceholderValue(placeholder)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: ChatEditorScrollView, context: Context) -> CGSize? {

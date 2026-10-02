@@ -223,7 +223,7 @@ struct ProviderSettingsView: View {
 
                 HStack {
                     Image(systemName: "doc.text")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(.blue).accessibilityHidden(true)
                     VStack(alignment: .leading) {
                         Text("Markdown (.md)")
                             .font(.headline)
@@ -236,7 +236,7 @@ struct ProviderSettingsView: View {
 
                 HStack {
                     Image(systemName: "doc.richtext")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.red).accessibilityHidden(true)
                     VStack(alignment: .leading) {
                         Text("PDF Document (.pdf)")
                             .font(.headline)

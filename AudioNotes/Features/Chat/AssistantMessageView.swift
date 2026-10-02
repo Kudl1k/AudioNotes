@@ -102,6 +102,8 @@ private struct MarkdownCodeBlock: View {
                 Spacer()
                 Button("Copy", systemImage: "doc.on.doc") { copy() }
                     .font(.caption2).buttonStyle(.borderless)
+                    .accessibilityLabel(language.isEmpty ? "Copy code" : "Copy \(language) code")
+                    .accessibilityIdentifier("chat.code.copy")
             }
             ScrollView(.horizontal) {
                 Text(verbatim: code)
@@ -139,11 +141,12 @@ private struct ChatSourcesView: View {
                     }
                     .buttonStyle(.plain)
                     .help(group.references.compactMap(\.excerpt).joined(separator: "\n"))
-                    .accessibilityLabel("Seek to \(TimestampFormatter.string(group.startTime))")
+                    .accessibilityLabel("Open citation, recording at \(TimestampFormatter.string(group.startTime))")
                 }
                 if !expanded && groups.count > 5 {
                     Button("+\(groups.count - 5)") { expanded = true }
                         .font(.caption).buttonStyle(.borderless)
+                        .accessibilityLabel("Show \(groups.count - 5) more sources")
                 }
             }
         }

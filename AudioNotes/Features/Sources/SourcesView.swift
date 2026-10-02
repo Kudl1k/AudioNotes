@@ -21,8 +21,10 @@ struct SourcesView: View {
             HStack {
                 TextField("Search all sources", text: $model.searchQuery).textFieldStyle(.roundedBorder)
                     .onChange(of: model.searchQuery) { _, _ in model.search() }
+                    .accessibilityIdentifier("sources.search")
                 Button("Add Source…", systemImage: "plus") { showImporter() }.disabled(model.isImporting)
-                if model.isImporting { ProgressView().controlSize(.small) }
+                    .accessibilityIdentifier("sources.add")
+                if model.isImporting { ProgressView().controlSize(.small).accessibilityLabel("Importing sources") }
             }.padding(12)
             if let phase = model.importPhase { Text(phase).font(.caption).foregroundStyle(.secondary).padding(.horizontal) }
             List {
@@ -42,6 +44,12 @@ struct SourcesView: View {
                             }
                         }.buttonStyle(.plain)
                     }
+                }
+            }
+            .overlay {
+                if !model.searchQuery.isEmpty {
+                    if model.isSearching { ProgressView("Searching sources…") }
+                    else if model.searchResults.isEmpty { ContentUnavailableView.search(text: model.searchQuery) }
                 }
             }
             Text("Originals are stored locally. PDF extraction, OCR, and search have no API cost.")
@@ -74,7 +82,7 @@ struct SourcesView: View {
             SourceThumbnailView(url: model.thumbnailURL(for: source), revision: source.statusRaw,
                 icon: source.type.icon, loader: model.imageLoader)
             VStack(alignment: .leading, spacing: 5) {
-                Text(source.displayName).font(.headline)
+                Text(source.displayName).font(.headline).lineLimit(2).truncationMode(.middle).help(source.displayName)
                 Text(statusText(source)).font(.caption).foregroundStyle(.secondary)
                 if let error = source.processingError { Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
                 if model.isProcessing(source) {
@@ -98,6 +106,7 @@ struct SourcesView: View {
             Spacer()
             if !model.isProcessing(source), source.type == .audio, !source.isContextReady {
                 Button("Transcribe…") { transcriptionOptionsSourceID = source.id }
+                    .accessibilityLabel("Transcribe \(source.displayName)")
                     .disabled(source.isPrimaryAudio && primaryTranscriptionBusy)
                     .popover(isPresented: Binding(
                         get: { transcriptionOptionsSourceID == source.id },
@@ -122,8 +131,10 @@ struct SourcesView: View {
                     }
             } else if !model.isProcessing(source), source.status == .failed || source.status == .partial {
                 Button("Retry") { model.reprocess(source, context: context) }
+                    .accessibilityLabel("Retry \(source.displayName)")
             }
             Button("Open", systemImage: "eye") { preview = .init(source: source) }.labelStyle(.iconOnly).buttonStyle(.borderless)
+                .accessibilityLabel("Open \(source.displayName)").help("Open \(source.displayName)")
         }
         .padding(.vertical, 6)
         .contextMenu {
@@ -141,7 +152,7 @@ struct SourcesView: View {
         if source.type == .audio { return source.isContextReady ? "Transcribed" : "Audio · \(source.status.rawValue.capitalized)" }
         let prefix: String
         switch source.metadata {
-        case .pdf(let count, _): prefix = "\(count) pages · "
+        case .pdf(let count, _): prefix = "\(count) \(count == 1 ? "page" : "pages") · "
         case .image(let width, let height): prefix = "\(width) × \(height) · "
         default: prefix = ""
         }

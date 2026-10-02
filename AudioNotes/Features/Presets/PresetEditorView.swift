@@ -160,9 +160,7 @@ struct PresetEditorView: View {
 
                 if let errorMessage {
                     Section {
-                        Text(errorMessage)
-                            .foregroundStyle(.red)
-                            .font(.callout)
+                        InlineErrorLabel(errorMessage, font: .callout)
                     }
                 }
             }

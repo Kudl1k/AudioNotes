@@ -128,9 +128,7 @@ struct ProviderConnectionsView: View {
                     }
 
                     if let err = model.chatGPTErrorMessage {
-                        Text(err)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+                        InlineErrorLabel(err)
                     }
                 }
                 .padding(.vertical, 4)
@@ -176,7 +174,7 @@ struct ProviderConnectionsView: View {
             }
             Text("Google OAuth authorizes Gemini API access for the configured Google Cloud project. It does not imply that a consumer Gemini subscription pays for API use.")
                 .font(.caption).foregroundStyle(.secondary)
-            if let error = model.googleOAuthError { Text(error).font(.caption).foregroundStyle(.red) }
+            if let error = model.googleOAuthError { InlineErrorLabel(error) }
             Label(model.geminiKeyIsConfigured ? "API key configured" : "No API key configured",
                   systemImage: model.geminiKeyIsConfigured ? "key.fill" : "key")
             SecureField(model.geminiKeyIsConfigured ? "Enter a replacement Gemini API key" : "Enter a Gemini API key",

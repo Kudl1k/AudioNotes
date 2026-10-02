@@ -14,11 +14,11 @@ struct TranscriptView: View {
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal, WorkspaceSpacing.majorSection)
                     .padding(.top, WorkspaceSpacing.standard)
-                    .accessibilityLabel("Search transcript")
+                    .accessibilityLabel("Search transcript").accessibilityIdentifier("transcript.search")
                 if model.isLoading {
                     ProgressView("Loading transcript…").controlSize(.small).padding(8)
                 }
-                if !searchText.isEmpty {
+                if !searchText.isEmpty && !model.visibleSegments.isEmpty {
                     Text("\(model.visibleSegments.count) matches")
                         .font(.caption).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -50,6 +50,12 @@ struct TranscriptView: View {
                     .onAppear {
                         if let id = revealedSegmentID { proxy.scrollTo(id, anchor: .center) }
                     }
+                    // An overlay keeps the scroll view (and its position) alive across searches.
+                    .overlay {
+                        if !searchText.isEmpty && model.visibleSegments.isEmpty && !model.isLoading && model.searchedQuery == searchText {
+                            ContentUnavailableView.search(text: searchText).background(.background)
+                        }
+                    }
                 }
             }
             .task(id: transcript.id) { await model.load(transcript) }
@@ -61,14 +67,23 @@ struct TranscriptView: View {
     }
 
     private func segmentRow(_ segment: TranscriptDisplaySegment) -> some View {
-        HStack(alignment: .top, spacing: 16) {
-            Button(AudioTime.string(segment.startTime)) { seek(segment.startTime) }
+        let time = AudioTime.string(segment.startTime)
+        return HStack(alignment: .top, spacing: 16) {
+            Button(time) { seek(segment.startTime) }
                 .buttonStyle(.link).monospacedDigit()
-                .accessibilityLabel("Seek to \(AudioTime.string(segment.startTime))")
             VStack(alignment: .leading, spacing: 4) {
                 if let speaker = segment.speaker { Text(speaker).font(.caption.bold()) }
                 Text(segment.text).textSelection(.enabled)
             }
         }
+        // One element per segment: speaker, timestamp, then text. Activating it plays from the segment.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.spokenLabel(speaker: segment.speaker, time: time, text: segment.text))
+        .accessibilityAction(named: "Play from \(time)") { seek(segment.startTime) }
+        .accessibilityIdentifier("transcript.segment")
+    }
+
+    static func spokenLabel(speaker: String?, time: String, text: String) -> String {
+        [speaker, time, text].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: ", ")
     }
 }

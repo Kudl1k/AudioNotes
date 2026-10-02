@@ -15,6 +15,9 @@ final class SourcesViewModel {
     private(set) var transcriptionProgress: [UUID: TranscriptionProgressSnapshot] = [:]
     var searchQuery = ""
     var searchResults: [SourceChunk] = []
+    /// The query whose results are in `searchResults`, so "no matches" is distinguishable from "still searching".
+    private(set) var searchedQuery: String?
+    var isSearching: Bool { !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && searchedQuery != searchQuery }
     @ObservationIgnored private let importer: any SourceImporting
     @ObservationIgnored private let processor: any SourceProcessing
     @ObservationIgnored private let storage: LibraryStorage
@@ -32,7 +35,7 @@ final class SourcesViewModel {
 
     func prepare(context: ModelContext) {
         SourceCompatibilityMigration().ensurePrimaryAudio(for: recording, context: context)
-        do { try context.save() } catch { self.error = error.localizedDescription }
+        do { try context.save() } catch { self.error = "The library could not be updated. Try again." }
     }
     func url(for source: RecordingSource) -> URL { storage.sourceURL(source) }
     func thumbnailURL(for source: RecordingSource) -> URL { storage.sourceDirectory(id: source.id).appending(path: "thumbnail.jpg") }
@@ -82,7 +85,7 @@ final class SourcesViewModel {
         progress[source.id] = nil // Unit totals are known only after the processor reports them.
         source.processingError = nil
         startedAt[source.id] = .now
-        do { try context.save() } catch { self.error = error.localizedDescription; source.status = .failed; return }
+        do { try context.save() } catch { self.error = "The source could not be prepared for processing. Try again."; source.status = .failed; return }
         let processor = processor
         let fileURL = url(for: source)
         let sourceID = source.id
@@ -184,7 +187,7 @@ final class SourcesViewModel {
         guard !name.isEmpty else { return }
         let previous = source.displayName
         source.displayName = name
-        do { try context.save() } catch { source.displayName = previous; self.error = error.localizedDescription }
+        do { try context.save() } catch { source.displayName = previous; self.error = "The source could not be renamed. Try again." }
     }
 
     func remove(_ source: RecordingSource, context: ModelContext) {
@@ -227,13 +230,14 @@ final class SourcesViewModel {
                 }
             }
             search()
-        } catch { self.error = error.localizedDescription }
+        } catch { self.error = "The source could not be removed. Try again." }
     }
 
     func search() {
         searchTask?.cancel()
         let query = searchQuery
         searchResults = []
+        searchedQuery = nil
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         searchTask = Task { [weak self] in
             do {
@@ -249,6 +253,7 @@ final class SourcesViewModel {
                 } onCancel: { worker.cancel() }
                 try Task.checkCancellation()
                 self.searchResults = Array(results.prefix(100))
+                self.searchedQuery = query
             } catch { /* Superseded searches never publish. */ }
         }
     }
