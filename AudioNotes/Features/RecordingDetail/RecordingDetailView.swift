@@ -123,7 +123,7 @@ struct RecordingDetailView: View {
                 }
                 .keyboardShortcut("c", modifiers: [.command, .option])
                 .disabled(!showsChat && !detailFitsChat)
-                .help(showsChat ? "Hide chat (⌘⌥C)" : detailFitsChat ? "Show chat (⌘⌥C)" : "Make the window wider or hide the sidebar to show chat")
+                .help(showsChat ? "Hide chat (⌥⌘C)" : detailFitsChat ? "Show chat (⌥⌘C)" : "Make the window wider or hide the sidebar to show chat")
                 .accessibilityValue(showsChat ? "Shown" : "Hidden")
                 .accessibilityIdentifier("toolbar.chat")
             }
@@ -234,7 +234,7 @@ struct RecordingDetailView: View {
                                         Text("The current transcript will be kept in history when the new version is ready.")
                                             .font(.callout).foregroundStyle(.secondary)
                                         HStack {
-                                            SettingsLink { Text("Transcription Settings…") }
+                                            OpenSettingsLink { Text("Transcription Settings…") }
                                             Spacer()
                                             Button("Regenerate") {
                                                 showsRegenerationOptions = false

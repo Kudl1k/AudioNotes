@@ -16,6 +16,8 @@ struct SourceProcessingTests {
         #expect(result.units[1].text.contains("žluťoučký"))
         #expect(result.units.allSatisfy { $0.origin == .nativeText })
         #expect(ocr.calls == 0)
+        let thumbnail = pdf.deletingLastPathComponent().appending(path: "thumbnail.jpg")
+        #expect(FileManager.default.fileExists(atPath: thumbnail.path))
     }
     @Test func emptyPageUsesOCRFallbackAndPartialFailureKeepsProvenance() async throws {
         let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
@@ -72,7 +74,7 @@ struct SourceProcessingTests {
         let output = try await VisionOCRService().recognize(sourceTestImage(text: text)).map(\.text).joined(separator: " ")
         #expect(!output.isEmpty)
         #expect(output.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).contains(text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)), "OCR result: \(output)")
-        if text.contains("ů") { #expect(output.contains { "říšžťčýůň".contains($0) }, "OCR should preserve recognized Unicode") }
+        if text.contains("ů") { #expect(output.contains { "říšťčýůň".contains($0) }, "OCR should preserve recognized Unicode") }
     }
     @Test func markdownAndUTF16DocumentsPreserveTextAndSections() async throws {
         let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
@@ -113,5 +115,31 @@ struct SourceProcessingTests {
         let text = workspace.root.appending(path: "empty.txt")
         try Data().write(to: text)
         await #expect(throws: SourceImportError.noText) { try await NativeSourceProcessingService().process(url: text, type: .document) }
+    }
+    @Test func renderPageProducesDeterministicCoreGraphicsImage() throws {
+        let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
+        let pdf = workspace.root.appending(path: "render_test.pdf")
+        try writeSourceTestPDF(["Page one rendering test"], to: pdf)
+
+        let document = try #require(PDFDocument(url: pdf))
+        let page = try #require(document.page(at: 0))
+
+        // Target size (220, 280) with source bounds (600, 800)
+        // Aspect ratio: 600/800 = 0.75. Scale = min(220/600, 280/800) = 0.35.
+        // Expected width = round(600 * 0.35) = 210, height = round(800 * 0.35) = 280.
+        let image = try #require(NativeSourceProcessingService.renderPage(page, targetSize: CGSize(width: 220, height: 280)))
+        #expect(image.width == 210)
+        #expect(image.height == 280)
+        #expect(image.bitsPerPixel == 32)
+
+        // Rotated page: rotation 90 degrees swaps effective aspect ratio
+        page.rotation = 90
+        // Effective width 800, height 600.
+        // Scale = min(220/800, 280/600) = min(0.275, 0.4667) = 0.275.
+        // Expected width = round(800 * 0.275) = 220, height = round(600 * 0.275) = 165.
+        let rotatedImage = try #require(NativeSourceProcessingService.renderPage(page, targetSize: CGSize(width: 220, height: 280)))
+        #expect(rotatedImage.width == 220)
+        #expect(rotatedImage.height == 165)
+        #expect(rotatedImage.bitsPerPixel == 32)
     }
 }

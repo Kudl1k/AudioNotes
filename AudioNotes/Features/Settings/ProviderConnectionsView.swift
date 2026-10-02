@@ -138,7 +138,21 @@ struct ProviderConnectionsView: View {
 
     private var anthropicSection: some View {
         Group {
-            ClaudeCLIConnectionView(configuration: llmConfig, settings: model)
+#if os(macOS)
+            if PlatformCapabilities.current.supportsClaudeCLI {
+                ClaudeCLIConnectionView(configuration: llmConfig, settings: model)
+            } else {
+                Section("Anthropic Claude") {
+                    Text("Claude CLI is unavailable on this system.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+#else
+            Section("Anthropic Claude") {
+                Text("Claude Code CLI integration is available on macOS.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+#endif
             if model.anthropicKeyIsConfigured {
                 Section("Previously saved API key") {
                     Text("Claude Code uses its account login. This saved API key is not used for summaries or chat.")

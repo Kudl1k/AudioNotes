@@ -1,5 +1,7 @@
 import Foundation
+#if os(macOS)
 import Darwin
+#endif
 
 enum ClaudeCLIError: LocalizedError, Equatable, Sendable {
     case notInstalled, notSignedIn, unsupportedAuthentication, launchFailed, timedOut, invalidResponse, invalidModel, requestFailed
@@ -23,6 +25,7 @@ protocol ClaudeCLIRunning: Sendable {
     func run(executable: String, arguments: [String], input: Data, systemPrompt: String?) -> AsyncThrowingStream<Data, Error>
 }
 
+#if os(macOS)
 /// Bridges Foundation process/pipe callbacks into structured concurrency. A locked
 /// process handle makes cancellation safe before, during, and after launch.
 struct ClaudeCLIRunner: ClaudeCLIRunning {
@@ -166,3 +169,13 @@ private final class ClaudeCLIInvocation: @unchecked Sendable {
         }
     }
 }
+#else
+/// Inert stub for non-macOS platforms where Process is unavailable.
+struct ClaudeCLIRunner: ClaudeCLIRunning {
+    func run(executable: String, arguments: [String], input: Data, systemPrompt: String?) -> AsyncThrowingStream<Data, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.finish(throwing: ClaudeCLIError.launchFailed)
+        }
+    }
+}
+#endif

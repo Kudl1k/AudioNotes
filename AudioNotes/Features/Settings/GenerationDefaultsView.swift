@@ -122,7 +122,12 @@ struct GenerationDefaultsView: View {
                 }
 
             } else if llmConfig.selectedProvider == .anthropic {
+#if os(macOS)
                 ClaudeModelPicker(selection: $llmConfig.summaryClaudeModel, configuration: llmConfig, settings: model)
+#else
+                Text("Claude Code CLI integration is available on macOS.")
+                    .font(.caption).foregroundStyle(.secondary)
+#endif
             } else if llmConfig.selectedProvider == .ollama {
                 OllamaModelPicker(title: "Model", selection: Binding(get: { llmConfig.localAI.summaryModel }, set: { llmConfig.localAI.summaryModel = $0 }), configuration: llmConfig.localAI)
                 Text("Manage the Ollama connection and installed models in Providers → Local AI.").font(.caption).foregroundStyle(.secondary)
@@ -139,65 +144,45 @@ struct GenerationDefaultsView: View {
                 }
                 Text("Gemini generation is not available in this build yet. This selection does not trigger fallback to the other credential method.")
                     .font(.caption).foregroundStyle(.secondary)
-            } else {
-                Text("Manage API keys in Providers. Summary generation for this provider is not implemented yet.")
-                    .foregroundStyle(.secondary)
             }
 
-            Picker("Default Preset", selection: $llmConfig.defaultPreset) {
-                ForEach(SummaryPreset.allCases) { preset in
-                    Label(preset.title, systemImage: preset.iconName).tag(preset)
-                }
-            }
-
-            Picker("Response length", selection: $llmConfig.summaryOutputLength) {
+            Picker("Detail Level", selection: $llmConfig.summaryOutputLength) {
                 ForEach(OutputLength.allCases) { Text($0.title).tag($0) }
             }
 
-            Text("Create and edit custom instructions in Presets.")
-                .font(.caption).foregroundStyle(.secondary)
-
-            if llmConfig.selectedProvider == .openAI {
-                DisclosureGroup(isExpanded: $showAdvancedSummary) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if llmConfig.summaryCapabilities.supportsMaxOutputTokens {
-                            TextField("Max output tokens", value: Binding(
-                                get: { llmConfig.summarySettings.maxOutputTokens ?? 6000 },
-                                set: { value in var settings = llmConfig.summarySettings; settings.maxOutputTokens = max(1, value); llmConfig.summarySettings = settings }
-                            ), format: .number)
-                        }
-                        if llmConfig.summaryCapabilities.supportsTemperature {
-                            HStack {
-                                Text("Temperature:")
-                                Spacer()
-                                Text(String(format: "%.2f", llmConfig.summarySettings.temperature ?? 0.7)).monospacedDigit()
-                            }
-                            Slider(value: Binding(
-                                get: { llmConfig.summarySettings.temperature ?? 0.7 },
-                                set: { val in var current = llmConfig.summarySettings; current.temperature = val; llmConfig.summarySettings = current }
-                            ), in: 0.0...2.0, step: 0.05)
-                        }
-                        if llmConfig.summaryCapabilities.supportsTopP {
-                            HStack {
-                                Text("Top P:")
-                                Spacer()
-                                Text(String(format: "%.2f", llmConfig.summarySettings.topP ?? 1.0)).monospacedDigit()
-                            }
-                            Slider(value: Binding(
-                                get: { llmConfig.summarySettings.topP ?? 1.0 },
-                                set: { val in var current = llmConfig.summarySettings; current.topP = val; llmConfig.summarySettings = current }
-                            ), in: 0.0...1.0, step: 0.05)
-                        }
+            DisclosureGroup(isExpanded: $showAdvancedSummary) {
+                VStack(alignment: .leading, spacing: 10) {
+                    if llmConfig.summaryCapabilities.supportsMaxOutputTokens {
+                        TextField("Max output tokens", value: Binding(
+                            get: { llmConfig.summarySettings.maxOutputTokens ?? 4000 },
+                            set: { value in var settings = llmConfig.summarySettings; settings.maxOutputTokens = max(1, value); llmConfig.summarySettings = settings }
+                        ), format: .number)
                     }
-                    .padding(.vertical, 4)
-                } label: {
-                    Text("Advanced Generation Settings")
-                        .font(.subheadline)
+                    if llmConfig.summaryCapabilities.supportsTemperature {
+                        HStack {
+                            Text("Temperature:")
+                            Spacer()
+                            Text(String(format: "%.2f", llmConfig.summarySettings.temperature ?? 0.3))
+                                .monospacedDigit()
+                        }
+                        Slider(
+                            value: Binding(
+                                get: { llmConfig.summarySettings.temperature ?? 0.3 },
+                                set: { val in
+                                    var current = llmConfig.summarySettings
+                                    current.temperature = val
+                                    llmConfig.summarySettings = current
+                                }
+                            ),
+                            in: 0.0...2.0,
+                            step: 0.05
+                        )
+                    }
                 }
-            } else if llmConfig.selectedProvider == .ollama {
-                LocalGenerationSettingsControls(settings: $llmConfig.summarySettings)
-            } else if llmConfig.selectedProvider == .llamaCpp {
-                LocalGenerationSettingsControls(settings: $llmConfig.summarySettings)
+                .padding(.vertical, 4)
+            } label: {
+                Text("Advanced Summary Settings")
+                    .font(.subheadline)
             }
         }
     }
@@ -207,16 +192,16 @@ struct GenerationDefaultsView: View {
             Picker("Provider", selection: $llmConfig.chatProvider) {
                 ForEach(LLMProviderID.selectable) { Text($0.title).tag($0) }
             }
-
             if llmConfig.chatProvider == .openAI {
                 Picker("Authentication", selection: $llmConfig.chatAuthMethod) {
                     ForEach(OpenAIAuthenticationMethod.allCases) { Text($0.title).tag($0) }
                 }
+
                 if llmConfig.chatAuthMethod == .apiKey {
                     Picker("Model", selection: $llmConfig.chatOpenAIModel) {
                         ForEach(OpenAILLMModel.allCases) { Text($0.title).tag($0) }
                     }
-                    Text("Chat uses your OpenAI API key.")
+                    Text("Chat is billed per token by OpenAI. Responses use reasoning where supported.")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
                     Picker("Model", selection: $llmConfig.chatChatGPTModel) {
@@ -230,7 +215,7 @@ struct GenerationDefaultsView: View {
                             Text("Fetching ChatGPT models…")
                                 .font(.caption).foregroundStyle(.secondary)
                         } else if model.isChatGPTSignedIn {
-                            Button("Refresh Models") {
+                            Button("Refresh ChatGPT Models") {
                                 Task { await model.fetchChatGPTModels() }
                             }
                             .buttonStyle(.borderless)
@@ -244,7 +229,12 @@ struct GenerationDefaultsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             } else if llmConfig.chatProvider == .anthropic {
+#if os(macOS)
                 ClaudeModelPicker(selection: $llmConfig.chatClaudeModel, configuration: llmConfig, settings: model)
+#else
+                Text("Claude Code CLI integration is available on macOS.")
+                    .font(.caption).foregroundStyle(.secondary)
+#endif
             } else if llmConfig.chatProvider == .ollama {
                 OllamaModelPicker(title: "Model", selection: Binding(get: { llmConfig.localAI.chatModel }, set: { llmConfig.localAI.chatModel = $0 }), configuration: llmConfig.localAI)
             } else if llmConfig.chatProvider == .llamaCpp {

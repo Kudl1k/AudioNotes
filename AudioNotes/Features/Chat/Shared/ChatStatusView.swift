@@ -14,7 +14,7 @@ struct ChatThinkingIndicator: View {
                 OperationElapsedTimeView(startedAt: startedAt)
             }
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+            .background(Color.chatCardBackground, in: RoundedRectangle(cornerRadius: 10))
             // Elapsed time is deliberately not part of the label: it would change every second.
             .accessibilityElement(children: .ignore).accessibilityLabel("Assistant is working: \(phase)")
             .accessibilityIdentifier("chat.thinking")
@@ -34,7 +34,7 @@ struct ChatStreamingIndicator<Content: View>: View {
             }
             content()
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+            .background(Color.chatCardBackground, in: RoundedRectangle(cornerRadius: 10))
             // Partial text changes every few milliseconds. VoiceOver reads the finished message instead.
             .accessibilityElement(children: .ignore).accessibilityLabel("Assistant is responding")
             .accessibilityIdentifier("chat.streaming")
@@ -52,7 +52,7 @@ struct ChatErrorView: View {
             if canRetry {
                 Button("Retry", action: onRetry).accessibilityLabel("Retry answer").accessibilityIdentifier("chat.retry")
             }
-            SettingsLink { Text("Choose Chat Provider…") }
+            OpenSettingsLink { Text("Choose Chat Provider…") }
                 .accessibilityLabel("Chat provider and model settings").accessibilityIdentifier("chat.settings")
         }.buttonStyle(.bordered).controlSize(.small).padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)

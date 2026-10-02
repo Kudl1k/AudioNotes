@@ -500,3 +500,20 @@ acceptance was performed. Explicitly deferred and still open (none of these was 
 - [ ] Older M11–M13 acceptance debt (see those milestones)
 
 See [M14.4 report](ACCESSIBILITY_AND_QA.md) and the [M14 migration report](SWIFTUI_MIGRATION.md).
+
+## M16 — iOS / iPadOS Port
+
+Goal: deliver native iPhone and iPad companion targets sharing core models, persistence, business logic, and providers with macOS, without duplicating architecture or code. M15 is reserved for the macOS Release Candidate / signing / notarization / distribution work and is not part of M16.
+
+- [x] M16.0 — Architecture and portability audit ([audit report](IOS_PORT_AUDIT.md))
+- [x] M16.1 — Shared/platform boundary preparation (zero behavior change on macOS; [boundary report](IOS_PLATFORM_BOUNDARIES.md))
+- [ ] M16.2 — iOS target + library and navigation shell
+- [ ] M16.3 — Audio import + recording detail (header, playback, transcript)
+- [ ] M16.4 — Cloud AI + chats (OpenAI transcription, summaries, Recording Chat, iOS composer)
+- [ ] M16.5 — Projects, sources, OCR, citations, Project Chat
+- [ ] M16.6 — Export and sharing (ShareLink, file exporter, PDF export)
+- [ ] M16.7 — Local capabilities (LAN Ollama/llama.cpp, Whisper feasibility spike)
+- [ ] M16.8 — iPad polish (adaptive split, inspector, keyboard shortcuts, drag & drop)
+- [ ] M16.9 — iOS QA, accessibility, memory, performance, and validation
+
+See [iOS Port Architecture and Portability Audit](IOS_PORT_AUDIT.md) and [iOS Platform Boundaries](IOS_PLATFORM_BOUNDARIES.md).

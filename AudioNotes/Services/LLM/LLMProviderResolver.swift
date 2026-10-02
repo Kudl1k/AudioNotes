@@ -57,7 +57,12 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
             }
             return OpenAILLMModel.allCases.map { .init(id: $0.rawValue, title: $0.title) }
         case .anthropic:
+#if os(macOS)
+            guard PlatformCapabilities.current.supportsClaudeCLI else { return [] }
             return configuration.cachedClaudeModels.map { .init(id: $0.id, title: $0.displayName) }
+#else
+            return []
+#endif
         case .ollama:
             return configuration.localAI.models.map { .init(id: $0.id, title: $0.id) }
         case .llamaCpp:
@@ -68,7 +73,8 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
     }
 
     @MainActor private func resolveSummaryBase(provider: LLMProviderID? = nil, model: String? = nil) -> any LLMProvider {
-        switch provider ?? configuration.summaryProvider {
+        let selectedProvider = provider ?? configuration.summaryProvider
+        switch selectedProvider {
         case .ollama:
             return OllamaLLMProvider(model: model ?? configuration.localAI.summaryModel, configuration: configuration.localAI)
         case .llamaCpp:
@@ -80,10 +86,18 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
             return UnavailableLLMProvider(providerID: .mock)
 #endif
         case .anthropic:
-            return ClaudeCLILLMProvider(model: model ?? configuration.summaryClaudeModel,
-                                        client: ClaudeCLIClient(executable: configuration.claudeExecutablePath))
+#if os(macOS)
+            if PlatformCapabilities.current.supportsClaudeCLI {
+                return ClaudeCLILLMProvider(model: model ?? configuration.summaryClaudeModel,
+                                            client: ClaudeCLIClient(executable: configuration.claudeExecutablePath))
+            } else {
+                return UnavailableLLMProvider(providerID: selectedProvider)
+            }
+#else
+            return UnavailableLLMProvider(providerID: selectedProvider)
+#endif
         case .gemini:
-            return UnavailableLLMProvider(providerID: provider ?? configuration.summaryProvider)
+            return UnavailableLLMProvider(providerID: selectedProvider)
         case .openAI:
             switch configuration.summaryAuthMethod {
             case .chatGPT:
@@ -121,8 +135,16 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
             return UnavailableLLMProvider(providerID: .mock)
 #endif
         case .anthropic:
-            return ClaudeCLILLMProvider(model: configuration.chatClaudeModel,
-                                        client: ClaudeCLIClient(executable: configuration.claudeExecutablePath))
+#if os(macOS)
+            if PlatformCapabilities.current.supportsClaudeCLI {
+                return ClaudeCLILLMProvider(model: configuration.chatClaudeModel,
+                                            client: ClaudeCLIClient(executable: configuration.claudeExecutablePath))
+            } else {
+                return UnavailableLLMProvider(providerID: configuration.chatProvider)
+            }
+#else
+            return UnavailableLLMProvider(providerID: configuration.chatProvider)
+#endif
         case .gemini:
             return UnavailableLLMProvider(providerID: configuration.chatProvider)
         case .openAI:
@@ -158,7 +180,7 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
 }
 
 @MainActor
-private final class UnavailableLLMProvider: LLMProvider {
+internal final class UnavailableLLMProvider: LLMProvider {
     let id: LLMProviderID
     var displayName: String { id.title }
     init(providerID: LLMProviderID) { id = providerID }

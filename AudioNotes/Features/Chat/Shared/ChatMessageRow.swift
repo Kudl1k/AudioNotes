@@ -43,7 +43,7 @@ struct ChatMessageRow<Content: View>: View {
                 }
             }.font(.caption).buttonStyle(.borderless).foregroundStyle(.secondary)
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(presentation.role == .user ? Color.accentColor.opacity(0.12) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+            .background(presentation.role == .user ? Color.accentColor.opacity(0.12) : Color.chatCardBackground, in: RoundedRectangle(cornerRadius: 10))
             .accessibilityElement(children: .contain).accessibilityLabel(presentation.role == .user ? "Your message" : "Assistant message")
             .contextMenu {
                 Button("Copy Message", action: onCopy)

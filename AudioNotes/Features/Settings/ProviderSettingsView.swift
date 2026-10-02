@@ -174,17 +174,21 @@ struct ProviderSettingsView: View {
 
             GenerationDefaultsView(transcriptionConfig: transcriptionConfig, llmConfig: llmConfig, model: model)
 
-            Section("Updates") {
-                Toggle("Automatically check for updates", isOn: $updates.automaticallyChecksForUpdates)
-                    .disabled(!updates.isConfigured)
-                Button("Check for Updates…") { updates.checkForUpdates() }.disabled(!updates.canCheckForUpdates)
-                if !updates.isConfigured {
-                    Text("Updates are unavailable in this build. Release hosting and signing must be configured by the publisher.")
-                        .font(.caption).foregroundStyle(.secondary)
+            if PlatformCapabilities.current.supportsSparkleUpdates {
+                Section("Updates") {
+                    Toggle("Automatically check for updates", isOn: $updates.automaticallyChecksForUpdates)
+                        .disabled(!updates.isConfigured)
+                    Button("Check for Updates…") { updates.checkForUpdates() }.disabled(!updates.canCheckForUpdates)
+                    if !updates.isConfigured {
+                        Text("Updates are unavailable in this build. Release hosting and signing must be configured by the publisher.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }
             Section("Storage & Privacy") {
-                Button("Reveal Data Folder") { Workspace.open(AppStorageLocations.applicationSupport()) }
+                if PlatformCapabilities.current.supportsFinderReveal {
+                    Button("Reveal Data Folder") { Workspace.open(AppStorageLocations.applicationSupport()) }
+                }
                 Button("Privacy") { information = .privacy }
                 Button("AudioNotes Help") { information = .help }
                 Button("Third-Party Licenses") { information = .licenses }

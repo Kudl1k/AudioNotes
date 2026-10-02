@@ -22,7 +22,7 @@ struct TranscriptionControls: View {
                     }
                 }
                 Spacer()
-                SettingsLink { Image(systemName: "gearshape") }.help("Transcription settings")
+                OpenSettingsLink { Image(systemName: "gearshape") }.help("Transcription settings")
                     .accessibilityLabel("Transcription settings").accessibilityIdentifier("transcription.settings")
                 if model.state.isProcessing {
                     Button("Cancel", action: model.cancelTranscription)

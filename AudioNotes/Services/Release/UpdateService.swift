@@ -1,4 +1,5 @@
 import Combine
+#if os(macOS)
 import Sparkle
 
 /// Sparkle owns scheduling, signatures, installation and standard error presentation.
@@ -28,3 +29,15 @@ final class UpdateService: ObservableObject {
 
     func checkForUpdates() { controller?.checkForUpdates(nil) }
 }
+#else
+/// Inert stub for non-macOS platforms where Sparkle is not available.
+@MainActor
+final class UpdateService: ObservableObject {
+    @Published private(set) var canCheckForUpdates = false
+    @Published var automaticallyChecksForUpdates = false
+    let isConfigured: Bool = false
+
+    init(enabled: Bool = false, configuration: Any? = nil) {}
+    func checkForUpdates() {}
+}
+#endif

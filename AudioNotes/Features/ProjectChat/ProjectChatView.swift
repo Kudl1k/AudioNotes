@@ -100,7 +100,7 @@ struct ProjectChatView: View {
                     .accessibilityHint("Choose which recordings and sources the assistant can search")
                     .accessibilityIdentifier("chat.scope")
                 Spacer()
-                SettingsLink { Text(model.providerDescription).font(.caption).lineLimit(2) }
+                OpenSettingsLink { Text(model.providerDescription).font(.caption).lineLimit(2) }
                     .help("Uses the same Chat provider, model and generation settings as Recording Chat")
                     .accessibilityLabel("Chat provider: \(model.providerDescription)")
                     .accessibilityHint("Opens chat provider settings")
