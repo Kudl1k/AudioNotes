@@ -17,7 +17,7 @@ struct LibraryViewModelTests {
         await model.importURLs([invalid, valid], into: SwiftDataRecordingRepository(context: context))
         let recording = try #require(context.fetch(FetchDescriptor<Recording>()).first)
         #expect(model.selection == recording.id)
-        #expect(model.importError?.contains("invalid.wav") == true)
+        #expect(model.error?.kind == .importFailed && model.error?.message.contains("invalid.wav") == true)
         #expect(!model.isImporting)
         #expect(try workspace.importedFiles().count == 1)
         let importedFile = try workspace.importedFiles().first
@@ -31,7 +31,7 @@ struct LibraryViewModelTests {
         await model.importURLs([try workspace.makeAudio()], into: FailingRepository())
         #expect(try workspace.importedFiles().isEmpty)
         #expect(model.selection == nil)
-        #expect(model.importError != nil)
+        #expect(model.error?.kind == .importFailed)
         #expect(!model.isImporting)
     }
 
@@ -114,7 +114,7 @@ struct LibraryViewModelTests {
         try context.save()
         model.delete(recording, using: repository)
         #expect(model.selection == nil)
-        #expect(model.workspaceError == nil)
+        #expect(model.error == nil)
         #expect(!FileManager.default.fileExists(atPath: ownedAudio.path))
         #expect(!FileManager.default.fileExists(atPath: sourceDirectory.path))
         #expect(FileManager.default.fileExists(atPath: original.path))
@@ -144,9 +144,9 @@ struct LibraryViewModelTests {
         #expect(!model.canDelete(recording))
         model.delete(recording, using: repository)
         #expect(try context.fetchCount(FetchDescriptor<Recording>()) == 1)
-        #expect(model.workspaceError != nil)
+        #expect(model.error?.kind == .workspace)
         generation.statusRaw = GenerationStatus.cancelled.rawValue
-        model.workspaceError = nil
+        model.error = nil
         model.delete(recording, using: repository)
         #expect(try context.fetchCount(FetchDescriptor<Recording>()) == 0)
         #expect(model.selection == selection)

@@ -151,10 +151,7 @@ Rules for new code:
 
 ## Findings that remain (recommended next steps, in order)
 
-1. **Presentation boundary cleanup** (highest value). Move inline repository mutations
-   from `LibraryView`, `ProjectWorkspaceView` and `SummaryView` into their view models,
-   so they become unit-testable. Replace boolean-bound alert stacks with one
-   `Identifiable` presentation enum per screen (§117).
+1. **Presentation boundary cleanup** — done in M14.1 (see below).
 2. **One chat UI.** Recording Chat (`ChatInspectorView`, 527 lines) and Project Chat
    (`ProjectChatView`) already share the message renderer, `ChatScrollState` and
    streaming cadence. They still duplicate the composer, history list and message row.
@@ -172,6 +169,114 @@ Rules for new code:
    app-target conveniences. With AppKit now confined, a later split could take
    `Services/` minus `PDFExporter` plus the value-type models, with SwiftData models
    staying in the app.
+
+## M14.1 — Presentation boundaries
+
+Scope: `LibraryView`, `ProjectWorkspaceView` and `SummaryView`. This was an architecture
+cleanup, not a redesign. No schema, storage-location, migration, module or release
+changes.
+
+### Audit (before)
+
+| View | Direct persistence / workflow in the view | Alerts and confirmations |
+| --- | --- | --- |
+| `LibraryView` (+ `ProjectLibraryDialogs`) | Built `SwiftDataProjectRepository` and ran `move` for menu moves and dropped-ID loops (ID resolution, skip rules, navigation). Routed imports between `ProjectImportQueue.enqueue` and `importURLs` itself. Ran project create/rename in the editor callback. Owned the project-deletion in-progress flag and `Task`. Chose the reveal error message. Rename and delete already went through `LibraryViewModel`. | Five independent alerts: rename, delete-workspace, delete-project, workspace error and import error. Driven by four optional targets, a title string and two error strings. |
+| `ProjectWorkspaceView` | `deleteSource`, `renameSource` and `move` called directly on a repository, with raw `localizedDescription` errors. No presentation model. | Four alerts (delete recording, delete source, rename source, error) over three optional targets, a name string and an error string. |
+| `SummaryView` | `makeCurrent` in the view, and `delete` in the history sheet, both with `try?` so failures were **silently ignored**. Generation already went through `SummaryViewModel`. | Delete-version `confirmationDialog`; no error presentation. |
+
+Fetching was already appropriate and is unchanged. `@Query` drives the library lists;
+project lists derive from relationships, and metadata filtering stays in the views. Cost
+snapshots are computed in `.task`, not in the view body. Long-running work (imports,
+transcription, chat, project deletion's cancel-and-await) was already library-owned.
+
+### Changes
+
+- Dependency flow is now View → presentation model → existing repository → SwiftData.
+  Views still construct the lightweight `SwiftData…Repository` adapters from their
+  environment `modelContext`. That is the existing injection convention (`using:` parameters,
+  also used by summary generation and existing tests); there is one computed property per
+  view. No new repository architecture or DI framework was added.
+- `LibraryViewModel` gains `prompt: LibraryPrompt?` (rename recording, delete recording,
+  delete project), `renameText`, `error: LibraryError?` (import / workspace kinds with
+  titles), `isDeletingProject`, `importFiles(_:to:context:)`, `move`, `moveRecordings`,
+  `saveProject`, `urlsToReveal`, and `confirm…` methods. `importError`/`workspaceError`
+  strings were replaced by the single typed `error`.
+- New `ProjectWorkspaceViewModel` (per-workspace view state only): `prompt` (delete
+  recording/source, rename source), `sourceName`, `errorMessage`, plus source rename/delete
+  and recording move. Recording deletion still goes through `LibraryViewModel.delete`, so
+  library-owned models are released. It does not own imports, chat or processing.
+- `SummaryViewModel.makeCurrent` / `deleteVersion` report failures in `historyError`.
+  The history sheet and the main view each present it; the main view's alert is suppressed
+  while the sheet is open.
+- `UserFacingError` keeps AudioNotes' own editing messages (`ProjectEditingError`,
+  `WorkspaceDeletionError`) and replaces SwiftData/file-system descriptions with a
+  context-specific sentence (for example "The recording could not be moved. Try again.").
+  Import failure text is unchanged.
+
+### Alert architecture
+
+Before: 10 independent `.alert`/`.confirmationDialog` modifiers (Library 4, project dialogs 1, workspace 4, summary history 1) across the three screens,
+each bound to its own optional or string. After: one prompt alert plus one error alert in
+`LibraryView` and in `ProjectWorkspaceView`, each driven by an `Identifiable` enum or error
+value through `alert(_:isPresented:presenting:)`. Summary keeps its delete-version
+`confirmationDialog` and adds an error alert.
+
+Prompts and errors are deliberately separate states. Confirming an action clears the
+prompt before the action can set an error, so dismissing the prompt never clears a newly
+raised error. Destructive confirmations keep their titles, buttons and messages. Project
+deletion still disables "Delete Recordings and Project" while recordings are busy.
+
+### Behavior changes (intentional, failure paths only)
+
+- Summary make-current/delete failures are now reported instead of being ignored.
+- Technical persistence descriptions are replaced by understandable messages.
+- A drop onto a project row no longer enqueues imports into a project that has just been
+  deleted (the panel path already checked this).
+
+### Tests
+
+`PresentationBoundaryTests` (15 tests) covers:
+
+- prompt state and dismissal;
+- forwarding to the repository on confirm;
+- failure → user-facing error without technical text;
+- error replacement and dismissal;
+- dropped-ID resolution and navigation;
+- project create selection and domain messages;
+- reveal reporting;
+- project deletion that keeps recordings;
+- ignored imports into a deleted project;
+- workspace source rename/delete/move;
+- summary history success and failure, with real SwiftData persistence.
+
+`LibraryViewModelTests` was updated to the typed error.
+
+### Validation (2026-10-02)
+
+The full Debug suite passed: 404 tests in 74 suites, including the 15 new tests. The
+Release build succeeded with no new warnings. `project.pbxproj` stays in the Xcode 16
+format; Xcode 27 rewrote it again and that was reverted. A runtime check in the isolated
+DEBUG fixtures (in-memory store, temporary files, mock providers) covered:
+
+- library rename prompt: prefilled, saved;
+- workspace delete prompt: message, Escape cancels;
+- project delete prompt: both destructive choices, Cancel;
+- project source rename;
+- project source delete: Return does not trigger Delete, an explicit Delete removes it;
+- summary history View → Make Current.
+
+No new stderr output appeared. Persistence failure alerts were verified by unit tests,
+not at runtime.
+
+### Remaining presentation-boundary issues
+
+- `ProjectWorkspaceView` still calls `queue.retry(source, in:context:)` directly. It is a
+  library-owned service call, not persistence logic.
+- `LibraryView` restores scene selection and selects DEBUG fixtures in `onAppear`.
+- The cost `.task(id:)` key is rebuilt from all generation records on each body evaluation.
+- Other views outside M14.1 scope still construct repositories inline: `ChatInspectorView`,
+  `TranscriptHistoryView` and `RecordingDetailView`, which forward to their models.
+- File › Export… is unavailable while focus is in the chat inspector (pre-existing).
 
 ## Future iOS readiness
 

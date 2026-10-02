@@ -225,6 +225,33 @@ final class SummaryViewModel {
         return task
     }
 
+    /// A failed version-history change; shown by whichever view started it.
+    var historyError: String?
+
+    /// Restores a previous version as current. Returns whether it succeeded.
+    @discardableResult
+    func makeCurrent(_ summary: Summary, using repository: any SummaryStoring) -> Bool {
+        do {
+            try repository.makeCurrent(summary, for: recording)
+            return true
+        } catch {
+            historyError = "This summary version could not be made current. Try again."
+            return false
+        }
+    }
+
+    /// Deletes a non-current version. Returns whether it succeeded.
+    @discardableResult
+    func deleteVersion(_ summary: Summary, using repository: any SummaryStoring) -> Bool {
+        do {
+            try repository.delete(summary, for: recording)
+            return true
+        } catch {
+            historyError = "This summary version could not be deleted. Nothing was removed."
+            return false
+        }
+    }
+
     func cancelGeneration() {
         attemptID = nil
         task?.cancel()

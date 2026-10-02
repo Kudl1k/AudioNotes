@@ -15,11 +15,7 @@ struct ProjectWorkspaceView: View {
     @State private var query = ""
     @State private var preview: SourcePreviewTarget?
     @State private var exporting: Recording?
-    @State private var deletingRecording: Recording?
-    @State private var removing: RecordingSource?
-    @State private var renaming: RecordingSource?
-    @State private var sourceName = ""
-    @State private var error: String?
+    @State private var model = ProjectWorkspaceViewModel()
     @State private var showsActivity = false
     @State private var recordingDropTargeted = false
     private enum WorkspaceTab: Hashable { case overview, recordings, sources, chat }
@@ -123,40 +119,55 @@ struct ProjectWorkspaceView: View {
                 .popover(isPresented: $showsActivity) { ProjectImportActivityView(projectID: project.id, queue: queue) } }
         }
         .sheet(item: $exporting) { ExportSheetView(recording: $0) }
-        .alert("Delete Recording?", isPresented: Binding(get: { deletingRecording != nil }, set: { if !$0 { deletingRecording = nil } })) {
-            Button("Cancel", role: .cancel) { deletingRecording = nil }
-            Button("Delete", role: .destructive) {
-                if let recording = deletingRecording {
-                    library.delete(recording, using: SwiftDataRecordingRepository(context: context, storage: queue.storage))
-                }
-                deletingRecording = nil
-            }
-        } message: { Text("This recording and its managed files, transcript, summaries, chats and history will be permanently deleted. Project sources and your original files remain.") }
         .sheet(item: $preview) { SourcePreviewView(target: $0, url: queue.storage.sourceURL($0.source)) }
-        .alert("Delete Project Source?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
-            Button("Cancel", role: .cancel) { removing = nil }
-            Button("Delete", role: .destructive) {
-                if let source = removing {
-                    do { try SwiftDataProjectRepository(context: context, storage: queue.storage).deleteSource(source, from: project) }
-                    catch { self.error = error.localizedDescription }
-                }
-                removing = nil
-            }
-        } message: { Text("The managed copy and extracted text will be removed. Your original file remains on your Mac.") }
-        .alert("Rename Source", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Name", text: $sourceName)
-            Button("Cancel", role: .cancel) { renaming = nil }
-            Button("Rename") {
-                if let source = renaming {
-                    do { try SwiftDataProjectRepository(context: context).renameSource(source, in: project, name: sourceName) }
-                    catch { self.error = error.localizedDescription }
-                }
-                renaming = nil
-            }.disabled(sourceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .alert(promptTitle, isPresented: Binding(get: { model.prompt != nil }, set: { if !$0 { model.prompt = nil } }),
+               presenting: model.prompt) { prompt in
+            promptActions(prompt)
+        } message: { prompt in
+            promptMessage(prompt)
         }
-        .alert("Project could not be updated", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button("OK", role: .cancel) { error = nil }
-        } message: { Text(error ?? "") }
+        .alert("Project could not be updated", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
+            Button("OK", role: .cancel) { model.errorMessage = nil }
+        } message: { Text(model.errorMessage ?? "") }
+    }
+
+    private var projectRepository: SwiftDataProjectRepository {
+        SwiftDataProjectRepository(context: context, storage: queue.storage)
+    }
+
+    private var promptTitle: String {
+        switch model.prompt {
+        case .deleteRecording: "Delete Recording?"
+        case .deleteSource: "Delete Project Source?"
+        case .renameSource: "Rename Source"
+        case nil: ""
+        }
+    }
+
+    @ViewBuilder private func promptActions(_ prompt: ProjectWorkspaceViewModel.Prompt) -> some View {
+        switch prompt {
+        case .deleteRecording(let recording):
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                model.confirmDelete(recording, library: library, using: SwiftDataRecordingRepository(context: context, storage: queue.storage))
+            }
+        case .deleteSource(let source):
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) { model.confirmDelete(source, from: project, using: projectRepository) }
+        case .renameSource(let source):
+            TextField("Name", text: $model.sourceName)
+            Button("Cancel", role: .cancel) {}
+            Button("Rename") { model.confirmRename(source, in: project, using: projectRepository) }
+                .disabled(model.sourceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+
+    @ViewBuilder private func promptMessage(_ prompt: ProjectWorkspaceViewModel.Prompt) -> some View {
+        switch prompt {
+        case .deleteRecording: Text("This recording and its managed files, transcript, summaries, chats and history will be permanently deleted. Project sources and your original files remain.")
+        case .deleteSource: Text("The managed copy and extracted text will be removed. Your original file remains on your Mac.")
+        case .renameSource: EmptyView()
+        }
     }
 
     private func recordingRow(_ recording: Recording) -> some View {
@@ -173,12 +184,9 @@ struct ProjectWorkspaceView: View {
         }.buttonStyle(.plain)
         .contextMenu {
             Button("Open") { openRecording(recording.id) }
-            RecordingProjectMenu(recording: recording, projects: projects) { target in
-                do { try SwiftDataProjectRepository(context: context).move(recording, to: target) }
-                catch { self.error = error.localizedDescription }
-            }
+            RecordingProjectMenu(recording: recording, projects: projects) { model.move(recording, to: $0, using: projectRepository) }
             Button("Export…") { exporting = recording }
-            Button("Delete…", role: .destructive) { deletingRecording = recording }.disabled(!library.canDelete(recording))
+            Button("Delete…", role: .destructive) { model.requestDelete(recording) }.disabled(!library.canDelete(recording))
         }
     }
     private func recordingStatus(_ recording: Recording) -> String {
@@ -208,10 +216,10 @@ struct ProjectWorkspaceView: View {
         }.padding(.vertical, 4).accessibilityElement(children: .contain)
         .contextMenu {
             Button("Open") { preview = .init(source: source) }
-            Button("Rename…") { sourceName = source.displayName; renaming = source }
+            Button("Rename…") { model.requestRename(source) }
             Button("Retry") { queue.retry(source, in: project, context: context) }.disabled(queue.isProcessing(source.id))
             Button("Show in Finder") { Workspace.revealInFinder([queue.storage.sourceURL(source)]) }
-            Button("Delete…", role: .destructive) { removing = source }.disabled(queue.isProcessing(source.id))
+            Button("Delete…", role: .destructive) { model.requestDelete(source) }.disabled(queue.isProcessing(source.id))
         }
     }
     private func sourceDescription(_ source: RecordingSource) -> String {
