@@ -42,12 +42,38 @@ struct ChatMessageRow<Content: View>: View {
                         .accessibilityLabel("Regenerate answer").accessibilityIdentifier("chat.regenerate")
                 }
             }.font(.caption).buttonStyle(.borderless).foregroundStyle(.secondary)
-        }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(presentation.role == .user ? Color.accentColor.opacity(0.12) : Color.chatCardBackground, in: RoundedRectangle(cornerRadius: 10))
+        }
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                if presentation.role == .user {
+                    RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.12))
+                } else {
+#if os(macOS)
+                    RoundedRectangle(cornerRadius: 10).fill(Color.chatCardBackground)
+#endif
+                }
+            }
             .accessibilityElement(children: .contain).accessibilityLabel(presentation.role == .user ? "Your message" : "Assistant message")
             .contextMenu {
                 Button("Copy Message", action: onCopy)
                 if presentation.role == .assistant && canRegenerate { Button("Regenerate", action: onRegenerate) }
             }
     }
+    private var horizontalPadding: CGFloat {
+#if os(iOS)
+        presentation.role == .user ? 12 : 0
+#else
+        12
+#endif
+    }
+    private var verticalPadding: CGFloat {
+#if os(iOS)
+        8
+#else
+        12
+#endif
+    }
+
 }

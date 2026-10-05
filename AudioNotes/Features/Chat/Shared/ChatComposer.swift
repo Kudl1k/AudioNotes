@@ -54,6 +54,9 @@ struct ChatComposer: View {
     let isGenerating: Bool
     let onSend: () -> Void
     let onStop: () -> Void
+    var providerTitle: String? = nil
+    var onSettings: () -> Void = {}
+    var onClear: () -> Void = {}
     @FocusState private var isFocused: Bool
 
     private func send() {
@@ -63,19 +66,31 @@ struct ChatComposer: View {
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: 4) {
+            if let providerTitle {
+                Menu {
+                    Section(providerTitle) {
+                        Button("AI Defaults", systemImage: "slider.horizontal.3", action: onSettings)
+                        Button("Clear Chat", systemImage: "trash", role: .destructive, action: onClear)
+                    }
+                } label: {
+                    Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel("Chat options, " + providerTitle)
+                .accessibilityIdentifier("chat.options")
+            }
             TextField(placeholder, text: $text, axis: .vertical)
                 .focused($isFocused)
                 .lineLimit(1...5)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+                .padding(.leading, providerTitle == nil ? 12 : 0)
+                .padding(.vertical, 10)
                 .accessibilityIdentifier("chat.input")
 
             if isGenerating {
                 Button("Stop", systemImage: "stop.circle.fill", action: onStop)
                     .labelStyle(.iconOnly)
                     .font(.title2)
+                    .frame(minWidth: 44, minHeight: 44)
                     .foregroundStyle(.red)
                     .buttonStyle(.plain)
                     .accessibilityLabel("Stop generating")
@@ -84,14 +99,15 @@ struct ChatComposer: View {
                 Button("Send", systemImage: "arrow.up.circle.fill", action: send)
                     .labelStyle(.iconOnly)
                     .font(.title2)
+                    .frame(minWidth: 44, minHeight: 44)
                     .buttonStyle(.plain)
                     .disabled(!canSend)
                     .accessibilityLabel("Send message")
                     .accessibilityIdentifier("chat.send")
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.trailing, 4)
+        .modifier(IOSControlSurface())
         .onChange(of: focusRequest) { _, _ in
             isFocused = true
         }

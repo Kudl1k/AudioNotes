@@ -14,6 +14,10 @@ struct IOSRecordingDetailShell: View {
 
     @State private var player = IOSRecordingPlaybackModel()
     @State private var tab = DetailTab.transcript
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var showTranscriptionSettings = false
+    @State private var showMove = false
+    @State private var showChatSettings = false
     @State private var showDelete = false
     @State private var showRename = false
     @State private var showRegenerateTranscriptConfirm = false
@@ -42,19 +46,25 @@ struct IOSRecordingDetailShell: View {
         self.recording = recording
         let effectiveServices = services ?? AppServices()
         self.services = effectiveServices
-        _transcriptionModel = State(initialValue: transcriptionModel ?? RecordingViewModel(recording: recording, resolver: effectiveServices.transcriptionResolver))
-        _summaryModel = State(initialValue: summaryModel ?? SummaryViewModel(recording: recording, resolver: effectiveServices.llmResolver))
-        _chatModel = State(initialValue: chatModel ?? ChatViewModel(recording: recording, resolver: effectiveServices.llmResolver))
+        _transcriptionModel = State(initialValue: transcriptionModel ?? RecordingViewModel(recording: recording, resolver: IOSFeatureProviders.transcription(effectiveServices)))
+        _summaryModel = State(initialValue: summaryModel ?? SummaryViewModel(recording: recording, resolver: IOSFeatureProviders.llm(effectiveServices)))
+        _chatModel = State(initialValue: chatModel ?? ChatViewModel(recording: recording, resolver: IOSFeatureProviders.llm(effectiveServices)))
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            headerMetadataSection
-
-            Picker("Recording content", selection: $tab) {
-                ForEach(DetailTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        VStack(spacing: 8) {
+            Text("\(AudioTime.format(recording.duration)) · \(recording.importedAt.formatted(date: .abbreviated, time: .shortened))")
+                .font(.subheadline).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if dynamicTypeSize.isAccessibilitySize {
+                Picker("Recording content", selection: $tab) {
+                    ForEach(DetailTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.menu)
+            } else {
+                Picker("Recording content", selection: $tab) {
+                    ForEach(DetailTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.segmented).accessibilityIdentifier("recording.content")
             }
-            .pickerStyle(.segmented)
 
             Group {
                 switch tab {
@@ -69,16 +79,18 @@ struct IOSRecordingDetailShell: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .frame(maxWidth: 960)
+        .padding(.top, 4)
+        .frame(maxWidth: 760)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom) {
+        .safeAreaInset(edge: .bottom, spacing: 8) {
             if tab != .chat {
-                IOSPlaybackControls(model: player)
-                    .padding()
-                    .frame(maxWidth: 800)
-                    .frame(maxWidth: .infinity)
-                    .background(.regularMaterial)
+                IOSGlassControls {
+                    IOSCompactPlaybackBar(model: player)
+                }
+                .frame(maxWidth: 760)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+                .frame(maxWidth: .infinity)
             }
         }
         .navigationTitle(recording.title)
@@ -86,12 +98,20 @@ struct IOSRecordingDetailShell: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Section { Text(recording.title) }
                     Button(action: { showsUsage = true }) {
                         Label("Usage & Cost", systemImage: "dollarsign.circle")
                     }
                     if recording.transcript != nil {
                         Button(action: { showRegenerateTranscriptConfirm = true }) {
                             Label("Regenerate Transcript…", systemImage: "arrow.clockwise")
+                        }
+                    }
+                    Button("Transcription Settings", systemImage: "slider.horizontal.3") { showTranscriptionSettings = true }
+                    Button("Move to Project…", systemImage: "folder") { showMove = true }
+                    if recording.project != nil {
+                        Button("Remove from Project", systemImage: "folder.badge.minus") {
+                            imports.library.move(recording, to: nil, using: SwiftDataProjectRepository(context: context))
                         }
                     }
                     Button("Rename", systemImage: "pencil") {
@@ -103,9 +123,12 @@ struct IOSRecordingDetailShell: View {
                     }
                 } label: {
                     Label("Recording actions", systemImage: "ellipsis.circle")
-                }
+                }.accessibilityIdentifier("recording.actions")
             }
         }
+        .sheet(isPresented: $showChatSettings) { IOSSettingsView(services: services) }
+        .sheet(isPresented: $showMove) { IOSMoveRecordingSheet(recording: recording, library: imports.library) }
+        .sheet(isPresented: $showTranscriptionSettings) { IOSTranscriptionSettingsSheet(model: transcriptionModel, services: services) }
         .sheet(isPresented: $showsUsage) {
             UsageCostView(recordingID: recording.id)
         }
@@ -145,6 +168,17 @@ struct IOSRecordingDetailShell: View {
         .task(id: recording.id) {
             await player.load(url: LibraryStorage().recordingURL(fileName: recording.audioFileName))
         }
+        #if DEBUG
+        .task {
+            guard ProcessInfo.processInfo.arguments.contains("--performance-fixtures"), ProcessInfo.processInfo.arguments.contains("--ios-audio-review") else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            if ProcessInfo.processInfo.arguments.contains("--ios-review-configuration") { showTranscriptionSettings = true }
+            if ProcessInfo.processInfo.arguments.contains("--ios-review-move") { showMove = true }
+            if ProcessInfo.processInfo.arguments.contains("--ios-review-summary") { tab = .summary }
+            if ProcessInfo.processInfo.arguments.contains("--ios-review-chat") { tab = .chat }
+        }
+#endif
         .onDisappear { player.stop() }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { player.pause() }
@@ -157,52 +191,12 @@ struct IOSRecordingDetailShell: View {
         }
     }
 
-    // MARK: - Header
-
-    private var headerMetadataSection: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(recording.title)
-                    .font(.title2.bold())
-                    .lineLimit(3)
-                    .truncationMode(.middle)
-                    .accessibilityAddTraits(.isHeader)
-
-                ViewThatFits(in: .horizontal) {
-                    HStack { metadata }
-                    VStack(alignment: .leading) { metadata }
-                }
-
-                if let project = recording.project {
-                    Label(project.name, systemImage: "folder")
-                        .font(.caption)
-                        .lineLimit(2)
-                }
-
-                Text(recording.originalFileName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxHeight: 120)
-    }
-
-    @ViewBuilder private var metadata: some View {
-        Label(OperationDurationFormatter.string(recording.duration), systemImage: "clock")
-        Text(recording.importedAt.formatted(date: .abbreviated, time: .shortened))
-            .foregroundStyle(.secondary)
-    }
-
     // MARK: - Transcript Tab
 
     @ViewBuilder
     private var transcriptTabContent: some View {
         if transcriptionModel.state.isProcessing {
-            VStack(spacing: 20) {
-                Spacer()
+            ScrollView {
                 OperationProgressView(
                     title: transcriptionModel.progressSnapshot.map(activityTitle) ?? "Transcribing audio…",
                     status: transcriptionModel.progressSnapshot.flatMap(partStatus),
@@ -212,8 +206,7 @@ struct IOSRecordingDetailShell: View {
                     cancel: transcriptionModel.cancelTranscription,
                     canCancel: transcriptionModel.state.canCancel
                 )
-                .padding()
-                Spacer()
+                .padding(.vertical, 16)
             }
         } else if let transcript = recording.transcript, !transcript.segments.isEmpty {
             TranscriptView(transcript: transcript, seek: player.seek)
@@ -239,50 +232,34 @@ struct IOSRecordingDetailShell: View {
         snapshot.partDescription.map { "\($0) · \(snapshot.completedParts) completed" }
     }
 
-    @ViewBuilder
     private var transcriptionPromptContent: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            ContentUnavailableView {
-                Label("Transcribe Recording", systemImage: "waveform.badge.magnifyingglass")
-            } description: {
-                Text("Generate an accurate transcript with timestamps using AI. Recordings over 25MB are automatically split and processed sequentially.")
-            } actions: {
-                VStack(spacing: 16) {
-                    TranscriptionProviderControls(model: transcriptionModel)
-                        .frame(maxWidth: 320)
-
-                    Text(transcriptionModel.transcriptionEstimate.displayText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if case .failed(let message) = transcriptionModel.state {
-                        VStack(spacing: 8) {
-                            Label(message, systemImage: "exclamationmark.triangle")
-                                .font(.callout)
-                                .foregroundStyle(.red)
-                                .multilineTextAlignment(.center)
-
-                            OpenSettingsLink {
-                                Text("Open Settings to configure API key…")
-                                    .font(.caption)
-                            }
-                        }
-                        .padding(.horizontal)
+        ScrollView {
+            IOSCreationPrompt(title: "Create Transcript", symbol: "waveform.badge.magnifyingglass",
+                description: "Convert this recording into searchable text with timestamps and speakers.") {
+                Button { showTranscriptionSettings = true } label: {
+                    VStack(spacing: 4) {
+                        Text(transcriptionModel.providerName + (transcriptionModel.selectedModelName.map { " · " + $0 } ?? ""))
+                            .foregroundStyle(.primary)
+                        Text("Change").foregroundStyle(.tint)
                     }
-
-                    Button(action: {
-                        transcriptionModel.startTranscription(using: SwiftDataTranscriptRepository(context: context))
-                    }) {
-                        Label(transcriptionModel.state == .idle ? "Transcribe Audio" : "Retry Transcription", systemImage: "sparkles")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier(transcriptionModel.state == .idle ? "transcription.start" : "transcription.retry")
+                    .font(.subheadline)
+                    .padding(.horizontal, 16).padding(.vertical, 8)
                 }
+                .buttonStyle(.plain)
+                .modifier(IOSControlSurface(cornerRadius: 18))
+                .accessibilityIdentifier("transcription.configure")
+                Button(transcriptionModel.state == .idle ? "Transcribe" : "Retry Transcription") {
+                    transcriptionModel.startTranscription(using: SwiftDataTranscriptRepository(context: context))
+                }
+                .modifier(IOSPrimaryAction())
+                .accessibilityIdentifier(transcriptionModel.state == .idle ? "transcription.start" : "transcription.retry")
+                if case .failed(let message) = transcriptionModel.state {
+                    InlineErrorLabel(message)
+                    OpenSettingsLink { Text("Open Settings") }
+                }
+                Text(transcriptionModel.transcriptionEstimate.displayText).font(.footnote).foregroundStyle(.secondary)
             }
-            Spacer()
         }
-        .padding()
     }
 
     // MARK: - Summary Tab
@@ -323,25 +300,31 @@ struct IOSRecordingDetailShell: View {
         } else {
             VStack(spacing: 0) {
                 if player.playback.isLoaded {
-                    IOSCompactPlaybackBar(model: player)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.regularMaterial)
+                    IOSGlassControls {
+                        IOSCompactPlaybackBar(model: player, identifierPrefix: "chat.playback")
+                    }
+                    .padding(.bottom, 4)
                 }
 
                 chatMessageList
 
-                Divider()
-
-                ChatComposer(
-                    text: $chatModel.inputText,
-                    focusRequest: $chatFocusRequest,
-                    placeholder: "Ask about this recording…",
-                    canSend: chatModel.canSend,
-                    isGenerating: chatModel.isGenerating,
-                    onSend: chatModel.sendMessage,
-                    onStop: chatModel.stopGeneration
-                )
+            }
+            .safeAreaInset(edge: .bottom, spacing: 8) {
+                IOSGlassControls {
+                    ChatComposer(
+                        text: $chatModel.inputText,
+                        focusRequest: $chatFocusRequest,
+                        placeholder: "Ask about this recording…",
+                        canSend: chatModel.canSend,
+                        isGenerating: chatModel.isGenerating,
+                        onSend: chatModel.sendMessage,
+                        onStop: chatModel.stopGeneration,
+                        providerTitle: services.llmConfiguration.chatProvider == .openAI && services.llmConfiguration.chatAuthMethod == .chatGPT ? "ChatGPT" : services.llmConfiguration.chatProvider.title,
+                        onSettings: { showChatSettings = true },
+                        onClear: { chatModel.confirmingClearChat = true }
+                    )
+                }
+                .padding(.bottom, 6)
             }
             .task {
                 let storage = SwiftDataChatRepository(context: context)
@@ -449,91 +432,58 @@ struct IOSRecordingDetailShell: View {
 
 private struct IOSCompactPlaybackBar: View {
     let model: IOSRecordingPlaybackModel
+    var identifierPrefix = "playback"
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var isSeeking = false
+    @State private var seekTime: TimeInterval = 0
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button(action: model.togglePlayback) {
-                Image(systemName: model.playback.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.callout)
+        VStack(spacing: 4) {
+            if typeSize.isAccessibilitySize {
+                HStack { playButton; position; Spacer(); duration }
+                timeline
+            } else {
+                HStack(spacing: 10) { playButton; position; timeline; duration }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-            .accessibilityLabel(model.playback.isPlaying ? "Pause" : "Play")
-            .accessibilityIdentifier("chat.playback.toggle")
-
-            Text(OperationDurationFormatter.string(model.playback.currentTime))
-                .font(.caption2.monospacedDigit())
-
-            Slider(value: Binding(
-                get: { model.playback.currentTime },
-                set: { model.seek(to: $0) }
-            ), in: 0...max(model.playback.duration, 0.01))
-            .controlSize(.small)
-            .accessibilityLabel("Playback position")
-
-            Text(OperationDurationFormatter.string(model.playback.duration))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
+            if let error = model.sessionError ?? model.playback.errorMessage { InlineErrorLabel(error) }
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .modifier(IOSControlSurface())
     }
-}
-
-private struct IOSPlaybackControls: View {
-    let model: IOSRecordingPlaybackModel
-    @State private var scrubbing = false
-    @State private var scrubTime: TimeInterval = 0
-
-    var body: some View {
-        VStack(spacing: 8) {
-            Slider(value: Binding(get: { scrubbing ? scrubTime : model.playback.currentTime }, set: {
-                scrubTime = $0
-                if !scrubbing { model.seek(to: $0) }
-            }), in: 0...max(model.playback.duration, 0.01), onEditingChanged: { editing in
-                if editing {
-                    scrubTime = model.playback.currentTime
-                    scrubbing = true
-                } else {
-                    model.seek(to: scrubTime)
-                    scrubbing = false
-                }
-            })
-            .disabled(!model.playback.isLoaded)
-            .accessibilityLabel("Playback position")
-            .accessibilityValue("\(OperationDurationFormatter.string(model.playback.currentTime)) of \(OperationDurationFormatter.string(model.playback.duration))")
-            .accessibilityIdentifier("playback.position")
-
-            HStack {
-                Text(OperationDurationFormatter.string(scrubbing ? scrubTime : model.playback.currentTime))
-                    .monospacedDigit()
-                    .accessibilityLabel("Current position")
-                    .accessibilityValue(OperationDurationFormatter.string(scrubbing ? scrubTime : model.playback.currentTime))
-
-                Spacer()
-
-                Button(action: model.togglePlayback) {
-                    Label(model.playback.isPlaying ? "Pause" : "Play", systemImage: model.playback.isPlaying ? "pause.fill" : "play.fill")
-                        .frame(minWidth: 80, minHeight: 44)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!model.playback.isLoaded || model.isActivating)
-                .accessibilityIdentifier("playback.toggle")
-
-                Spacer()
-
-                Text(OperationDurationFormatter.string(model.playback.duration))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Duration")
-                    .accessibilityValue(OperationDurationFormatter.string(model.playback.duration))
-            }
-
-            if let error = model.sessionError ?? model.playback.errorMessage {
-                InlineErrorLabel(error)
-            }
+    private var playButton: some View {
+        Button(action: model.togglePlayback) {
+            Image(systemName: model.playback.isPlaying ? "pause.fill" : "play.fill")
+                .frame(minWidth: 44, minHeight: 44)
         }
-        .onChange(of: model.playback.isPlaying) { _, playing in
-            if !playing { model.pause() }
-        }
+        .buttonStyle(.plain).foregroundStyle(.tint)
+        .disabled(!model.playback.isLoaded || model.isActivating)
+        .accessibilityLabel(model.playback.isPlaying ? "Pause" : "Play")
+        .accessibilityIdentifier(identifierPrefix + ".toggle")
+    }
+    private var position: some View {
+        Text(OperationDurationFormatter.string(isSeeking ? seekTime : model.playback.currentTime))
+            .font(.subheadline.monospacedDigit()).accessibilityLabel("Playback position")
+            .accessibilityValue(OperationDurationFormatter.string(isSeeking ? seekTime : model.playback.currentTime))
+    }
+    private var duration: some View {
+        Text(OperationDurationFormatter.string(model.playback.duration))
+            .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+            .accessibilityLabel("Duration")
+            .accessibilityValue(OperationDurationFormatter.string(model.playback.duration))
+    }
+    private var timeline: some View {
+        Slider(value: Binding(get: { isSeeking ? seekTime : model.playback.currentTime }, set: {
+            seekTime = $0
+            if !isSeeking { model.seek(to: $0) }
+        }), in: 0...max(model.playback.duration, 0.01), onEditingChanged: { editing in
+            if editing { seekTime = model.playback.currentTime; isSeeking = true }
+            else { model.seek(to: seekTime); isSeeking = false }
+        })
+        .disabled(!model.playback.isLoaded)
+        .accessibilityLabel("Seek playback")
+        .accessibilityValue("\(OperationDurationFormatter.string(model.playback.currentTime)) of \(OperationDurationFormatter.string(model.playback.duration))")
+        .accessibilityIdentifier(identifierPrefix + ".position")
     }
 }
 #endif

@@ -8,12 +8,13 @@ final class RecordingViewModel {
     var selectedProvider: TranscriptionProviderID? {
         didSet { if selectedProvider != oldValue { selectedModel = nil } }
     }
+    var selectedLanguage: TranscriptionLanguage?
     var selectedModel: String?
     var availableModels: [GenerationModelOption] {
         let provider = selectedProvider ?? resolvedProvider.providerID.flatMap(TranscriptionProviderID.init(rawValue:))
         return provider.map { resolver.models(for: $0) } ?? []
     }
-    private var resolvedProvider: any TranscriptionProvider { resolver.resolve(provider: selectedProvider, model: selectedModel) }
+    private var resolvedProvider: any TranscriptionProvider { resolver.resolve(provider: selectedProvider, model: selectedModel, language: selectedLanguage) }
     let recording: Recording
     private(set) var state: TranscriptionState
     private(set) var progress: Double?

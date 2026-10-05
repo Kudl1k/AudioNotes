@@ -3,117 +3,55 @@ import SwiftUI
 
 struct IOSProjectWorkspaceShell: View {
     let project: Project
+    let services: AppServices
+    @Environment(IOSAudioImportModel.self) private var imports
 
     var body: some View {
         List {
-            headerSection
-            recordingsSection
-            sourcesSection
-            chatPlaceholderSection
+            if let description = project.projectDescription, !description.isEmpty {
+                Section { Text(description).foregroundStyle(.secondary) }
+            }
+            Section {
+                NavigationLink {
+                    List(project.recordings.sorted { $0.importedAt > $1.importedAt }) { recording in
+                        NavigationLink {
+                            IOSRecordingDetailShell(recording: recording, services: services,
+                                transcriptionModel: imports.library.transcriptionModel(for: recording, resolver: IOSFeatureProviders.transcription(services)),
+                                summaryModel: imports.library.summaryModel(for: recording, resolver: IOSFeatureProviders.llm(services)),
+                                chatModel: imports.library.chatModel(for: recording, resolver: IOSFeatureProviders.llm(services)))
+                        } label: { IOSRecordingRow(recording: recording) }
+                        .modifier(IOSRecordingActions(recording: recording))
+                    }
+                    .overlay { if project.recordings.isEmpty { ContentUnavailableView("No Recordings", systemImage: "waveform", description: Text("Move recordings here from the library.")) } }
+                    .navigationTitle("Recordings")
+                } label: {
+                    HStack {
+                        Label("Recordings", systemImage: "waveform")
+                        Spacer()
+                        Text(project.recordings.count.formatted()).foregroundStyle(.secondary)
+                    }
+                }
+                NavigationLink {
+                    List(project.sources) { source in Label(source.displayName, systemImage: "doc.text") }
+                        .overlay { if project.sources.isEmpty { ContentUnavailableView("No Sources", systemImage: "doc.text", description: Text("Project document import is currently available on Mac.")) } }
+                        .navigationTitle("Sources")
+                } label: {
+                    HStack {
+                        Label("Sources", systemImage: "paperclip")
+                        Spacer()
+                        Text(project.sources.count.formatted()).foregroundStyle(.secondary)
+                    }
+                }
+            } footer: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Created \(project.createdAt.formatted(date: .abbreviated, time: .omitted))")
+                    Text("Project Chat is available on Mac. Recording Chat is available inside each recording.")
+                }
+            }
         }
-        .listStyle(.insetGrouped)
+        .modifier(IOSProjectActions(project: project, showsToolbar: true))
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var headerSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(project.name)
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(.primary)
-
-                if let desc = project.projectDescription, !desc.isEmpty {
-                    Text(desc)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-
-                HStack(spacing: 8) {
-                    Label("\(project.recordings.count) Recordings", systemImage: "waveform")
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.15), in: Capsule())
-
-                    Label("\(project.sources.count) Sources", systemImage: "paperclip")
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.15), in: Capsule())
-
-                    Label("Created \(project.createdAt.formatted(date: .abbreviated, time: .omitted))", systemImage: "calendar")
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.15), in: Capsule())
-                }
-            }
-            .padding(.vertical, 4)
-        }
-    }
-
-    private var recordingsSection: some View {
-        Section(header: Label("Recordings", systemImage: "waveform")) {
-            if project.recordings.isEmpty {
-                Text("No recordings assigned to this project.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(project.recordings.sorted(by: { $0.importedAt > $1.importedAt })) { recording in
-                    NavigationLink(destination: IOSRecordingDetailShell(recording: recording)) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(recording.title)
-                                .font(.body.weight(.medium))
-                            Text("\(AudioTime.format(recording.duration)) • \(recording.importedAt.formatted(date: .abbreviated, time: .shortened))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var sourcesSection: some View {
-        Section(header: Label("Sources", systemImage: "paperclip")) {
-            if project.sources.isEmpty {
-                Text("No sources added to this project.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(project.sources) { source in
-                    HStack {
-                        Image(systemName: sourceIconName(for: source))
-                            .foregroundStyle(Color.accentColor)
-                        Text(source.displayName)
-                            .font(.body)
-                    }
-                }
-            }
-        }
-    }
-
-    private var chatPlaceholderSection: some View {
-        Section(header: Label("Project Chat", systemImage: "bubble.left.and.bubble.right")) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Synthesize answers across all project materials")
-                    .font(.subheadline.weight(.medium))
-                Text("Cross-recording search, source grounding, and multi-turn project chat workspace.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 4)
-        }
-    }
-
-    private func sourceIconName(for source: RecordingSource) -> String {
-        switch source.type {
-        case .pdf: return "doc.text"
-        case .image: return "photo"
-        case .document: return "doc"
-        case .audio: return "waveform"
-        }
     }
 }
 #endif

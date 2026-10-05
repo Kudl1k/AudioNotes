@@ -19,8 +19,20 @@ final class AppServices {
 
     init() {
         AppStorageLocations.restorePreferences()
+#if DEBUG && os(iOS)
+        if ProcessInfo.processInfo.arguments.contains("--performance-fixtures") {
+            let reviewDefaults = UserDefaults(suiteName: "AudioNotes-iOS-UX-Review")!
+            reviewDefaults.removePersistentDomain(forName: "AudioNotes-iOS-UX-Review")
+            configuration = TranscriptionConfiguration(defaults: reviewDefaults)
+            llmConfiguration = LLMConfiguration(defaults: reviewDefaults)
+        } else {
+            configuration = TranscriptionConfiguration()
+            llmConfiguration = LLMConfiguration()
+        }
+#else
         configuration = TranscriptionConfiguration()
         llmConfiguration = LLMConfiguration()
+#endif
         localAISettings = LocalAISettingsViewModel(configuration: llmConfiguration.localAI, store: whisperStore)
         let authService = ChatGPTAuthService(credentialStore: chatGPTCredentials)
         self.chatGPTAuthService = authService

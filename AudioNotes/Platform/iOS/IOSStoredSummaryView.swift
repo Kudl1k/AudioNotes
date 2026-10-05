@@ -47,4 +47,18 @@ private struct IOSSummaryMarkdownView: View {
         }
     }
 }
+/// Parses only the overview snapshot; structured summary timestamps remain native buttons.
+struct IOSSummaryOverviewView: View {
+    let text: String
+    @State private var document = MarkdownDocument("")
+    var body: some View {
+        MarkdownMessageView(document: document).textSelection(.enabled)
+            .task(id: text) {
+                let snapshot = text
+                let parsed = await Task.detached(priority: .userInitiated) { MarkdownDocument(snapshot) }.value
+                guard !Task.isCancelled else { return }
+                document = parsed
+            }
+    }
+}
 #endif

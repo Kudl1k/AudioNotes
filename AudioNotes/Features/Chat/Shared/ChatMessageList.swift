@@ -22,11 +22,21 @@ struct ChatMessageList<Content: View>: View {
         }
     }
 
+    private var horizontalPadding: CGFloat {
+#if os(iOS)
+        0 // The recording detail shell owns the reading margin.
+#else
+        14
+#endif
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
                 content()
-            }.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity).padding(14)
+            }.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                .padding(.horizontal, horizontalPadding)
+                .padding(.vertical, 14)
                 .scrollTargetLayout()
         }
         .scrollPosition($scrollPosition)
