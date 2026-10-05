@@ -9,22 +9,12 @@ protocol LocalWhisperRunning: Sendable {
                     status: @escaping LocalWhisperStatusReporter) async throws -> LocalWhisperResult
 }
 
-#if !os(macOS)
-struct UnavailableWhisperRuntime: LocalWhisperRunning {
-    func transcribe(audioURL: URL, modelFolder: URL, language: String?,
-                    status: @escaping LocalWhisperStatusReporter) async throws -> LocalWhisperResult {
-        throw LocalAIError.unsupportedHardware
-    }
-}
-
-enum LocalWhisperRuntimeCapabilities {
-    static var languageCodes: Set<String> { [] }
-    static var isSupported: Bool { false }
-}
-#endif
-
 @MainActor final class LocalWhisperTranscriptionProvider: TranscriptionProvider {
+    #if os(iOS)
+    let displayName = "On Device"
+#else
     let displayName = "Local Whisper"
+#endif
     let providerID: String? = "localWhisper"
     let billingKind: BillingKind = .local
     let executionLocation: ProviderExecutionLocation = .local
@@ -34,23 +24,24 @@ enum LocalWhisperRuntimeCapabilities {
     let language: String?
     let runtime: any LocalWhisperRunning
     let store: WhisperModelStore
+    let coordinator: LocalInferenceCoordinator
 
-#if os(macOS)
-    init(model: WhisperModelDescriptor, language: String?, runtime: any LocalWhisperRunning = WhisperKitRuntime(), store: WhisperModelStore) {
-        self.model = model; self.language = language; self.runtime = runtime; self.store = store
+    init(model: WhisperModelDescriptor, language: String?, runtime: any LocalWhisperRunning = WhisperKitRuntime(), store: WhisperModelStore, coordinator: LocalInferenceCoordinator? = nil) {
+        self.model = model; self.language = language; self.runtime = runtime; self.store = store; self.coordinator = coordinator ?? LocalInferenceCoordinator()
     }
-#else
-    init(model: WhisperModelDescriptor, language: String?, runtime: any LocalWhisperRunning = UnavailableWhisperRuntime(), store: WhisperModelStore) {
-        self.model = model; self.language = language; self.runtime = runtime; self.store = store
+    var capabilities: TranscriptionProviderCapabilities {
+        .init(maxDirectUploadSize: nil, maxProviderFileUploadSize: nil, supportsProviderFileUpload: false,
+              supportsTimestamps: true, supportsDiarization: false, maximumDuration: nil, requiresChunking: false)
     }
-#endif
 
     func transcribe(audioURL: URL, progress: @escaping TranscriptionProgress) async throws -> Transcript {
         try await transcribe(audioURL: audioURL, progress: progress, status: { _ in })
     }
     func transcribe(audioURL: URL, progress: @escaping TranscriptionProgress, status: @escaping TranscriptionStatusReporter) async throws -> Transcript {
         try Task.checkCancellation()
-        try await store.acquire()
+        try await coordinator.acquire()
+        do { try await store.acquire() }
+        catch { await coordinator.release(); throw error }
         do {
             guard await store.isReady(model) else { throw LocalAIError.missingModel(model.title) }
             let folder = await store.folder(model)
@@ -62,8 +53,14 @@ enum LocalWhisperRuntimeCapabilities {
             try Task.checkCancellation()
             let transcript = try Self.makeTranscript(result, model: model.title)
             await store.release()
+            await coordinator.release()
             return transcript
-        } catch { await store.release(); throw error }
+        } catch {
+            await store.release(); await coordinator.release()
+            if Task.isCancelled || error is CancellationError { throw CancellationError() }
+            if error is LocalAIError || error is TranscriptionError { throw error }
+            throw LocalAIError.inference("On-device transcription failed. Retry, download the model again, or explicitly choose another provider.")
+        }
     }
     static func makeTranscript(_ result: LocalWhisperResult, model: String) throws -> Transcript {
         let segments = result.segments.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }

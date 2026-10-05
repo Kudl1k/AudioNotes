@@ -12,6 +12,7 @@ struct LLMInputCapabilities: Codable, Equatable, Sendable {
     var approximateTokensPerImage = 30_000
 
     static func known(model: String?, provider: LLMProviderID) -> Self {
+        if provider == .onDevice { return Self(contextWindowTokens: 4096) }
         if provider == .llamaCpp { return Self(contextWindowTokens: 4096) }
         guard provider == .openAI, let model else { return Self() }
         let names = ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"]

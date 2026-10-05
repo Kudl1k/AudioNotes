@@ -38,9 +38,18 @@ struct IOSTranscriptionSettingsSheet: View {
                         .accessibilityIdentifier("transcription.model")
                     }
                 }
-                if (model.selectedProvider ?? services.configuration.selectedProvider) == .openAI {
+                if (model.selectedProvider ?? services.configuration.selectedProvider) == .localWhisper {
+                    Section("On-device Model") {
+                        if let descriptor = services.localAISettings.models.first(where: { $0.id == (model.selectedModel ?? services.llmConfiguration.localAI.whisperModel) }) {
+                            IOSWhisperModelRow(model: descriptor, settings: services.localAISettings)
+                        }
+                        Text("No audio upload. Timestamps and language detection are supported. Speaker diarization is unavailable.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                if [.openAI, .localWhisper].contains(model.selectedProvider ?? services.configuration.selectedProvider) {
                     Section("Options") {
-                        Picker("Language", selection: Binding(get: { model.selectedLanguage ?? services.configuration.language }, set: { model.selectedLanguage = $0 })) {
+                        Picker("Language", selection: Binding(get: { model.selectedLanguage ?? ((model.selectedProvider ?? services.configuration.selectedProvider) == .localWhisper ? (TranscriptionLanguage(rawValue: services.llmConfiguration.localAI.whisperLanguage) ?? .automatic) : services.configuration.language) }, set: { model.selectedLanguage = $0 })) {
                             ForEach(TranscriptionLanguage.allCases) { Text($0.title).tag($0) }
                         }.accessibilityIdentifier("transcription.language")
                     }
@@ -60,13 +69,14 @@ struct IOSTranscriptionSettingsSheet: View {
             .task {
 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--performance-fixtures") {
-                    providers = [.mock]; loading = false; return
+                    providers = ProcessInfo.processInfo.arguments.contains("--ios-local-ai-review") ? [.localWhisper] : [.mock]; loading = false; return
                 }
 #endif
                 let key = (try? await services.credentials.containsKey(for: .openAI)) == true
                 let google = await services.googleGeminiOAuth.account() != nil
                 providers = IOSProviderAvailability.transcription(openAIKey: key, geminiConnected: google,
-                    includeMock: model.isMockProvider)
+                    includeMock: model.isMockProvider, localWhisperSupported: LocalAISettingsViewModel.supportsWhisper)
+                await services.localAISettings.refreshInstalled()
                 loading = false
             }
         }
@@ -74,7 +84,8 @@ struct IOSTranscriptionSettingsSheet: View {
         .presentationDragIndicator(.visible)
     }
     private var defaultModel: String {
-        (model.selectedProvider ?? services.configuration.selectedProvider) == .gemini ? services.configuration.geminiModel : services.configuration.openAIModel.rawValue
+        if (model.selectedProvider ?? services.configuration.selectedProvider) == .localWhisper { return services.llmConfiguration.localAI.whisperModel }
+        return (model.selectedProvider ?? services.configuration.selectedProvider) == .gemini ? services.configuration.geminiModel : services.configuration.openAIModel.rawValue
     }
 }
 #endif

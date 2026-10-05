@@ -18,7 +18,15 @@ enum TranscriptionProviderID: String, CaseIterable, Identifiable, Sendable {
 #endif
     }
     var id: Self { self }
-    var title: String { switch self { case .mock: "Mock (development)"; case .openAI: "OpenAI API"; case .gemini: "Gemini"; case .localWhisper: "Local Whisper" } }
+    var title: String { switch self { case .mock: "Mock (development)"; case .openAI: "OpenAI API"; case .gemini: "Gemini"; case .localWhisper: Self.localTitle } }
+    private static var localTitle: String {
+#if os(iOS)
+        "On Device"
+#else
+        "Local Whisper"
+#endif
+    }
+
 }
 
 public struct OpenAITranscriptionModel: RawRepresentable, Hashable, Identifiable, Codable, Sendable {

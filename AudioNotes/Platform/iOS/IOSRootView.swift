@@ -1,10 +1,12 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 import SwiftData
 import UniformTypeIdentifiers
 
 struct IOSRootView: View {
     let services: AppServices
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Query(sort: \Recording.importedAt, order: .reverse) private var recordings: [Recording]
     @Query(sort: \Project.name) private var projects: [Project]
@@ -44,6 +46,22 @@ struct IOSRootView: View {
 
     var body: some View {
         libraryPresentation
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+            imports.library.interruptOnDeviceWork()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                services.localAISettings.cancelDownload()
+                imports.library.interruptOnDeviceWork()
+            }
+        }
+        .task {
+#if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--performance-fixtures") { return }
+#endif
+            try? await services.whisperStore.cleanAbandonedDownloads()
+            await services.localAISettings.refreshInstalled()
+        }
         .onChange(of: navigationPath) { _, path in
             if horizontalSizeClass == .compact { destination = path.last ?? .allRecordings }
         }
@@ -93,6 +111,11 @@ struct IOSRootView: View {
                 services.configuration.selectedProvider = .mock
                 services.llmConfiguration.summaryProvider = .mock
                 services.llmConfiguration.chatProvider = .mock
+                if ProcessInfo.processInfo.arguments.contains("--ios-local-ai-review") {
+                    services.configuration.selectedProvider = .localWhisper
+                    services.llmConfiguration.summaryProvider = .onDevice
+                    services.llmConfiguration.chatProvider = .onDevice
+                }
                 if ProcessInfo.processInfo.arguments.contains("--ios-project-knowledge-review") {
                     try IOSProjectKnowledgeFixtures.prepare(context: context)
                     let project = try context.fetch(FetchDescriptor<Project>()).first { $0.id == IOSProjectKnowledgeFixtures.projectID }
@@ -113,6 +136,7 @@ struct IOSRootView: View {
                     destination = .project(project.id); navigationPath = [.project(project.id)]
                 }
                 if ProcessInfo.processInfo.arguments.contains("--ios-review-new-project") { showingNewProject = true }
+                if ProcessInfo.processInfo.arguments.contains("--ios-local-ai-review") && !ProcessInfo.processInfo.arguments.contains("--ios-review-detail") { isShowingSettings = true }
                 if ProcessInfo.processInfo.arguments.contains("--ios-review-settings") { isShowingSettings = true }
                 try Data("ready".utf8).write(to: AppStorageLocations.applicationSupport().appending(path: "ios-ux-review-ready"), options: .atomic)
             }

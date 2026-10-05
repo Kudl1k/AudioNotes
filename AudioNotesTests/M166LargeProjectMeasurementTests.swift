@@ -118,6 +118,15 @@ struct M166LargeProjectMeasurementTests {
             let prompt = ProjectChatPrompt.prompt(evidence: json, history: history, settings: settings)
             let contextBuild = constructionStart.duration(to: clock.now)
             let promptTokens = TranscriptTokenEstimator.estimate(prompt.systemInstructions) + prompt.messages.reduce(0) { $0 + ProjectChatBudget.tokens($1) }
+            // Reuse this exact large mixed corpus against the native local provider's smaller window.
+            let localBudget = try ProjectChatBudget(contextWindow: 4096, settings: settings, question: query)
+            var localOptions = RetrievalOptions(); localOptions.maximumTokens = localBudget.evidenceBudget
+            let localResult = try await service.retrieve(query: query, scope: .project(project.id), context: context, options: localOptions)
+            let localPrompt = ProjectChatPrompt.prompt(evidence: try ProjectChatPrompt.evidence(localResult.context),
+                history: [.init(role: .user, content: query)], settings: settings)
+            let localRequest = try LocalLLMProvider.request(instructions: localPrompt.systemInstructions, messages: localPrompt.messages, kind: .chat, settings: settings)
+            #expect(TranscriptTokenEstimator.estimate(localRequest.instructions + localRequest.data) + 1024 + 512 <= 4096)
+            #expect(localResult.context.entries.allSatisfy { $0.document.projectID == project.id })
             reports.append("\(name): first \(samples.first!), median \(median), indexed documents \(indexed), selected chunks \(selected), assembled tokens \(estimate), provider prompt estimate \(promptTokens), context JSON+budget+prompt preparation \(contextBuild), provenance \(provenanceIsValid)")
         }
         let sortedOpen = openTimes.sorted { $0 < $1 }

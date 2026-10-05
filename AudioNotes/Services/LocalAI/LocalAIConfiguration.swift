@@ -4,8 +4,16 @@ import Observation
 enum ProviderExecutionLocation: String, Codable, Sendable {
     case local, remote, cloud
     var title: String {
-        switch self { case .local: "Runs on this Mac"; case .remote: "Remote server"; case .cloud: "Cloud" }
+        switch self { case .local: Self.localTitle; case .remote: "Remote server"; case .cloud: "Cloud" }
     }
+    private static var localTitle: String {
+#if os(iOS)
+        "On Device"
+#else
+        "Runs on this Mac"
+#endif
+    }
+
 }
 
 enum LocalAIError: LocalizedError, Equatable, Sendable {
@@ -15,7 +23,7 @@ enum LocalAIError: LocalizedError, Equatable, Sendable {
     case transportSecurityBlocked, networkUnavailable, hostNotFound, connectionTimedOut
     var errorDescription: String? {
         switch self {
-        case .privacyBlocked: "Local Only is enabled. Choose a provider running on this Mac, or disable Local Only in Settings."
+        case .privacyBlocked: "Local Only is enabled. Choose a provider running on this device, or disable Local Only in Settings."
         case .invalidEndpoint: "Enter an HTTP or HTTPS server address without credentials, query parameters, or a path."
         case .unreachable(let local): local ? "Ollama is not reachable. Start Ollama on this Mac and try again." : "The Ollama server is unreachable. Check the server address, published port, and network connection. Also check AudioNotes access in System Settings > Privacy & Security > Local Network."
         case .transportSecurityBlocked: "macOS blocked this HTTP connection. Use HTTPS, an IP address, or a .local hostname, or configure an App Transport Security exception for this server."
@@ -26,7 +34,7 @@ enum LocalAIError: LocalizedError, Equatable, Sendable {
         case .missingModel(let model): "Model \"\(model)\" is not installed. Choose or install this model in Settings."
         case .cloudModel: "This Ollama model uses a cloud backend or has unverified execution metadata. Choose a downloaded local model."
         case .insufficientDiskSpace: "There is insufficient disk space for this model. Free space and try again."
-        case .modelBusy: "Local Whisper is already processing or managing a model. Wait for it to finish."
+        case .modelBusy: "On-device AI is already processing or managing a model. Wait for it to finish."
         case .unsupportedHardware: "Local Whisper requires Apple Silicon."
         case .inference(let message): message
         }
@@ -89,8 +97,15 @@ final class LocalAIConfiguration {
         contextTokens = savedContext > 0 ? savedContext : 16_384
         summaryModel = defaults.string(forKey: "ai.ollama.summaryModel") ?? ""
         chatModel = defaults.string(forKey: "ai.ollama.chatModel") ?? ""
-        whisperModel = defaults.string(forKey: "ai.whisper.model") ?? "openai_whisper-small"
+        whisperModel = defaults.string(forKey: "ai.whisper.model") ?? Self.defaultWhisperModel
         whisperLanguage = defaults.string(forKey: "ai.whisper.language") ?? ""
+    }
+    private static var defaultWhisperModel: String {
+#if os(iOS)
+        "openai_whisper-tiny"
+#else
+        "openai_whisper-small"
+#endif
     }
     func capabilities(model: String) -> LLMModelCapabilities {
         models.first { $0.id == model }?.capabilities(contextLimit: contextTokens)

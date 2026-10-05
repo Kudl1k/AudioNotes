@@ -45,7 +45,7 @@ struct IOSSettingsView: View {
 #endif
     }
 
-    private enum Destination: Hashable { case chatGPT, gemini, defaults }
+    private enum Destination: Hashable { case chatGPT, gemini, defaults, localAI }
     @State private var path: [Destination] = []
 
     var body: some View {
@@ -60,6 +60,7 @@ struct IOSSettingsView: View {
                     }.accessibilityIdentifier("settings.gemini")
                 }
                 Section("AI") {
+                    NavigationLink(value: Destination.localAI) { Text("Local AI") }.accessibilityIdentifier("settings.localAI")
                     NavigationLink("Defaults") { defaultsScreen }.accessibilityIdentifier("settings.defaults")
                     NavigationLink("Presets") { PresetsManagementView().navigationTitle("Presets") }
                 }
@@ -73,6 +74,7 @@ struct IOSSettingsView: View {
             .sheet(isPresented: $showingUsage) { UsageCostView() }
             .navigationDestination(for: Destination.self) { destination in
                 switch destination {
+                case .localAI: IOSLocalAISettingsView(services: services)
                 case .chatGPT: chatGPTScreen
                 case .gemini: geminiScreen
                 case .defaults: defaultsScreen
@@ -94,6 +96,7 @@ struct IOSSettingsView: View {
                     }
                     if ProcessInfo.processInfo.arguments.contains("--ios-review-chatgpt") { path = [.chatGPT] }
                     if ProcessInfo.processInfo.arguments.contains("--ios-review-gemini") { path = [.gemini] }
+                    if ProcessInfo.processInfo.arguments.contains("--ios-local-ai-review") { path = [.localAI] }
                     if ProcessInfo.processInfo.arguments.contains("--ios-review-defaults") { path = [.defaults] }
                     if ProcessInfo.processInfo.arguments.contains("--ios-review-usage") { showingUsage = true }
                     return
@@ -212,7 +215,7 @@ struct IOSSettingsView: View {
     private var defaultsScreen: some View {
         Form {
             Section {
-                NavigationLink { transcriptionDefaults } label: { defaultRow("Transcription", provider: services.configuration.selectedProvider.title, model: services.configuration.selectedProvider == .gemini ? services.configuration.geminiModel : services.configuration.openAIModel.title) }
+                NavigationLink { transcriptionDefaults } label: { defaultRow("Transcription", provider: services.configuration.selectedProvider.title, model: services.configuration.selectedProvider == .localWhisper ? services.llmConfiguration.localAI.whisperModel : services.configuration.selectedProvider == .gemini ? services.configuration.geminiModel : services.configuration.openAIModel.title) }
                 NavigationLink { summaryDefaults } label: { defaultRow("Summary", provider: services.llmConfiguration.summaryProvider == .openAI && services.llmConfiguration.summaryAuthMethod == .chatGPT ? "ChatGPT" : services.llmConfiguration.summaryProvider.title, model: services.llmConfiguration.summaryProvider == .gemini ? services.llmConfiguration.summaryGeminiModel : services.llmConfiguration.summaryAuthMethod == .chatGPT ? services.llmConfiguration.summaryChatGPTModel : services.llmConfiguration.summaryOpenAIModel.title) }
                 NavigationLink { chatDefaults } label: { defaultRow("Chat", provider: services.llmConfiguration.chatProvider == .openAI && services.llmConfiguration.chatAuthMethod == .chatGPT ? "ChatGPT" : services.llmConfiguration.chatProvider.title, model: services.llmConfiguration.chatProvider == .gemini ? services.llmConfiguration.chatGeminiModel : services.llmConfiguration.chatAuthMethod == .chatGPT ? services.llmConfiguration.chatChatGPTModel : services.llmConfiguration.chatOpenAIModel.title) }
             } footer: { Text("Connect accounts to make their providers available. Summary and Chat defaults are independent.") }
@@ -228,6 +231,7 @@ struct IOSSettingsView: View {
 
     private func defaultDescription(provider: String, model: String) -> String {
         if provider == LLMProviderID.mock.title { return provider }
+        if provider == LLMProviderID.onDevice.title { return provider + " · " + LocalLLMProvider.modelTitle }
         let name = provider == LLMProviderID.openAI.title ? TranscriptionProviderID.openAI.title : provider
         let title = providerSettings.availableChatGPTModels.first(where: { $0.slug == model })?.displayName
             ?? services.llmResolver.summaryModels(for: .gemini).first(where: { $0.id == model })?.title
@@ -392,6 +396,17 @@ struct IOSSettingsView: View {
                 }
             }
 
+            if services.configuration.selectedProvider == .localWhisper {
+                Picker("On-device Model", selection: Binding(get: { services.llmConfiguration.localAI.whisperModel }, set: { services.llmConfiguration.localAI.whisperModel = $0 })) {
+                    ForEach(services.localAISettings.models) { Text("Whisper " + $0.title).tag($0.id) }
+                }
+                Picker("Language", selection: Binding(get: { services.llmConfiguration.localAI.whisperLanguage }, set: { services.llmConfiguration.localAI.whisperLanguage = $0 })) {
+                    Text("Automatic detection").tag("")
+                    ForEach(LocalAISettingsViewModel.languages, id: \.self) { code in Text(Locale.current.localizedString(forLanguageCode: code) ?? code).tag(code) }
+                }
+                NavigationLink("Manage Models") { IOSLocalAISettingsView(services: services) }
+                Text("No audio upload. Download a model explicitly before transcribing.").font(.footnote).foregroundStyle(.secondary)
+            }
             if services.configuration.selectedProvider == .openAI {
                 Picker("Transcription Model", selection: Binding(
                     get: { services.configuration.openAIModel },
@@ -454,11 +469,12 @@ struct IOSSettingsView: View {
     }
 
     private var availableTranscriptionProviders: [TranscriptionProviderID] {
-        IOSProviderAvailability.transcription(openAIKey: providerSettings.keyIsConfigured, geminiConnected: geminiAccount != nil, includeMock: services.configuration.selectedProvider == .mock)
+        IOSProviderAvailability.transcription(openAIKey: providerSettings.keyIsConfigured, geminiConnected: geminiAccount != nil, includeMock: services.configuration.selectedProvider == .mock, localWhisperSupported: LocalAISettingsViewModel.supportsWhisper)
     }
 
     private var availableLLMProviders: [LLMProviderID] {
         var providers: [LLMProviderID] = []
+        if PlatformCapabilities.current.isSupported(llmProvider: .onDevice) { providers.append(.onDevice) }
 #if DEBUG
         if services.llmConfiguration.summaryProvider == .mock || services.llmConfiguration.chatProvider == .mock { providers.append(.mock) }
 #endif

@@ -22,9 +22,13 @@ final class ChatViewModel {
     var usesUnifiedContext: Bool { !recording.sources.isEmpty || selectedSourceIDs != nil }
     var hasReadySources: Bool { RecordingContextAvailability.hasContent(recording) }
     var selectedSourcesAvailable: Bool { RecordingContextAvailability.hasContent(recording, selectedSourceIDs: selectedSourceIDs) }
+    var providerExecutionLocation: ProviderExecutionLocation {
+        if isGenerating, let raw = lastGeneration?.executionLocationRaw, let location = ProviderExecutionLocation(rawValue: raw) { return location }
+        return resolver.resolveChat().executionLocation
+    }
     var providerDescription: String {
         let provider = resolver.resolveChat()
-        return [provider.displayName, provider.modelID, provider.executionLocation.title].compactMap { $0 }.joined(separator: " · ")
+        return [provider.displayName, provider.modelDisplayName, provider.executionLocation.title].compactMap { $0 }.joined(separator: " · ")
     }
     var imageInputDescription: String { resolver.resolveChat().executionLocation == .local ? "Images: relevant visuals stay on this Mac" : "Images: relevant visuals are sent to the selected provider" }
     var supportsImageInput: Bool { resolver.resolveChat().inputCapabilities.supportsImageInput }
@@ -246,6 +250,7 @@ final class ChatViewModel {
         }
         generation.selectedSourceIDsData = selectionData
         generation.executionLocationRaw = provider.executionLocation.rawValue
+        generation.modelDisplayNameSnapshot = provider.modelDisplayName
         lastGeneration = generation
         let tracker = OperationUsageTracker(generation: generation) { try? storage.record(generation) }
         try? storage.record(generation)

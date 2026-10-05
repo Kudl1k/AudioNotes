@@ -46,7 +46,7 @@ struct IOSCloudAITests {
 
         let transcriptionSelectable = TranscriptionProviderID.currentPlatformSelectable
         #expect(transcriptionSelectable.contains(.openAI))
-        #expect(!transcriptionSelectable.contains(.localWhisper))
+        #expect(transcriptionSelectable.contains(.localWhisper) == LocalWhisperRuntimeCapabilities.isSupported)
     }
 
     @Test func iOSGoogleOAuthUsesRegisteredNativeClientAndCallbackScheme() throws {

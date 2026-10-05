@@ -25,6 +25,11 @@ struct PlatformCapabilities: Sendable, Equatable {
 
     func isSupported(llmProvider: LLMProviderID) -> Bool {
         switch llmProvider {
+        case .onDevice:
+#if os(iOS)
+            if #available(iOS 26, *) { return true }
+#endif
+            return false
         case .anthropic:
             return supportsClaudeCLI
         case .gemini:
@@ -57,7 +62,7 @@ struct PlatformCapabilities: Sendable, Equatable {
             return false
 #endif
         case .localWhisper:
-#if os(macOS) && arch(arm64)
+#if arch(arm64)
             return true
 #else
             return false

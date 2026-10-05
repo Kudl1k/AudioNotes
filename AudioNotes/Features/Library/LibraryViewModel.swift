@@ -93,6 +93,15 @@ final class LibraryViewModel {
         return model
     }
 
+#if os(iOS)
+    /// Foreground-only native inference: persist interruption through existing model cancellation paths.
+    func interruptOnDeviceWork() {
+        for model in transcriptionModels.values where model.executionLocation == .local { model.cancelTranscription() }
+        for model in summaryModels.values where model.providerExecutionLocation == .local { model.cancelGeneration() }
+        for model in chatModels.values where model.isGenerating && model.providerExecutionLocation == .local { model.stopGeneration() }
+        for model in projectChatModels.values where model.isGenerating && model.providerExecutionLocation == .local { model.cancel() }
+    }
+#endif
     var activeOperations: [LibraryActivity] {
         let transcription = transcriptionModels.values.filter { $0.state.isProcessing }.map { LibraryActivity(recording: $0.recording, feature: "transcription", title: "Transcribing") }
         let summaries = summaryModels.values.filter { $0.state.isGenerating }.map { LibraryActivity(recording: $0.recording, feature: "summary", title: "Generating summary") }

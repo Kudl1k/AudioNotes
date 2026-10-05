@@ -7,6 +7,7 @@ import Foundation
     var id: LLMProviderID { base.id }
     var displayName: String { base.displayName }
     var modelID: String? { base.modelID }
+    var modelDisplayName: String? { base.modelDisplayName }
     var authenticationMethod: ProviderAuthenticationMethod? { base.authenticationMethod }
     var supportsSourceSummaries: Bool { base.supportsSourceSummaries }
     var inputCapabilities: LLMInputCapabilities { base.inputCapabilities }
@@ -41,6 +42,7 @@ import Foundation
     var displayName: String { base.displayName }
     var isMock: Bool { base.isMock }
     var providerID: String? { base.providerID }
+    var capabilities: TranscriptionProviderCapabilities { base.capabilities }
     var modelDisplayName: String? { base.modelDisplayName }
     var modelID: String? { base.modelID }
     var authenticationMethod: ProviderAuthenticationMethod? { base.authenticationMethod }

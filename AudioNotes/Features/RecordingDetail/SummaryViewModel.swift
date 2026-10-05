@@ -14,11 +14,12 @@ final class SummaryViewModel {
         resolver.resolveSummary(provider: selectedProvider ?? selectedUserPreset?.provider,
             model: selectedModel ?? (selectedProvider == nil ? selectedUserPreset?.model : nil))
     }
-    var selectedModelName: String? { (activeProvider ?? resolvedProvider).modelID }
+    var selectedModelName: String? { (activeProvider ?? resolvedProvider).modelDisplayName }
     let recording: Recording
     private(set) var state: SummaryState
     var selectedSourceIDs: Set<UUID>? = nil
     var allowImageUpload = false
+    var providerExecutionLocation: ProviderExecutionLocation { (activeProvider ?? resolvedProvider).executionLocation }
     var executionDescription: String { (activeProvider ?? resolvedProvider).executionLocation.title }
     var supportsImageInput: Bool { resolvedProvider.inputCapabilities.supportsImageInput }
     var usesUnifiedContext: Bool { (!recording.sources.isEmpty && resolvedProvider.supportsSourceSummaries) || recording.sources.contains { !$0.isPrimaryAudio } || selectedSourceIDs != nil || recording.transcript == nil }
@@ -151,6 +152,7 @@ final class SummaryViewModel {
         generation.estimatedCostRangeData = costEstimate.flatMap { try? JSONEncoder().encode($0) }
         generation.selectedSourceIDsData = selectionData
         generation.executionLocationRaw = provider.executionLocation.rawValue
+        generation.modelDisplayNameSnapshot = provider.modelDisplayName
         lastGeneration = generation
         let tracker = OperationUsageTracker(generation: generation) { try? repository.record(generation) }
         let trackedProvider = UsageTrackingLLMProvider(base: provider, tracker: tracker)

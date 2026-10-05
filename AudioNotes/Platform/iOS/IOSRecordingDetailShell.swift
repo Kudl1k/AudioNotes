@@ -245,7 +245,7 @@ struct IOSRecordingDetailShell: View {
     private var transcriptionPromptContent: some View {
         ScrollView {
             IOSCreationPrompt(title: "Create Transcript", symbol: "waveform.badge.magnifyingglass",
-                description: "Convert this recording into searchable text with timestamps and speakers.") {
+                description: "Convert this recording into searchable text. Timestamps and speaker labels depend on the selected provider.") {
                 Button { showTranscriptionSettings = true } label: {
                     VStack(spacing: 4) {
                         Text(transcriptionModel.providerName + (transcriptionModel.selectedModelName.map { " · " + $0 } ?? ""))
@@ -258,6 +258,10 @@ struct IOSRecordingDetailShell: View {
                 .buttonStyle(.plain)
                 .modifier(IOSControlSurface(cornerRadius: 18))
                 .accessibilityIdentifier("transcription.configure")
+                if (transcriptionModel.selectedProvider ?? services.configuration.selectedProvider) == .localWhisper,
+                   let descriptor = services.localAISettings.models.first(where: { $0.id == (transcriptionModel.selectedModel ?? services.llmConfiguration.localAI.whisperModel) }) {
+                    IOSWhisperModelRow(model: descriptor, settings: services.localAISettings).padding(.horizontal)
+                }
                 Button(transcriptionModel.state == .idle ? "Transcribe" : "Retry Transcription") {
                     transcriptionModel.startTranscription(using: SwiftDataTranscriptRepository(context: context))
                 }

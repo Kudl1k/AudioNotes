@@ -37,9 +37,13 @@ final class ProjectChatViewModel {
         self.project = project; self.resolver = resolver; self.retrieval = retrieval
     }
     var isGenerating: Bool { state.isGenerating }
+    var providerExecutionLocation: ProviderExecutionLocation {
+        if isGenerating, let raw = lastGeneration?.executionLocationRaw, let location = ProviderExecutionLocation(rawValue: raw) { return location }
+        return resolver.resolveChat().executionLocation
+    }
     var providerDescription: String {
         let p = resolver.resolveChat()
-        return [p.displayName, p.modelID, p.executionLocation.title].compactMap { $0 }.joined(separator: " · ")
+        return [p.displayName, p.modelDisplayName, p.executionLocation.title].compactMap { $0 }.joined(separator: " · ")
     }
     var hasSelectedContent: Bool { !searchableIDs.intersection(selection.sourceIDs(in: project)).isEmpty }
     var canSend: Bool { !isGenerating && hasSelectedContent && !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -227,6 +231,7 @@ final class ProjectChatViewModel {
         lastGeneration = generation
         generation.selectedSourceIDsData = selectionData
         generation.executionLocationRaw = provider.executionLocation.rawValue
+        generation.modelDisplayNameSnapshot = provider.modelDisplayName
         generation.generationStrategy = "project_retrieval"
         let tracker = OperationUsageTracker(generation: generation)
         do { try repository.record(generation) } catch { lastError = error.localizedDescription; return }

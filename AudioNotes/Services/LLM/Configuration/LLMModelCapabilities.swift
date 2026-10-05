@@ -58,6 +58,10 @@ struct LLMModelCapabilities: Equatable, Sendable, Codable {
 
     private static func generationCapabilities(for model: String, provider: LLMProviderID) -> LLMModelCapabilities {
         switch provider {
+        case .onDevice:
+            return LLMModelCapabilities(supportsTemperature: true, supportsTopP: false,
+                supportsMaxOutputTokens: true, supportsReasoningEffort: false,
+                supportsStreaming: true, supportsStructuredOutput: true, maxTemperature: 1, defaultTemperature: nil)
         case .ollama:
             return OllamaModelDescriptor(id: model, size: nil, vision: false, contextWindow: nil).capabilities(contextLimit: 16_384)
         case .llamaCpp:

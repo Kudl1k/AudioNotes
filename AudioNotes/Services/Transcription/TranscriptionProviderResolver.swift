@@ -23,17 +23,19 @@ struct TranscriptionProviderResolver: TranscriptionProviderResolving {
     let client: OpenAITranscriptionClient
     let localConfiguration: LocalAIConfiguration
     let whisperStore: WhisperModelStore
+    let coordinator: LocalInferenceCoordinator?
     let geminiOAuth: GoogleGeminiOAuthService
 
     init(configuration: TranscriptionConfiguration, credentials: any CredentialStoring,
          client: OpenAITranscriptionClient = OpenAITranscriptionClient(),
          localConfiguration: LocalAIConfiguration? = nil, whisperStore: WhisperModelStore = WhisperModelStore(),
-         geminiOAuth: GoogleGeminiOAuthService = GoogleGeminiOAuthService()) {
+         geminiOAuth: GoogleGeminiOAuthService = GoogleGeminiOAuthService(), coordinator: LocalInferenceCoordinator? = nil) {
         self.configuration = configuration
         self.credentials = credentials
         self.client = client
         self.localConfiguration = localConfiguration ?? LocalAIConfiguration()
         self.whisperStore = whisperStore
+        self.coordinator = coordinator
         self.geminiOAuth = geminiOAuth
     }
 
@@ -52,15 +54,15 @@ struct TranscriptionProviderResolver: TranscriptionProviderResolving {
         case .mock: []
         case .openAI: configuration.availableVoiceModels.map { .init(id: $0.rawValue, title: $0.title) }
         case .gemini: [.init(id: "gemini-3.5-transcribe", title: "Gemini 3.5 Transcribe (timestamps and speakers)")]
-        case .localWhisper: WhisperModelDescriptor.bundled.map { .init(id: $0.id, title: $0.title) }
+        case .localWhisper: WhisperModelDescriptor.selectable.map { .init(id: $0.id, title: $0.title) }
         }
     }
 
     private func resolveBase(provider: TranscriptionProviderID?, model: String?, language: TranscriptionLanguage?) -> any TranscriptionProvider {
         switch provider ?? configuration.selectedProvider {
         case .localWhisper:
-            if let model = WhisperModelDescriptor.bundled.first(where: { $0.id == (model ?? localConfiguration.whisperModel) }) {
-                return LocalWhisperTranscriptionProvider(model: model, language: localConfiguration.whisperLanguage.isEmpty ? nil : localConfiguration.whisperLanguage, store: whisperStore)
+            if let model = WhisperModelDescriptor.selectable.first(where: { $0.id == (model ?? localConfiguration.whisperModel) }) {
+                return LocalWhisperTranscriptionProvider(model: model, language: language == nil ? (localConfiguration.whisperLanguage.isEmpty ? nil : localConfiguration.whisperLanguage) : language?.code, store: whisperStore, coordinator: coordinator)
             } else { return MissingLocalWhisperProvider() }
         case .mock:
 #if DEBUG

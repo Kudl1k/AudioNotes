@@ -25,6 +25,7 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
     private let client: OpenAILLMClient
     private let tokenRefresher: any ChatGPTTokenRefreshing
     private let responsesClient: ChatGPTResponsesClient
+    private let coordinator: LocalInferenceCoordinator?
     private let geminiOAuth: GoogleGeminiOAuthService
 
     init(
@@ -33,7 +34,8 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
         client: OpenAILLMClient = OpenAILLMClient(),
         tokenRefresher: any ChatGPTTokenRefreshing = ChatGPTTokenRefresher(),
         responsesClient: ChatGPTResponsesClient = ChatGPTResponsesClient(),
-        geminiOAuth: GoogleGeminiOAuthService = GoogleGeminiOAuthService()
+        geminiOAuth: GoogleGeminiOAuthService = GoogleGeminiOAuthService(),
+        coordinator: LocalInferenceCoordinator? = nil
     ) {
         self.configuration = configuration
         self.credentials = credentials
@@ -41,6 +43,7 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
         self.tokenRefresher = tokenRefresher
         self.responsesClient = responsesClient
         self.geminiOAuth = geminiOAuth
+        self.coordinator = coordinator
     }
 
     @MainActor
@@ -54,6 +57,7 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
 
     @MainActor func summaryModels(for provider: LLMProviderID) -> [GenerationModelOption] {
         switch provider {
+        case .onDevice: return [.init(id: LocalLLMProvider.modelIdentifier, title: LocalLLMProvider.modelTitle)]
         case .openAI:
             if configuration.summaryAuthMethod == .chatGPT {
                 return configuration.cachedChatGPTModels.map { .init(id: $0.slug, title: $0.displayName) }
@@ -87,6 +91,7 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
     @MainActor private func resolveSummaryBase(provider: LLMProviderID? = nil, model: String? = nil) -> any LLMProvider {
         let selectedProvider = provider ?? configuration.summaryProvider
         switch selectedProvider {
+        case .onDevice: return LocalLLMProvider(coordinator: coordinator, selectedModel: model)
         case .ollama:
 #if os(macOS)
             return OllamaLLMProvider(model: model ?? configuration.localAI.summaryModel, configuration: configuration.localAI)
@@ -145,6 +150,7 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
 
     @MainActor private func resolveChatBase() -> any LLMProvider {
         switch configuration.chatProvider {
+        case .onDevice: return LocalLLMProvider(coordinator: coordinator)
         case .ollama:
 #if os(macOS)
             return OllamaLLMProvider(model: configuration.localAI.chatModel, configuration: configuration.localAI)

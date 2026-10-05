@@ -7,6 +7,7 @@ final class AppServices {
     let llmConfiguration: LLMConfiguration
     let credentials = KeychainService()
     let chatGPTCredentials = ChatGPTCredentialStore()
+    let localInference = LocalInferenceCoordinator()
     let whisperStore = WhisperModelStore()
     let localAISettings: LocalAISettingsViewModel
     let transcriptionClient = OpenAITranscriptionClient()
@@ -34,6 +35,13 @@ final class AppServices {
         llmConfiguration = LLMConfiguration()
 #endif
         localAISettings = LocalAISettingsViewModel(configuration: llmConfiguration.localAI, store: whisperStore)
+#if DEBUG && os(iOS)
+        if ProcessInfo.processInfo.arguments.contains("--performance-fixtures"),
+           let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--ios-local-ai-state"),
+           ProcessInfo.processInfo.arguments.indices.contains(index + 1) {
+            localAISettings.prepareIOSReviewState(ProcessInfo.processInfo.arguments[index + 1])
+        }
+#endif
         let authService = ChatGPTAuthService(credentialStore: chatGPTCredentials)
         self.chatGPTAuthService = authService
         self.chatGPTTokenRefresher = ChatGPTTokenRefresher(credentialStore: chatGPTCredentials)
@@ -45,7 +53,7 @@ final class AppServices {
             credentials: credentials,
             client: transcriptionClient,
             localConfiguration: llmConfiguration.localAI, whisperStore: whisperStore,
-            geminiOAuth: googleGeminiOAuth
+            geminiOAuth: googleGeminiOAuth, coordinator: localInference
         )
     }
 
@@ -56,7 +64,7 @@ final class AppServices {
             client: llmClient,
             tokenRefresher: chatGPTTokenRefresher,
             responsesClient: chatGPTResponsesClient,
-            geminiOAuth: googleGeminiOAuth
+            geminiOAuth: googleGeminiOAuth, coordinator: localInference
         )
     }
 }
