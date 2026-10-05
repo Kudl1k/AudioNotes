@@ -46,6 +46,16 @@ enum ChatGPTAuthError: LocalizedError, Equatable {
     }
 }
 
+enum ChatGTPOAuthDiagnostics {
+    /// Retain only a bounded provider error code; never surface an untrusted token endpoint body.
+    static func safeCode(from data: Data) -> String {
+        struct Envelope: Decodable { let error: String? }
+        guard let raw = try? JSONDecoder().decode(Envelope.self, from: data).error else { return "provider_error" }
+        let value = raw.filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }
+        return String(value.prefix(64)).isEmpty ? "provider_error" : String(value.prefix(64))
+    }
+}
+
 @MainActor
 protocol ChatGPTAuthenticating: Sendable {
     var authState: ChatGPTAuthState { get }
@@ -250,7 +260,8 @@ final class ChatGPTAuthService: ObservableObject, ChatGPTAuthenticating {
             issuedClientID: issuedClientID,
             grantedScopes: tokenResponse.grantedScopes,
             planUsageEnabled: planUsage,
-            expiresAt: expiresAt
+            expiresAt: expiresAt,
+            earliestRefreshAt: tokenResponse.earliestRefreshAt
         )
 
         // Save tokens securely to Keychain
@@ -358,12 +369,11 @@ final class ChatGPTAuthService: ObservableObject, ChatGPTAuthenticating {
             if errorText.contains("invalid_grant") {
                 throw ChatGPTAuthError.invalidGrant
             }
-            throw ChatGPTAuthError.tokenExchangeFailed(status: http.statusCode, message: errorText)
+            throw ChatGPTAuthError.tokenExchangeFailed(status: http.statusCode, message: ChatGTPOAuthDiagnostics.safeCode(from: data))
         }
 
         guard (200...299).contains(http.statusCode) else {
-            let errorText = String(data: data, encoding: .utf8) ?? ""
-            throw ChatGPTAuthError.tokenExchangeFailed(status: http.statusCode, message: errorText)
+            throw ChatGPTAuthError.tokenExchangeFailed(status: http.statusCode, message: ChatGTPOAuthDiagnostics.safeCode(from: data))
         }
 
         do {

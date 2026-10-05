@@ -1,6 +1,6 @@
 # M16 — iOS / iPadOS port: architecture and portability audit
 
-Status: M16.0 audit completed; M16.1 platform boundary preparation completed; M16.2 iOS target and navigation shell completed (2026-10-02).
+Status: M16.0 audit, M16.1 boundaries, M16.2 target/navigation, M16.3 audio import/detail, and M16.4 cloud AI completed (2026-10-02).
 Shared/platform boundaries prepared with zero macOS behavior change (see `docs/IOS_PLATFORM_BOUNDARIES.md`).
 iOS target and adaptive navigation shell operational on iPhone/iPad simulators (see `docs/IOS_TARGET_AND_NAVIGATION.md`).
 SwiftData schema remains 100% frozen; project.pbxproj remains on objectVersion = 77.

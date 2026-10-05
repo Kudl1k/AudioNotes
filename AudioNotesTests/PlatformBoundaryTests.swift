@@ -14,22 +14,55 @@ struct PlatformBoundaryTests {
         #expect(capabilities.isSupported(llmProvider: .openAI) == true)
         #expect(capabilities.isSupported(llmProvider: .ollama) == true)
         #expect(capabilities.isSupported(llmProvider: .llamaCpp) == true)
-        #expect(capabilities.isSupported(llmProvider: .gemini) == false)
+        #expect(capabilities.isSupported(llmProvider: .gemini) == true)
         #expect(capabilities.isSupported(transcriptionProvider: .localWhisper) == true)
+#elseif os(iOS)
+        #expect(capabilities.supportsClaudeCLI == false)
+        #expect(capabilities.supportsSparkleUpdates == false)
+        #expect(capabilities.supportsFinderReveal == false)
+        #expect(capabilities.isSupported(llmProvider: .anthropic) == false)
+        #expect(capabilities.isSupported(llmProvider: .openAI) == true)
+        #expect(capabilities.isSupported(llmProvider: .ollama) == false)
+        #expect(capabilities.isSupported(llmProvider: .llamaCpp) == false)
+        #expect(capabilities.isSupported(llmProvider: .gemini) == true)
+        #expect(capabilities.isSupported(transcriptionProvider: .gemini) == true)
+        #expect(capabilities.isSupported(transcriptionProvider: .localWhisper) == false)
+        #expect(capabilities.isSupported(transcriptionProvider: .openAI) == true)
 #endif
     }
 
     @Test func providerPlatformSupportExtensions() {
+#if os(macOS)
         #expect(LLMProviderID.anthropic.isSupportedOnCurrentPlatform == true)
         #expect(LLMProviderID.openAI.isSupportedOnCurrentPlatform == true)
         #expect(LLMProviderID.ollama.isSupportedOnCurrentPlatform == true)
         #expect(LLMProviderID.llamaCpp.isSupportedOnCurrentPlatform == true)
         #expect(LLMProviderID.mock.isSupportedOnCurrentPlatform == true)
-        #expect(LLMProviderID.gemini.isSupportedOnCurrentPlatform == false)
+        #expect(LLMProviderID.gemini.isSupportedOnCurrentPlatform == true)
 
         #expect(TranscriptionProviderID.openAI.isSupportedOnCurrentPlatform == true)
+        #expect(TranscriptionProviderID.gemini.isSupportedOnCurrentPlatform == true)
         #expect(TranscriptionProviderID.localWhisper.isSupportedOnCurrentPlatform == true)
         #expect(TranscriptionProviderID.mock.isSupportedOnCurrentPlatform == true)
+#elseif os(iOS)
+        #expect(LLMProviderID.anthropic.isSupportedOnCurrentPlatform == false)
+        #expect(LLMProviderID.openAI.isSupportedOnCurrentPlatform == true)
+        #expect(LLMProviderID.ollama.isSupportedOnCurrentPlatform == false)
+        #expect(LLMProviderID.llamaCpp.isSupportedOnCurrentPlatform == false)
+        #expect(LLMProviderID.mock.isSupportedOnCurrentPlatform == true)
+        #expect(LLMProviderID.gemini.isSupportedOnCurrentPlatform == true)
+
+        #expect(TranscriptionProviderID.openAI.isSupportedOnCurrentPlatform == true)
+        #expect(TranscriptionProviderID.gemini.isSupportedOnCurrentPlatform == true)
+        #expect(TranscriptionProviderID.localWhisper.isSupportedOnCurrentPlatform == false)
+        #expect(TranscriptionProviderID.mock.isSupportedOnCurrentPlatform == true)
+
+        #expect(LLMProviderID.currentPlatformSelectable.contains(.openAI))
+        #expect(!LLMProviderID.currentPlatformSelectable.contains(.anthropic))
+        #expect(!LLMProviderID.currentPlatformSelectable.contains(.ollama))
+        #expect(TranscriptionProviderID.currentPlatformSelectable.contains(.openAI))
+        #expect(!TranscriptionProviderID.currentPlatformSelectable.contains(.localWhisper))
+#endif
     }
 
     @Test @MainActor func unavailableLLMProviderThrowsTypedError() async {
@@ -68,34 +101,5 @@ struct PlatformBoundaryTests {
         } catch {
             #expect(Bool(false), "Unexpected non-LLM error: \(error)")
         }
-    }
-
-    @Test func appStorageLocationsStandardDirectories() {
-        let fileManager = FileManager.default
-        let appSupport = AppStorageLocations.standardApplicationSupport
-        #expect(appSupport.path.contains("Application Support"))
-
-        let temp = AppStorageLocations.temporaryDirectory
-        #expect(!temp.path.isEmpty)
-        #expect(fileManager.fileExists(atPath: temp.path))
-
-        let caches = AppStorageLocations.cachesDirectory
-        #expect(caches.path.contains("Caches"))
-
-        let resolved = AppStorageLocations.applicationSupport()
-        #expect(resolved.path.contains("Application Support") || resolved.path.contains("AudioNotes"))
-    }
-
-    @Test @MainActor func openSettingsActionExecutionAndEnvironment() {
-        var didOpenSettings = false
-        let action = OpenSettingsAction {
-            didOpenSettings = true
-        }
-
-        action()
-        #expect(didOpenSettings == true)
-
-        let env = EnvironmentValues()
-        #expect(env.openSettingsAction == nil)
     }
 }

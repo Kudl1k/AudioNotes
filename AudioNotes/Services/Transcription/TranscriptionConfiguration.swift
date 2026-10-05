@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 enum TranscriptionProviderID: String, CaseIterable, Identifiable, Sendable {
-    case mock, openAI, localWhisper
+    case mock, openAI, gemini, localWhisper
     static var selectable: [Self] {
 #if DEBUG
         allCases
@@ -18,7 +18,7 @@ enum TranscriptionProviderID: String, CaseIterable, Identifiable, Sendable {
 #endif
     }
     var id: Self { self }
-    var title: String { switch self { case .mock: "Mock (development)"; case .openAI: "OpenAI"; case .localWhisper: "Local Whisper" } }
+    var title: String { switch self { case .mock: "Mock (development)"; case .openAI: "OpenAI API"; case .gemini: "Gemini"; case .localWhisper: "Local Whisper" } }
 }
 
 public struct OpenAITranscriptionModel: RawRepresentable, Hashable, Identifiable, Codable, Sendable {
@@ -89,6 +89,9 @@ final class TranscriptionConfiguration {
     var openAIModel: OpenAITranscriptionModel {
         didSet { defaults.set(openAIModel.rawValue, forKey: "transcription.openai.model") }
     }
+    var geminiModel: String {
+        didSet { defaults.set(geminiModel, forKey: "transcription.gemini.model") }
+    }
     var language: TranscriptionLanguage {
         didSet { defaults.set(language.rawValue, forKey: "transcription.language") }
     }
@@ -115,6 +118,7 @@ final class TranscriptionConfiguration {
             openAIModel = .whisper1
         }
         language = TranscriptionLanguage(rawValue: defaults.string(forKey: "transcription.language") ?? "") ?? .automatic
+        geminiModel = defaults.string(forKey: "transcription.gemini.model") ?? "gemini-3.5-transcribe"
     }
 
     var openAI: OpenAITranscriptionConfiguration { .init(model: openAIModel, language: language) }

@@ -47,6 +47,12 @@ struct GenerationDefaultsView: View {
                 }
                 Text("Download and manage Whisper models in Providers → Local AI.")
                     .font(.caption).foregroundStyle(.secondary)
+            } else if transcriptionConfig.selectedProvider == .gemini {
+                Picker("Model", selection: $transcriptionConfig.geminiModel) {
+                    Text("Gemini 3.5 Transcribe").tag("gemini-3.5-transcribe")
+                }
+                Text("Word timestamps and speaker labels · up to 30 minutes · billed to the configured Google Cloud project.")
+                    .font(.caption).foregroundStyle(.secondary)
             } else {
                 Picker("Model", selection: $transcriptionConfig.openAIModel) {
                     ForEach(model.availableTranscriptionModels) { item in
@@ -142,7 +148,10 @@ struct GenerationDefaultsView: View {
                     Text("Google Account").tag(ProviderAuthenticationMethod.oauth)
                     Text("API Key").tag(ProviderAuthenticationMethod.apiKey)
                 }
-                Text("Gemini generation is not available in this build yet. This selection does not trigger fallback to the other credential method.")
+                Picker("Model", selection: $llmConfig.summaryGeminiModel) {
+                    Text("Gemini 3.8 Flash").tag("gemini-3.8-flash")
+                }
+                Text("Gemini Developer API use is billed to the configured Google Cloud project. Gemini Advanced does not pay API charges.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -246,11 +255,10 @@ struct GenerationDefaultsView: View {
                 Text("Mock simulates streaming answers and transcript citations locally without an API key or network access.")
                     .foregroundStyle(.secondary)
             } else if llmConfig.chatProvider == .gemini {
-                Picker("Authentication", selection: $llmConfig.chatGeminiAuthenticationMethod) {
-                    Text("Google Account").tag(ProviderAuthenticationMethod.oauth)
-                    Text("API Key").tag(ProviderAuthenticationMethod.apiKey)
+                Picker("Model", selection: $llmConfig.chatGeminiModel) {
+                    Text("Gemini 3.8 Flash").tag("gemini-3.8-flash")
                 }
-                Text("Gemini chat is not available in this build yet.")
+                Text("Gemini Developer API use is billed to the configured Google Cloud project. Gemini Advanced does not pay API charges.")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
                 Text("Claude chat is not available in this build yet.")

@@ -125,6 +125,8 @@ struct TranscriptionControls: View {
         return switch snapshot.phase {
         case .preparing: "Preparing audio…"
         case .splitting: "Optimizing audio…"
+        case .uploading: "Uploading audio…"
+        case .processing: "Processing audio…"
         case .transcribing: "Transcribing audio…"
         case .merging: "Combining transcript…"
         case .saving: "Saving transcript…"

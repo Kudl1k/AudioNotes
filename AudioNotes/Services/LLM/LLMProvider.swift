@@ -60,7 +60,7 @@ enum LLMError: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            "Add an OpenAI API key in Settings → AI Providers before generating a summary or chatting."
+            "Connect ChatGPT or Google in Settings → AI Accounts, or add an API key under advanced provider configuration."
         case .invalidAuthentication:
             "OpenAI rejected the API key. Please verify or update it in Settings → AI Providers."
         case .accessDenied:

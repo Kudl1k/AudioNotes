@@ -1,12 +1,14 @@
 import Foundation
 
 enum TranscriptionPhase: String, Sendable, CaseIterable {
-    case preparing, splitting, transcribing, merging, saving, completed
+    case preparing, splitting, uploading, processing, transcribing, merging, saving, completed
 
     var message: String {
         switch self {
         case .preparing: "Preparing audio…"
         case .splitting: "Splitting recording…"
+        case .uploading: "Uploading audio…"
+        case .processing: "Processing audio…"
         case .transcribing: "Transcribing audio…"
         case .merging: "Combining transcript…"
         case .saving: "Saving transcript…"

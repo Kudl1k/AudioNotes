@@ -49,7 +49,7 @@ struct TranscriptionProviderControls: View {
     @Bindable var model: RecordingViewModel
 
     var body: some View {
-        GenerationProviderControls(providers: TranscriptionProviderID.allCases, title: { $0.title },
+        GenerationProviderControls(providers: TranscriptionProviderID.currentPlatformSelectable, title: { $0.title },
             selectedProvider: $model.selectedProvider, selectedModel: $model.selectedModel,
             models: model.availableModels, providerName: model.providerName, modelName: model.selectedModelName)
             .disabled(model.state.isProcessing)
@@ -60,7 +60,7 @@ struct SummaryProviderControls: View {
     @Bindable var model: SummaryViewModel
 
     var body: some View {
-        GenerationProviderControls(providers: LLMProviderID.allCases.filter { $0 != .gemini }, title: { $0.title },
+        GenerationProviderControls(providers: LLMProviderID.currentPlatformSelectable.filter { $0 != .gemini }, title: { $0.title },
             selectedProvider: $model.selectedProvider, selectedModel: $model.selectedModel,
             models: model.availableModels, providerName: model.providerName, modelName: model.selectedModelName)
             .disabled(model.state.isGenerating)

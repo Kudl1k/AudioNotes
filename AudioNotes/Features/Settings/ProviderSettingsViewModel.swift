@@ -69,13 +69,11 @@ final class ProviderSettingsViewModel: ObservableObject {
 
         self.chatGPTAuthState = chatGPTAuth?.authState ?? .signedOut
 
-        if let cached = llmConfig?.cachedChatGPTModels, !cached.isEmpty {
+        if let cached = llmConfig?.cachedChatGPTModels, !cached.isEmpty,
+           llmConfig?.cachedChatGPTModelsAccountIdentifier == chatGPTAuth?.currentAccount?.id {
             self.availableChatGPTModels = cached
         } else {
-            self.availableChatGPTModels = [
-                OpenAIModelItem(slug: "gpt-4o", displayName: "GPT-4o (flagship)"),
-                OpenAIModelItem(slug: "o3-mini", displayName: "o3-mini (reasoning)")
-            ]
+            self.availableChatGPTModels = []
         }
 
         if let cachedVoice = transcriptionConfig?.availableVoiceModels, !cachedVoice.isEmpty {
@@ -238,7 +236,7 @@ final class ProviderSettingsViewModel: ObservableObject {
 
     func fetchChatGPTModels() async {
         guard let tokenRefresher else { return }
-        guard isChatGPTSignedIn else { return }
+        guard isChatGPTSignedIn, isChatGPTPlanUsageEnabled else { return }
         guard !isFetchingChatGPTModels else { return }
 
         isFetchingChatGPTModels = true
@@ -248,17 +246,16 @@ final class ProviderSettingsViewModel: ObservableObject {
         do {
             let token = try await tokenRefresher.validAccessToken()
             let all = try await modelsClient.fetchModels(bearerToken: token)
+            // SIWC's account-specific model catalog is authoritative. Keep
+            // provider ordering and don't infer availability from API models.
             let filtered = all.filter { item in
-                let isAllowed = item.slug != "gpt-4o-mini"
-                if let vis = item.visibility {
-                    return vis == "list" && isAllowed
-                }
-                return isAllowed && !item.slug.isEmpty
+                item.visibility == "list" && !item.slug.isEmpty
             }
 
             if !filtered.isEmpty {
                 availableChatGPTModels = filtered
                 llmConfig?.cachedChatGPTModels = filtered
+                llmConfig?.cachedChatGPTModelsAccountIdentifier = chatGPTAuth?.currentAccount?.id
                 if let current = llmConfig?.chatGPTModel,
                    !filtered.contains(where: { $0.slug == current }) {
                     llmConfig?.chatGPTModel = filtered.first?.slug ?? "gpt-4o"
@@ -355,10 +352,7 @@ final class ProviderSettingsViewModel: ObservableObject {
         do {
             try await chatGPTAuth.disconnect()
             chatGPTAuthState = .signedOut
-            availableChatGPTModels = llmConfig?.cachedChatGPTModels ?? [
-                OpenAIModelItem(slug: "gpt-4o", displayName: "GPT-4o (flagship)"),
-                OpenAIModelItem(slug: "o3-mini", displayName: "o3-mini (reasoning)")
-            ]
+            availableChatGPTModels = []
         } catch {
             chatGPTErrorMessage = error.localizedDescription
             chatGPTAuthState = chatGPTAuth.authState

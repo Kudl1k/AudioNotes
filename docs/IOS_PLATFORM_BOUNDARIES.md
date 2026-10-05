@@ -1,5 +1,9 @@
 # M16.1 — Shared / Platform Boundary Preparation
 
+## M16.4 Account Authentication Boundary
+
+iOS supports ChatGPT-plan OAuth for eligible Responses API summary/chat requests; it does not authorize audio transcription. Gemini 3.5 Transcribe is integrated into the shared transcription provider architecture with timestamps and diarization. Gemini account connection uses its platform-specific OAuth client through `ASWebAuthenticationSession`; Gemini Developer API usage is billed through a Google Cloud project, not Gemini Advanced subscription access. ChatGPT retains its separate required loopback callback. Full iPhone and iPad Simulator suites pass; live-provider acceptance was not performed because no authorized account session was available. Physical-device/signing acceptance is intentionally deferred to release work and does not block M16.4. No browser cookies, private endpoints, or CLI credentials are used.
+
 ## 1. Overview & Objectives
 
 Milestone **M16.1** prepares the AudioNotes codebase for the introduction of an iOS companion target in M16.2. 

@@ -32,7 +32,8 @@ final class AppServices {
             configuration: configuration,
             credentials: credentials,
             client: transcriptionClient,
-            localConfiguration: llmConfiguration.localAI, whisperStore: whisperStore
+            localConfiguration: llmConfiguration.localAI, whisperStore: whisperStore,
+            geminiOAuth: googleGeminiOAuth
         )
     }
 
@@ -42,7 +43,8 @@ final class AppServices {
             credentials: credentials,
             client: llmClient,
             tokenRefresher: chatGPTTokenRefresher,
-            responsesClient: chatGPTResponsesClient
+            responsesClient: chatGPTResponsesClient,
+            geminiOAuth: googleGeminiOAuth
         )
     }
 }

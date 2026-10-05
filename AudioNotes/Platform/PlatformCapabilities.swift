@@ -28,21 +28,27 @@ struct PlatformCapabilities: Sendable, Equatable {
         case .anthropic:
             return supportsClaudeCLI
         case .gemini:
-            return false
+            return true
         case .mock:
 #if DEBUG
             return true
 #else
             return false
 #endif
-        case .openAI, .ollama, .llamaCpp:
+        case .openAI:
             return true
+        case .ollama, .llamaCpp:
+#if os(macOS)
+            return true
+#else
+            return false
+#endif
         }
     }
 
     func isSupported(transcriptionProvider: TranscriptionProviderID) -> Bool {
         switch transcriptionProvider {
-        case .openAI:
+        case .openAI, .gemini:
             return true
         case .mock:
 #if DEBUG

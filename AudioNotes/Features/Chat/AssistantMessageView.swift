@@ -1,4 +1,3 @@
-#if os(macOS)
 import SwiftUI
 
 struct AssistantMessageView: View {
@@ -60,5 +59,3 @@ private struct ChatSourcesView: View {
         }
     }
 }
-
-#endif

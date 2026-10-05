@@ -25,19 +25,22 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
     private let client: OpenAILLMClient
     private let tokenRefresher: any ChatGPTTokenRefreshing
     private let responsesClient: ChatGPTResponsesClient
+    private let geminiOAuth: GoogleGeminiOAuthService
 
     init(
         configuration: LLMConfiguration,
         credentials: any CredentialStoring,
         client: OpenAILLMClient = OpenAILLMClient(),
         tokenRefresher: any ChatGPTTokenRefreshing = ChatGPTTokenRefresher(),
-        responsesClient: ChatGPTResponsesClient = ChatGPTResponsesClient()
+        responsesClient: ChatGPTResponsesClient = ChatGPTResponsesClient(),
+        geminiOAuth: GoogleGeminiOAuthService = GoogleGeminiOAuthService()
     ) {
         self.configuration = configuration
         self.credentials = credentials
         self.client = client
         self.tokenRefresher = tokenRefresher
         self.responsesClient = responsesClient
+        self.geminiOAuth = geminiOAuth
     }
 
     @MainActor
@@ -64,11 +67,20 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
             return []
 #endif
         case .ollama:
+#if os(macOS)
             return configuration.localAI.models.map { .init(id: $0.id, title: $0.id) }
+#else
+            return []
+#endif
         case .llamaCpp:
+#if os(macOS)
             let model = configuration.localAI.llamaCppModel
             return model.isEmpty ? [] : [.init(id: model, title: model)]
-        case .mock, .gemini: return []
+#else
+            return []
+#endif
+        case .mock: return []
+        case .gemini: return [GenerationModelOption(id: "gemini-3.8-flash", title: "Gemini 3.8 Flash")]
         }
     }
 
@@ -76,9 +88,17 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
         let selectedProvider = provider ?? configuration.summaryProvider
         switch selectedProvider {
         case .ollama:
+#if os(macOS)
             return OllamaLLMProvider(model: model ?? configuration.localAI.summaryModel, configuration: configuration.localAI)
+#else
+            return UnavailableLLMProvider(providerID: selectedProvider)
+#endif
         case .llamaCpp:
+#if os(macOS)
             return LlamaCppLLMProvider(model: model ?? configuration.localAI.llamaCppModel, configuration: configuration.localAI)
+#else
+            return UnavailableLLMProvider(providerID: selectedProvider)
+#endif
         case .mock:
 #if DEBUG
             return MockLLMProvider()
@@ -97,7 +117,8 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
             return UnavailableLLMProvider(providerID: selectedProvider)
 #endif
         case .gemini:
-            return UnavailableLLMProvider(providerID: selectedProvider)
+            guard configuration.summaryGeminiAuthenticationMethod == .oauth else { return UnavailableLLMProvider(providerID: selectedProvider) }
+            return GoogleGeminiProvider(model: model ?? configuration.summaryGeminiModel, oauth: geminiOAuth)
         case .openAI:
             switch configuration.summaryAuthMethod {
             case .chatGPT:
@@ -125,9 +146,17 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
     @MainActor private func resolveChatBase() -> any LLMProvider {
         switch configuration.chatProvider {
         case .ollama:
+#if os(macOS)
             return OllamaLLMProvider(model: configuration.localAI.chatModel, configuration: configuration.localAI)
+#else
+            return UnavailableLLMProvider(providerID: configuration.chatProvider)
+#endif
         case .llamaCpp:
+#if os(macOS)
             return LlamaCppLLMProvider(model: configuration.localAI.llamaCppModel, configuration: configuration.localAI)
+#else
+            return UnavailableLLMProvider(providerID: configuration.chatProvider)
+#endif
         case .mock:
 #if DEBUG
             return MockLLMProvider()
@@ -146,7 +175,8 @@ final class LLMProviderResolver: LLMProviderResolving, Sendable {
             return UnavailableLLMProvider(providerID: configuration.chatProvider)
 #endif
         case .gemini:
-            return UnavailableLLMProvider(providerID: configuration.chatProvider)
+            guard configuration.chatGeminiAuthenticationMethod == .oauth else { return UnavailableLLMProvider(providerID: configuration.chatProvider) }
+            return GoogleGeminiProvider(model: configuration.chatGeminiModel, oauth: geminiOAuth)
         case .openAI:
             switch configuration.chatAuthMethod {
             case .chatGPT:

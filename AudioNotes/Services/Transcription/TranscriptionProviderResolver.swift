@@ -19,15 +19,18 @@ struct TranscriptionProviderResolver: TranscriptionProviderResolving {
     let client: OpenAITranscriptionClient
     let localConfiguration: LocalAIConfiguration
     let whisperStore: WhisperModelStore
+    let geminiOAuth: GoogleGeminiOAuthService
 
     init(configuration: TranscriptionConfiguration, credentials: any CredentialStoring,
          client: OpenAITranscriptionClient = OpenAITranscriptionClient(),
-         localConfiguration: LocalAIConfiguration? = nil, whisperStore: WhisperModelStore = WhisperModelStore()) {
+         localConfiguration: LocalAIConfiguration? = nil, whisperStore: WhisperModelStore = WhisperModelStore(),
+         geminiOAuth: GoogleGeminiOAuthService = GoogleGeminiOAuthService()) {
         self.configuration = configuration
         self.credentials = credentials
         self.client = client
         self.localConfiguration = localConfiguration ?? LocalAIConfiguration()
         self.whisperStore = whisperStore
+        self.geminiOAuth = geminiOAuth
     }
 
     func resolve() -> any TranscriptionProvider {
@@ -41,6 +44,7 @@ struct TranscriptionProviderResolver: TranscriptionProviderResolving {
         switch provider {
         case .mock: []
         case .openAI: configuration.availableVoiceModels.map { .init(id: $0.rawValue, title: $0.title) }
+        case .gemini: [.init(id: "gemini-3.5-transcribe", title: "Gemini 3.5 Transcribe (timestamps and speakers)")]
         case .localWhisper: WhisperModelDescriptor.bundled.map { .init(id: $0.id, title: $0.title) }
         }
     }
@@ -61,6 +65,8 @@ struct TranscriptionProviderResolver: TranscriptionProviderResolving {
             var settings = configuration.openAI
             if let model { settings.model = OpenAITranscriptionModel(rawValue: model) }
             return OpenAITranscriptionProvider(configuration: settings, credentials: credentials, client: client)
+        case .gemini:
+            return GeminiTranscriptionProvider(model: model ?? configuration.geminiModel, oauth: geminiOAuth)
         }
     }
 }

@@ -20,6 +20,11 @@ struct OpenAITranscriptionProvider: TranscriptionProvider {
 
     var providerID: String? { "openAI" }
     var modelID: String? { configuration.model.rawValue }
+    var capabilities: TranscriptionProviderCapabilities {
+        .init(maxDirectUploadSize: Int64(OpenAIAudioUpload.maximumFileBytes), maxProviderFileUploadSize: nil, supportsProviderFileUpload: false,
+              supportsTimestamps: configuration.model.supportsSegmentTimestamps, supportsDiarization: false,
+              maximumDuration: nil, requiresChunking: true)
+    }
     var authenticationMethod: ProviderAuthenticationMethod? { .apiKey }
 
     var displayName: String { "OpenAI · \(configuration.model.rawValue)" }

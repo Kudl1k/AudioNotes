@@ -108,7 +108,7 @@ struct IOSRootView: View {
                             .disabled(imports.isImporting)
                     } else {
                         ForEach(recordings) { recording in
-                            NavigationLink(destination: IOSRecordingDetailShell(recording: recording)) {
+                            NavigationLink(destination: IOSRecordingDetailShell(recording: recording, services: services)) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(recording.title)
                                         .lineLimit(2).truncationMode(.middle)
@@ -208,7 +208,7 @@ struct IOSRootView: View {
         switch destination {
         case .recording(let id):
             if let recording = recordings.first(where: { $0.id == id }) {
-                IOSRecordingDetailShell(recording: recording).id(recording.id)
+                IOSRecordingDetailShell(recording: recording, services: services).id(recording.id)
             } else {
                 ContentUnavailableView("Recording Not Found", systemImage: "waveform.slash",
                                        description: Text("The selected recording could not be found."))
@@ -237,9 +237,8 @@ struct IOSRootView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(recording.title)
-                                        .lineLimit(2).truncationMode(.middle)
+                                    .lineLimit(2).truncationMode(.middle)
                                     .font(.body.weight(.medium))
-                                    .foregroundStyle(.primary)
                                 HStack(spacing: 6) {
                                     Text(AudioTime.format(recording.duration))
                                     Text("•")
@@ -250,10 +249,12 @@ struct IOSRootView: View {
                             }
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .font(.caption)
+                                .font(.caption.bold())
                                 .foregroundStyle(.tertiary)
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
                 .navigationTitle("All Recordings")
             }

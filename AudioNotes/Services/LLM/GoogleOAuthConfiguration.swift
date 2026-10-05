@@ -5,12 +5,33 @@ struct GoogleOAuthConfiguration: Sendable {
     let clientID: String
     let projectID: String
     let clientSecret: String?
+    let redirectScheme: String?
+
+    init(clientID: String, projectID: String, clientSecret: String?, redirectScheme: String? = nil) {
+        self.clientID = clientID
+        self.projectID = projectID
+        self.clientSecret = clientSecret
+        self.redirectScheme = redirectScheme
+    }
 
     static func load(bundle: Bundle = .main) throws -> Self {
+#if os(iOS)
+        guard let clientID = bundle.object(forInfoDictionaryKey: "GoogleOAuthClientID") as? String,
+              let redirectScheme = bundle.object(forInfoDictionaryKey: "GoogleOAuthURLScheme") as? String,
+              let projectID = bundle.object(forInfoDictionaryKey: "GoogleCloudProjectID") as? String,
+              !clientID.isEmpty, !redirectScheme.isEmpty, !projectID.isEmpty else {
+            throw GoogleOAuthConfigurationError.missingIOSClient
+        }
+        guard redirectScheme == "com.googleusercontent.apps." + String(clientID.split(separator: ".").first ?? "") else {
+            throw GoogleOAuthConfigurationError.invalidIOSClient
+        }
+        return Self(clientID: clientID, projectID: projectID, clientSecret: nil, redirectScheme: redirectScheme)
+#else
         guard let url = bundle.url(forResource: "GoogleOAuth", withExtension: "json") else {
             throw GoogleOAuthConfigurationError.missingFile
         }
         return try load(from: url)
+#endif
     }
 
     static func load(from url: URL) throws -> Self {
@@ -42,11 +63,15 @@ struct GoogleOAuthConfiguration: Sendable {
 
 enum GoogleOAuthConfigurationError: LocalizedError, Equatable {
     case missingFile
+    case missingIOSClient
+    case invalidIOSClient
     case unreadableFile
     case invalidFile
 
     var errorDescription: String? {
         switch self {
+        case .missingIOSClient: "Google sign-in is unavailable on iOS until its OAuth client, callback URL scheme, and Google Cloud project are configured."
+        case .invalidIOSClient: "Google sign-in is unavailable: the iOS callback scheme does not match the configured client ID."
         case .missingFile: "Google sign-in is unavailable: this build does not include GoogleOAuth.json."
         case .unreadableFile: "Google sign-in is unavailable: the app’s OAuth configuration could not be read."
         case .invalidFile: "Google sign-in is unavailable: the app’s OAuth configuration must contain a Desktop client ID and project ID."

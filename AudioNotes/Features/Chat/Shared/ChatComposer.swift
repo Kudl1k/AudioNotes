@@ -43,4 +43,58 @@ struct ChatComposer: View {
         }
     }
 }
+#elseif os(iOS)
+import SwiftUI
+
+struct ChatComposer: View {
+    @Binding var text: String
+    @Binding var focusRequest: Int
+    let placeholder: String
+    let canSend: Bool
+    let isGenerating: Bool
+    let onSend: () -> Void
+    let onStop: () -> Void
+    @FocusState private var isFocused: Bool
+
+    private func send() {
+        guard canSend, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        onSend()
+        focusRequest += 1
+    }
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            TextField(placeholder, text: $text, axis: .vertical)
+                .focused($isFocused)
+                .lineLimit(1...5)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+                .accessibilityIdentifier("chat.input")
+
+            if isGenerating {
+                Button("Stop", systemImage: "stop.circle.fill", action: onStop)
+                    .labelStyle(.iconOnly)
+                    .font(.title2)
+                    .foregroundStyle(.red)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Stop generating")
+                    .accessibilityIdentifier("chat.stop")
+            } else {
+                Button("Send", systemImage: "arrow.up.circle.fill", action: send)
+                    .labelStyle(.iconOnly)
+                    .font(.title2)
+                    .buttonStyle(.plain)
+                    .disabled(!canSend)
+                    .accessibilityLabel("Send message")
+                    .accessibilityIdentifier("chat.send")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .onChange(of: focusRequest) { _, _ in
+            isFocused = true
+        }
+    }
+}
 #endif

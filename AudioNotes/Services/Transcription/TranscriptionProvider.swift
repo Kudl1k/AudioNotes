@@ -14,6 +14,16 @@ struct TranscriptionStatus: Sendable {
     var totalAudioDuration: TimeInterval
 }
 
+struct TranscriptionProviderCapabilities: Equatable, Sendable {
+    var maxDirectUploadSize: Int64?
+    var maxProviderFileUploadSize: Int64?
+    var supportsProviderFileUpload: Bool
+    var supportsTimestamps: Bool
+    var supportsDiarization: Bool
+    var maximumDuration: TimeInterval?
+    var requiresChunking: Bool
+}
+
 /// Returns a new, unpersisted model graph. SwiftData objects never cross actors.
 /// This main-actor entry point orchestrates async work; implementations must run
 /// decoding/inference in a worker actor and network requests asynchronously.
@@ -27,6 +37,7 @@ protocol TranscriptionProvider {
     var billingKind: BillingKind { get }
     var modelID: String? { get }
     var modelDisplayName: String? { get }
+    var capabilities: TranscriptionProviderCapabilities { get }
     var authenticationMethod: ProviderAuthenticationMethod? { get }
     func transcribe(audioURL: URL, progress: @escaping TranscriptionProgress,
                     status: @escaping TranscriptionStatusReporter,
@@ -44,6 +55,10 @@ extension TranscriptionProvider {
     var billingKind: BillingKind { isMock ? .local : BillingKind.resolve(provider: providerID, authentication: authenticationMethod) }
     var modelID: String? { nil }
     var modelDisplayName: String? { modelID }
+    var capabilities: TranscriptionProviderCapabilities {
+        .init(maxDirectUploadSize: nil, maxProviderFileUploadSize: nil, supportsProviderFileUpload: false, supportsTimestamps: false,
+              supportsDiarization: false, maximumDuration: nil, requiresChunking: false)
+    }
     var authenticationMethod: ProviderAuthenticationMethod? { nil }
 
     func transcribe(audioURL: URL, progress: @escaping TranscriptionProgress,

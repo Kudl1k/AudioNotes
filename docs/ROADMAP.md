@@ -143,7 +143,7 @@ Oversized OpenAI uploads are split locally into temporary M4A parts. Progress wi
 
 ### Authentication and privacy notes
 
-Google OAuth is an API authorization flow for Gemini API access in the configured Google Cloud project; it does not grant use of a consumer Gemini plan for API billing. Developer setup requires a Google Cloud project, the Generative Language API, an OAuth consent screen, and a Desktop OAuth client ID. The app loads the client ID, project ID, and optional desktop client secret from a developer-supplied bundled `GoogleOAuth.json` file; users cannot edit them in Settings. Access and refresh tokens remain in Keychain, and the file’s optional client secret is synchronized into Keychain before sign-in or refresh. See [Google OAuth setup](GOOGLE_OAUTH.md). The current flow requests OpenID email plus the documented Gemini API scope, uses the system browser and a loopback IP redirect, validates `state`, and uses PKCE. Google may require test-user enrollment or verification depending on deployment. See [Gemini OAuth](https://ai.google.dev/gemini-api/docs/oauth) and [Google OAuth for desktop apps](https://developers.google.com/identity/protocols/oauth2/native-app).
+Google OAuth is an API authorization flow for Gemini API access in the configured Google Cloud project; it does not grant use of a consumer Gemini plan for API billing. iOS uses the supplied platform-specific native OAuth client and registered reversed-client-ID callback scheme; macOS retains its Desktop client, system browser and loopback IP redirect. The iOS client ID/scheme are public OAuth configuration in the iOS Info.plist; no client secret is embedded. The app requests OpenID email plus the documented Gemini API scope, validates `state`, uses PKCE where supported, and stores tokens in Keychain. Google may require test-user enrollment or verification depending on deployment. See [Gemini OAuth](https://ai.google.dev/gemini-api/docs/oauth), [Google OAuth native apps](https://developers.google.com/identity/protocols/oauth2/native-app), and [iOS Sign-In setup](https://developers.google.com/identity/sign-in/ios/start-integrating).
 
 Anthropic officially documents App Attest for direct Claude API use by registered iOS/macOS apps; usage bills to the app developer's workspace and App Attest does not identify an end user. The documented Swift package that implements this flow currently requires macOS 27 beta and Xcode 27, while AudioNotes targets macOS 15. This milestone therefore does not implement App Attest until it can be done without violating the deployment target or inventing an undocumented token exchange. It does not emulate Claude Code/CLI sign-in, use undocumented OAuth clients, access browser data, or claim Claude Pro/Max billing. The Anthropic API-key field remains available independently. See [Anthropic authentication](https://platform.claude.com/docs/en/manage-claude/authentication), [Anthropic App Attest](https://platform.claude.com/docs/en/manage-claude/app-attest), and the [official Swift package requirements](https://github.com/anthropics/ClaudeForFoundationModels).
 
@@ -509,11 +509,21 @@ Goal: deliver native iPhone and iPad companion targets sharing core models, pers
 - [x] M16.1 — Shared/platform boundary preparation (zero behavior change on macOS; [boundary report](IOS_PLATFORM_BOUNDARIES.md))
 - [x] M16.2 — iOS target + library and navigation shell ([implementation report](IOS_TARGET_AND_NAVIGATION.md))
 - [x] M16.3 — Native audio import + recording detail, foreground playback, stored transcript/summary/history and management ([report](IOS_AUDIO_AND_RECORDING.md)); implementation and Simulator QA complete, physical device/VoiceOver acceptance pending
-- [ ] M16.4 — Cloud AI + chats (OpenAI transcription, summaries, Recording Chat, iOS composer)
+- [x] M16.4 — Cloud AI + chats and account authentication; implementation, iPhone/iPad Simulator suites, macOS regression, and required builds pass. Live-provider testing was not performed (no authorized account session available). Physical Device / Signing Acceptance is intentionally deferred to release work; it does not block this milestone ([account authentication and deferred acceptance](IOS_ACCOUNT_AUTH.md), [cloud AI implementation/status](IOS_CLOUD_AI.md))
 - [ ] M16.5 — Projects, sources, OCR, citations, Project Chat
 - [ ] M16.6 — Export and sharing (ShareLink, file exporter, PDF export)
 - [ ] M16.7 — Local capabilities (LAN Ollama/llama.cpp, Whisper feasibility spike)
 - [ ] M16.8 — iPad polish (adaptive split, inspector, keyboard shortcuts, drag & drop)
 - [ ] M16.9 — iOS QA, accessibility, memory, performance, and validation
+
+### Deferred to release/signing: Physical Device / Signing Acceptance
+
+- [ ] Confirm owning company Developer Team and permanent production bundle identifier.
+- [ ] Register production App ID/capabilities and configure signing/provisioning; prepare TestFlight/App Store records only in the release milestone.
+- [ ] Install on physical iPhone; validate ChatGPT loopback while backgrounded and Google OAuth callback.
+- [ ] Verify Keychain persistence, provider inference, token refresh, disconnect, and background/foreground behavior.
+- [ ] Validate VoiceOver and device-specific audio playback.
+
+The current iOS bundle identifier is development/project configuration. No production App ID, provisioning, or App Store Connect record was created for M16.4. Existing project `DEVELOPMENT_TEAM` configuration was left unchanged; Simulator builds use `CODE_SIGN_IDENTITY = -`. Confirm team ownership before any device signing.
 
 See [iOS Port Architecture and Portability Audit](IOS_PORT_AUDIT.md), [iOS Platform Boundaries](IOS_PLATFORM_BOUNDARIES.md), and [iOS Target & Navigation Shell](IOS_TARGET_AND_NAVIGATION.md).
