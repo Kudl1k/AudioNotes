@@ -57,6 +57,11 @@ struct IOSRootView: View {
             destination = .project(id)
             if horizontalSizeClass == .compact { navigationPath = [.project(id)] }
         }
+        .onChange(of: imports.library.selection) { _, id in
+            guard let id else { return }
+            destination = .recording(id)
+            if horizontalSizeClass == .compact { navigationPath = [.recording(id)] }
+        }
         .onChange(of: projects.map(\.id)) { _, ids in
             if case .project(let id) = destination, !ids.contains(id) { destination = .allRecordings; navigationPath = [] }
         }
@@ -84,10 +89,24 @@ struct IOSRootView: View {
 #if DEBUG
     private func prepareReview() async {
             do {
-                guard ProcessInfo.processInfo.arguments.contains("--performance-fixtures") && ProcessInfo.processInfo.arguments.contains("--ios-audio-review") else { return }
+                guard ProcessInfo.processInfo.arguments.contains("--performance-fixtures") else { return }
                 services.configuration.selectedProvider = .mock
                 services.llmConfiguration.summaryProvider = .mock
                 services.llmConfiguration.chatProvider = .mock
+                if ProcessInfo.processInfo.arguments.contains("--ios-project-knowledge-review") {
+                    try IOSProjectKnowledgeFixtures.prepare(context: context)
+                    let project = try context.fetch(FetchDescriptor<Project>()).first { $0.id == IOSProjectKnowledgeFixtures.projectID }
+                    if let project {
+                        if ProcessInfo.processInfo.arguments.contains("--ios-project-import-progress") {
+                            imports.library.projectImports.prepareReviewProgress(projectID: project.id)
+                        }
+                        destination = .project(project.id)
+                        if horizontalSizeClass == .compact { navigationPath = [.project(project.id)] }
+                    }
+                    try Data("ready".utf8).write(to: AppStorageLocations.applicationSupport().appending(path: "ios-project-knowledge-review-ready"), options: .atomic)
+                    return
+                }
+                guard ProcessInfo.processInfo.arguments.contains("--ios-audio-review") else { return }
                 try await IOSAudioRecordingFixtures.prepare(context: context)
                 if ProcessInfo.processInfo.arguments.contains("--ios-review-detail"), let recording = try context.fetch(FetchDescriptor<Recording>()).first { destination = .recording(recording.id); navigationPath = [.recording(recording.id)] }
                 if ProcessInfo.processInfo.arguments.contains("--ios-review-project"), let project = try context.fetch(FetchDescriptor<Project>()).first(where: { !$0.recordings.isEmpty }) {
@@ -97,7 +116,13 @@ struct IOSRootView: View {
                 if ProcessInfo.processInfo.arguments.contains("--ios-review-settings") { isShowingSettings = true }
                 try Data("ready".utf8).write(to: AppStorageLocations.applicationSupport().appending(path: "ios-ux-review-ready"), options: .atomic)
             }
-            catch { imports.resultMessage = "The offline review fixture could not be prepared." }
+            catch {
+                if ProcessInfo.processInfo.arguments.contains("--ios-project-knowledge-review") {
+                    imports.resultMessage = "Offline fixture error: \(error.localizedDescription)"
+                } else {
+                    imports.resultMessage = "The offline review fixture could not be prepared."
+                }
+            }
     }
 #endif
 
@@ -171,12 +196,14 @@ struct IOSRootView: View {
             }
             .navigationTitle("AudioNotes")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { importButton }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: { isShowingSettings = true }) {
-                        Image(systemName: "gearshape")
+                if destination == .allRecordings || destination == nil {
+                    ToolbarItem(placement: .topBarTrailing) { importButton }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(action: { isShowingSettings = true }) {
+                            Image(systemName: "gearshape")
+                        }
+                        .accessibilityLabel("Settings").accessibilityIdentifier("library.settings")
                     }
-                    .accessibilityLabel("Settings").accessibilityIdentifier("library.settings")
                 }
             }
         }
@@ -227,12 +254,14 @@ struct IOSRootView: View {
             }
             .navigationTitle("AudioNotes")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { importButton }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: { isShowingSettings = true }) {
-                        Image(systemName: "gearshape")
+                if destination == .allRecordings || destination == nil {
+                    ToolbarItem(placement: .topBarTrailing) { importButton }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(action: { isShowingSettings = true }) {
+                            Image(systemName: "gearshape")
+                        }
+                        .accessibilityLabel("Settings").accessibilityIdentifier("library.settings")
                     }
-                    .accessibilityLabel("Settings").accessibilityIdentifier("library.settings")
                 }
             }
         } detail: {
@@ -249,7 +278,8 @@ struct IOSRootView: View {
                 IOSRecordingDetailShell(recording: recording, services: services,
                     transcriptionModel: imports.library.transcriptionModel(for: recording, resolver: IOSFeatureProviders.transcription(services)),
                     summaryModel: imports.library.summaryModel(for: recording, resolver: IOSFeatureProviders.llm(services)),
-                    chatModel: imports.library.chatModel(for: recording, resolver: IOSFeatureProviders.llm(services))).id(recording.id)
+                    chatModel: imports.library.chatModel(for: recording, resolver: IOSFeatureProviders.llm(services)),
+                    projectCitation: imports.library.pendingProjectCitation).id(recording.id)
             } else {
                 ContentUnavailableView("Recording Not Found", systemImage: "waveform.slash",
                                        description: Text("The selected recording could not be found."))

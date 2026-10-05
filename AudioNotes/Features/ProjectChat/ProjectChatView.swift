@@ -60,7 +60,8 @@ struct ProjectChatView: View {
     private var conversation: some View {
         ChatMessageList(scrollState: $model.scrollState, scrollPosition: $model.scrollPosition,
             messageCount: model.session?.messages.count ?? 0,
-            latestMessageID: model.session?.orderedMessages.last?.id, activeResponseID: model.assistantMessageID, draft: model.streamingDraft,
+            latestMessageID: model.session?.orderedMessages.last?.id,
+            activeResponseID: model.assistantMessageID, draft: model.streamingDraft,
             generationState: model.state, sentQuestionID: model.sentQuestionID) {
             if (model.session?.messages.isEmpty ?? true) && !model.isGenerating { emptyState }
             let messages = model.session?.orderedMessages ?? []
@@ -113,10 +114,12 @@ struct ProjectChatView: View {
         }.frame(maxWidth: 760).frame(maxWidth: .infinity).padding(12)
     }
     private func openCitation(_ citation: ProjectCitation) {
-        guard ProjectCitationNavigation.available(citation, project: model.project) else { return }
-        if let recording = ProjectCitationNavigation.recording(citation, project: model.project) {
-            library.selectRecording(recording.id); library.pendingProjectCitation = citation
-        } else if let source = ProjectCitationNavigation.source(citation, project: model.project) {
+        guard let intent = ProjectCitationNavigation.intent(citation, project: model.project) else { return }
+        switch intent {
+        case .recording(let id, _):
+            library.selectRecording(id); library.pendingProjectCitation = citation
+        case .source(let id, _):
+            guard let source = model.project.sources.first(where: { $0.id == id }) else { return }
             preview = .init(source: source, locator: citation.reference.locator)
         }
     }

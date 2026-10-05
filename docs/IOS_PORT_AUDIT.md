@@ -559,14 +559,14 @@ them) and duplicate test folders. Do not restructure test targets before M16.2.
 | Library | yes | planned (M16.2) | planned | shared view models |
 | Projects | yes | planned (M16.5) | planned | |
 | Audio import | yes | planned (M16.3) | planned | `.fileImporter`; copy-in-scope already correct |
-| PDF import | yes | planned (M16.5) | planned | PDFKit extraction portable; thumbnail path to fix |
-| Image import | yes | planned (M16.5) | planned | Vision/ImageIO portable |
+| PDF import | yes | yes (M16.6) | yes | Shared PDFKit extraction; iOS PDFKit viewer and page citations |
+| Image import | yes | yes (M16.6) | yes | Shared Vision OCR and managed originals |
 | Transcription (cloud, OpenAI) | yes | planned (M16.4), foreground | planned | background limits |
 | Local Whisper | yes (Apple Silicon) | not initial; investigate | not initial; investigate | §13 |
 | Summary | yes | planned (M16.4) | planned | OpenAI only |
 | Recording Chat | yes | planned (M16.4) | planned | iOS composer |
-| Project Chat | yes | planned (M16.5) | planned | |
-| Citations / source navigation | yes | planned (M16.5) | planned | shared semantics, UIKit PDF view |
+| Project Chat | yes | yes (M16.6 implementation) | yes | Shared project chat/retrieval engine and provider resolver; iOS native composition |
+| Citations / source navigation | yes | yes (M16.6 implementation) | yes | Shared authoritative references; iOS PDFKit page navigation |
 | OpenAI (API key) | yes | yes | yes | |
 | Anthropic | Claude CLI only | **unavailable** | **unavailable** | no API client exists |
 | Gemini | not implemented | unavailable | unavailable | |

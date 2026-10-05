@@ -158,6 +158,24 @@ struct ProjectCitationResolver {
 
 @MainActor
 struct ProjectCitationNavigation {
+    enum Intent: Equatable {
+        case recording(id: UUID, timestamp: TimeInterval)
+        case source(id: UUID, pageIndex: Int?)
+    }
+
+    static func intent(_ citation: ProjectCitation, project: Project) -> Intent? {
+        guard available(citation, project: project) else { return nil }
+        if let recording = recording(citation, project: project) {
+            guard case .audio(_, let start, _) = citation.reference.locator else { return nil }
+            return .recording(id: recording.id, timestamp: start)
+        }
+        guard let source = source(citation, project: project) else { return nil }
+        if case .pdf(let pageIndex) = citation.reference.locator {
+            return .source(id: source.id, pageIndex: pageIndex)
+        }
+        return .source(id: source.id, pageIndex: nil)
+    }
+
     static func recording(_ citation: ProjectCitation, project: Project) -> Recording? {
         guard citation.projectID == project.id, let id = citation.recordingID else { return nil }
         return project.recordings.first { $0.id == id && $0.project?.id == project.id }

@@ -29,6 +29,7 @@ struct IOSRecordingDetailShell: View {
     @State private var summaryModel: SummaryViewModel
     @State private var chatModel: ChatViewModel
     @State private var chatFocusRequest = 0
+    private let projectCitation: ProjectCitation?
 
     private enum DetailTab: String, CaseIterable {
         case transcript = "Transcript"
@@ -41,9 +42,11 @@ struct IOSRecordingDetailShell: View {
         services: AppServices? = nil,
         transcriptionModel: RecordingViewModel? = nil,
         summaryModel: SummaryViewModel? = nil,
-        chatModel: ChatViewModel? = nil
+        chatModel: ChatViewModel? = nil,
+        projectCitation: ProjectCitation? = nil
     ) {
         self.recording = recording
+        self.projectCitation = projectCitation
         let effectiveServices = services ?? AppServices()
         self.services = effectiveServices
         _transcriptionModel = State(initialValue: transcriptionModel ?? RecordingViewModel(recording: recording, resolver: IOSFeatureProviders.transcription(effectiveServices)))
@@ -167,6 +170,7 @@ struct IOSRecordingDetailShell: View {
         }
         .task(id: recording.id) {
             await player.load(url: LibraryStorage().recordingURL(fileName: recording.audioFileName))
+            if case .audio(_, let start, _) = projectCitation?.reference.locator { player.seek(to: start) }
         }
         #if DEBUG
         .task {
@@ -209,10 +213,16 @@ struct IOSRecordingDetailShell: View {
                 .padding(.vertical, 16)
             }
         } else if let transcript = recording.transcript, !transcript.segments.isEmpty {
-            TranscriptView(transcript: transcript, seek: player.seek)
+            TranscriptView(transcript: transcript, revealedSegmentID: citedSegmentID, seek: player.seek)
         } else {
             transcriptionPromptContent
         }
+    }
+
+    private var citedSegmentID: UUID? {
+        guard let projectCitation, projectCitation.recordingID == recording.id,
+              case .audio(let ids, _, _) = projectCitation.reference.locator else { return nil }
+        return ids.first
     }
 
     private func activityTitle(_ snapshot: TranscriptionProgressSnapshot) -> String {

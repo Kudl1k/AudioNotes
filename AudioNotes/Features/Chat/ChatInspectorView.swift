@@ -109,7 +109,8 @@ struct ChatInspectorView: View {
     private var chatContentView: some View {
         ChatMessageList(scrollState: $model.scrollState, scrollPosition: $model.scrollPosition,
             messageCount: model.session?.messages.count ?? 0,
-            latestMessageID: model.session?.orderedMessages.last?.id, activeResponseID: model.assistantMessageID, draft: model.streamingDraft,
+            latestMessageID: model.session?.orderedMessages.last?.id,
+            activeResponseID: model.assistantMessageID, draft: model.streamingDraft,
             generationState: model.generationState, sentQuestionID: model.sentQuestionID) {
             if (model.session?.messages.isEmpty ?? true) && !model.isGenerating {
                 emptyStateView
