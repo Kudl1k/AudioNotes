@@ -20,6 +20,11 @@ Production startup opens `default.store` in the resolved Application Support dir
 
 ## Validation
 
+Use Xcode 27 for project format `objectVersion = 110`. GitHub Actions uses the
+`xcode-27` runner and verifies the selected toolchain before building; the
+`macos-26` runner's default Xcode 26.6 cannot open this project. Keep the project
+format and established signing configuration unchanged.
+
 ```sh
 xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes \
   -configuration Debug -destination 'platform=macOS,arch=arm64' \

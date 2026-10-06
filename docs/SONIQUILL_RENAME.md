@@ -217,7 +217,7 @@ sandbox or change the established Apple identity. M16.7 Local AI may then contin
 
 ## Validation and captures
 
-Final rerun: **2026-10-06**, Xcode 27.0.1. Full suites ran serially with no test
+Final rerun: **2026-10-06**, Xcode 27.0 (27A266a), macOS 27.0.1. Full suites ran serially with no test
 filters; the final iPhone/iPad runs include the aligned Google OAuth declaration.
 An intermediate run correctly failed the old mismatch expectation after the
 owner's Console correction; that expectation was replaced with configuration-load
