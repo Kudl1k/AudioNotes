@@ -25,6 +25,12 @@ Use Xcode 27 for project format `objectVersion = 110`. GitHub Actions uses the
 `macos-26` runner's default Xcode 26.6 cannot open this project. Keep the project
 format and established signing configuration unchanged.
 
+The native Vision OCR integration test explicitly selects supported CPU devices so
+it also runs on hosted macOS VMs without a Neural Engine; application requests
+retain Vision's default device selection. Download state tests keep their assertions
+and use a bounded 60-second polling deadline to accommodate hosted-runner scheduling.
+See [Apple's Vision compute-device API](https://developer.apple.com/documentation/vision/vnrequest/setcomputedevice(_:for:)).
+
 ```sh
 xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes \
   -configuration Debug -destination 'platform=macOS,arch=arm64' \

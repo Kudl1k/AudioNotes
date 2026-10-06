@@ -1,6 +1,8 @@
+import CoreML
 import Foundation
 import PDFKit
 import Testing
+import Vision
 @testable import AudioNotes
 
 struct SourceProcessingTests {
@@ -71,7 +73,18 @@ struct SourceProcessingTests {
     }
     @Test(arguments: ["English operating systems", "Příliš žluťoučký kůň"])
     func realVisionOCRPreservesEnglishAndCzech(text: String) async throws {
-        let output = try await VisionOCRService().recognize(sourceTestImage(text: text)).map(\.text).joined(separator: " ")
+        // Hosted macOS VMs have no Neural Engine. Exercise real Vision OCR using
+        // its supported CPU devices instead of depending on accelerator availability.
+        let ocr = VisionOCRService { request in
+            for (stage, devices) in try request.supportedComputeStageDevices {
+                let cpu = try #require(devices.first { device in
+                    if case .cpu = device { return true }
+                    return false
+                }, "Vision must support CPU execution for \(stage)")
+                request.setComputeDevice(cpu, for: stage)
+            }
+        }
+        let output = try await ocr.recognize(sourceTestImage(text: text)).map(\.text).joined(separator: " ")
         #expect(!output.isEmpty)
         #expect(output.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).contains(text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)), "OCR result: \(output)")
         if text.contains("ů") { #expect(output.contains { "říšťčýůň".contains($0) }, "OCR should preserve recognized Unicode") }
