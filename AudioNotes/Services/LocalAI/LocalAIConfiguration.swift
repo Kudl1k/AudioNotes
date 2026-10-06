@@ -25,9 +25,9 @@ enum LocalAIError: LocalizedError, Equatable, Sendable {
         switch self {
         case .privacyBlocked: "Local Only is enabled. Choose a provider running on this device, or disable Local Only in Settings."
         case .invalidEndpoint: "Enter an HTTP or HTTPS server address without credentials, query parameters, or a path."
-        case .unreachable(let local): local ? "Ollama is not reachable. Start Ollama on this Mac and try again." : "The Ollama server is unreachable. Check the server address, published port, and network connection. Also check AudioNotes access in System Settings > Privacy & Security > Local Network."
+        case .unreachable(let local): local ? "Ollama is not reachable. Start Ollama on this Mac and try again." : "The Ollama server is unreachable. Check the server address, published port, and network connection. Also check Soniquill access in System Settings > Privacy & Security > Local Network."
         case .transportSecurityBlocked: "macOS blocked this HTTP connection. Use HTTPS, an IP address, or a .local hostname, or configure an App Transport Security exception for this server."
-        case .networkUnavailable: "The network connection is unavailable or was interrupted. Check your network and AudioNotes access in System Settings > Privacy & Security > Local Network, then try again."
+        case .networkUnavailable: "The network connection is unavailable or was interrupted. Check your network and Soniquill access in System Settings > Privacy & Security > Local Network, then try again."
         case .hostNotFound: "The Ollama hostname could not be resolved. Check the server address and local DNS, or use the server's IP address."
         case .connectionTimedOut: "The Ollama server did not respond in time. Check the server, published port, and firewall, then try again."
         case .invalidResponse: "The local AI service returned an invalid response. Check the selected model and try again."

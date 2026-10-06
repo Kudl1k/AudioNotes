@@ -1,13 +1,13 @@
 # Claude Code account integration
 
-AudioNotes can use an installed Claude Code executable for Anthropic summaries and
+Soniquill can use an installed Claude Code executable for Anthropic summaries and
 recording chat. The application remains Swift/SwiftUI; there is no backend service
 or embedded Node runtime. The CLI is an external, user-installed dependency.
 
 ## Setup
 
 1. Install a current native Claude Code release using the [official instructions](https://code.claude.com/docs/en/setup).
-2. In AudioNotes, open Settings → Anthropic. Leave the executable path blank for
+2. In Soniquill, open Settings → Anthropic. Leave the executable path blank for
    automatic discovery (`~/.local/bin/claude`, Homebrew locations, then `PATH`), or
    enter an absolute path.
 3. Click **Sign in with Claude Code…**, complete the CLI's browser login, and
@@ -19,7 +19,7 @@ or embedded Node runtime. The CLI is an external, user-installed dependency.
    selected when a refresh no longer lists them. Preset provider/model overrides
    use the same CLI path.
 
-AudioNotes requires the CLI's `claude.ai` / `firstParty` account authentication.
+Soniquill requires the CLI's `claude.ai` / `firstParty` account authentication.
 It rejects API-key, Console and third-party-cloud authentication and never falls
 back to another credential or model. No login is performed automatically. Logout
 is managed in Claude Code because the login is shared with other CLI clients.
@@ -65,7 +65,7 @@ Transcript and source reference resolvers validate returned IDs against the sele
 context. Model-generated numeric locations are discarded. CLI diagnostic output is
 not logged or displayed because it can include source content or credentials.
 
-The CLI owns its credentials and token refresh. AudioNotes neither reads nor copies
+The CLI owns its credentials and token refresh. Soniquill neither reads nor copies
 Claude Code's tokens. Generation metadata records the non-secret `claudeCode`
 authentication method and the returned model ID when available. Reported usage,
 including cache tokens, is retained; missing usage remains unavailable. CLI cost
@@ -80,7 +80,7 @@ installation, configuration and Keychain login. Hardened Runtime remains enabled
 This build is intended for direct macOS distribution, not the Mac App Store sandbox.
 
 `AppStorageLocations` reuses an existing sandbox Application Support directory when
-its database or AudioNotes managed-storage directory is present. The default
+its database or Soniquill managed-storage directory is present. The default
 SwiftData store, audio/source originals and downloaded models stay in place.
 Known non-secret provider/privacy preferences are restored once without replacing
 existing desktop values. No historical summaries, chats or usage records are rewritten.
@@ -94,7 +94,7 @@ A live initialization-only probe returned the signed-in CLI model list.
 A live neutral connectivity check succeeded with Claude Code 2.1.286 on this Mac.
 Interactive browser login and a full native recording workflow still require manual
 acceptance. Older CLIs that do not support the integration's flags must be updated;
-AudioNotes does not retry using weaker isolation flags.
+Soniquill does not retry using weaker isolation flags.
 
 Official references checked 2026-10-01:
 

@@ -49,7 +49,7 @@ PYACCEPT
     codesign --verify --verbose=2 "$output/AudioNotes-$version.dmg"
     spctl --assess --type open --context context:primary-signature --verbose=2 "$output/AudioNotes-$version.dmg"
     python3 scripts/release/validate_appcast.py "$output/feed/appcast.xml" --repository "$repository" --offline-artifacts "$output/feed"
-    gh release create "v$version" --repo "$repository" --target "$(git rev-parse HEAD)" --title "AudioNotes $version" --notes-file "docs/release/$version.md" --draft "$output/AudioNotes-$version.dmg" "$output/SHA256SUMS" "$output/feed/appcast.xml"
+    gh release create "v$version" --repo "$repository" --target "$(git rev-parse HEAD)" --title "Soniquill $version" --notes-file "docs/release/$version.md" --draft "$output/AudioNotes-$version.dmg" "$output/SHA256SUMS" "$output/feed/appcast.xml"
     gh release edit "v$version" --repo "$repository" --draft=false
     gh workflow run publish-appcast.yml --repo "$repository" --ref main -f "release_tag=v$version"
     echo 'Release published; Pages dispatched. Verify the public feed and actual installed update before announcing.'
@@ -76,7 +76,7 @@ xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes -configuration Debug
 python3 -m unittest discover -s scripts/release -p 'test_*.py' > "$output/tooling-tests.log" 2>&1
 if [[ "$mode" == --dry-run ]]; then
     xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes -configuration Release -destination 'generic/platform=macOS' -derivedDataPath "$derived" -archivePath "$output/AudioNotes.xcarchive" CODE_SIGNING_ALLOWED=NO archive > "$output/archive.log" 2>&1
-    app="$output/AudioNotes.xcarchive/Products/Applications/AudioNotes.app"
+    app="$output/AudioNotes.xcarchive/Products/Applications/Soniquill.app"
     dmg="$output/UNSIGNED-DO-NOT-DISTRIBUTE-AudioNotes-$version.dmg"
 else
     xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes -configuration Release -destination 'generic/platform=macOS' -derivedDataPath "$derived" -archivePath "$output/AudioNotes.xcarchive" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$DEVELOPER_ID_APPLICATION" DEVELOPMENT_TEAM="$team" AUDIONOTES_UPDATE_FEED_URL="$feed" AUDIONOTES_UPDATE_PUBLIC_KEY="$SPARKLE_PUBLIC_ED_KEY" archive > "$output/archive.log" 2>&1
@@ -85,7 +85,7 @@ else
     /usr/libexec/PlistBuddy -c "Add :signingCertificate string $DEVELOPER_ID_APPLICATION" "$output/ExportOptions.plist"
     /usr/libexec/PlistBuddy -c "Add :teamID string $team" "$output/ExportOptions.plist"
     xcodebuild -exportArchive -archivePath "$output/AudioNotes.xcarchive" -exportPath "$output/export" -exportOptionsPlist "$output/ExportOptions.plist" > "$output/export.log" 2>&1
-    app="$output/export/AudioNotes.app"
+    app="$output/export/Soniquill.app"
     codesign --verify --deep --strict --verbose=2 "$app"
     codesign -dv "$app" 2>&1 | grep -F 'Authority=Developer ID Application:' >/dev/null
     codesign -dv "$app" 2>&1 | grep 'flags=.*runtime' >/dev/null
@@ -99,15 +99,15 @@ else
     spctl --assess --type execute --verbose=2 "$app"
     dmg="$output/AudioNotes-$version.dmg"
 fi
-[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" == cz.stepankudlacek.audionotes ]]
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" == cz.kudladev.soniquill ]]
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" == "$version" ]]
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")" == "$build" ]]
-[[ "$(lipo -archs "$app/Contents/MacOS/AudioNotes")" == arm64 ]]
-[[ -f "$app/Contents/Resources/AudioNotes.icns" ]] || { echo 'Compiled macOS fallback icon missing.'; exit 1; }
+[[ "$(lipo -archs "$app/Contents/MacOS/Soniquill")" == arm64 ]]
+[[ -f "$app/Contents/Resources/AppIcon.icns" ]] || { echo 'Compiled macOS fallback icon missing.'; exit 1; }
 mkdir "$output/dmg-root"
-ditto "$app" "$output/dmg-root/AudioNotes.app"
+ditto "$app" "$output/dmg-root/Soniquill.app"
 ln -s /Applications "$output/dmg-root/Applications"
-hdiutil create -volname AudioNotes -srcfolder "$output/dmg-root" -format UDZO "$dmg"
+hdiutil create -volname Soniquill -srcfolder "$output/dmg-root" -format UDZO "$dmg"
 hdiutil verify "$dmg"
 if [[ "$mode" == --dry-run ]]; then
     echo "Unsigned packaging rehearsal only: $dmg"

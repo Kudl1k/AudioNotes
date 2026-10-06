@@ -37,7 +37,7 @@ Sources checked during this pass:
 and the resolved Argmax 1.1.0 package sources and Apple SDK Swift interfaces.
 
 **Material difference from the original app-managed LLM proposal:** the language-model
-catalog contains one system-managed Apple model. AudioNotes cannot offer Download,
+catalog contains one system-managed Apple model. Soniquill cannot offer Download,
 Cancel Download, Delete, a pinned model version, a byte size, or a user-selected
 quantization for that model. It reports availability and points users to Apple
 Intelligence in system Settings. It neither starts Apple Intelligence setup nor
@@ -102,7 +102,7 @@ Preserve its copyright/permission notice when redistributing substantial copies.
 third-party notices (including Apache-2.0 portions of swift-transformers). Downloaded
 artifacts are model/tokenizer data, never arbitrary executable code.
 
-Apple's system language model is not redistributed by AudioNotes. The app consumes
+Apple's system language model is not redistributed by Soniquill. The app consumes
 Apple's SDK/framework under the applicable Apple developer/platform terms. No public
 repository, third-party model license, weight size or redistribution permission is
 inferred for it.
@@ -151,7 +151,7 @@ summaries, messages, generation history and citations.
 view model. The gate prevents overlapping heavy Whisper/LLM operations from this app.
 Providers also have a private admission gate when injected independently. Whisper
 unloads on all operation boundaries. Foundation Models sessions are request-scoped;
-stream workers are cancelled/awaited before releasing the gate. AudioNotes does not
+stream workers are cancelled/awaited before releasing the gate. Soniquill does not
 retain sessions between requests. Apple may cache its system model; the app cannot
 promise to unload Apple's OS-owned resident weights.
 

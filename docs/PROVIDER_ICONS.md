@@ -1,6 +1,6 @@
 # Provider sidebar icons
 
-These bundled assets identify the configured service. Logos remain the property of their respective owners; they do not indicate endorsement of AudioNotes.
+These bundled assets identify the configured service. Logos remain the property of their respective owners; they do not indicate endorsement of Soniquill.
 
 - OpenAI: the monochrome Blossom SVG from [Simple Icons v15.0.0](https://github.com/simple-icons/simple-icons/blob/15.0.0/icons/openai.svg), rendered in black or white for contrast. [OpenAI brand guidelines](https://openai.com/brand/).
 - Anthropic: the touch icon linked by [anthropic.com](https://www.anthropic.com/), downloaded from https://cdn.prod.website-files.com/67ce28cfec624e2b733f8a52/67d31dd7aa394792257596c5_webclip.png.

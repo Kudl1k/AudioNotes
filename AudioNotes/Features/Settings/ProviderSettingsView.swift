@@ -191,9 +191,9 @@ struct ProviderSettingsView: View {
                     Button("Reveal Data Folder") { Workspace.open(AppStorageLocations.applicationSupport()) }
                 }
                 Button("Privacy") { information = .privacy }
-                Button("AudioNotes Help") { information = .help }
+                Button("Soniquill Help") { information = .help }
                 Button("Third-Party Licenses") { information = .licenses }
-                Text("Use Help → Export Diagnostics for a report that excludes your content and credentials. To make a full backup, quit AudioNotes and copy the data folders described in Help.")
+                Text("Use Help → Export Diagnostics for a report that excludes your content and credentials. To make a full backup, quit Soniquill and copy the data folders described in Help.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 #if DEBUG
@@ -202,9 +202,9 @@ struct ProviderSettingsView: View {
             }
 #endif
 
-            Section("About AudioNotes") {
+            Section("About Soniquill") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("AudioNotes \(ReleaseIdentity().version) (\(ReleaseIdentity().build))")
+                    Text("Soniquill \(ReleaseIdentity().version) (\(ReleaseIdentity().build))")
                         .font(.headline)
                     Text("Native audio transcription, AI summaries, and interactive transcript chat.")
                         .font(.caption)

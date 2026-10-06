@@ -234,7 +234,7 @@ M14.1 commit was altered; no M14.3 work was started.
 
 ## M14.4 — Chat accessibility and keyboard follow-up
 
-Rows are announced "Your message" and "Assistant message" (the visible "You / AudioNotes" header is hidden
+Rows are announced "Your message" and "Assistant message" (the visible "You / Soniquill" header is hidden
 from VoiceOver to avoid repeating it). While an answer streams, the partial text is not exposed: one element,
 "Assistant is working: <phase>" and then "Assistant is responding", and a single "Answer ready" announcement
 at completion, so VoiceOver never rereads a growing response. Elapsed time is excluded from labels. Citation

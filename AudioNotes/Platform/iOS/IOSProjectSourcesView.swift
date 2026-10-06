@@ -23,7 +23,7 @@ struct IOSProjectSourcesView: View {
         List {
             if project.sources.isEmpty && jobs.isEmpty {
                 IOSCreationPrompt(title: "Add project sources", symbol: "doc.badge.plus",
-                    description: "Add PDFs, images and notes so AudioNotes can use them with your recordings.") {
+                    description: "Add PDFs, images and notes so Soniquill can use them with your recordings.") {
                     Button("Add Sources", systemImage: "plus") { showingImporter = true }
                         .accessibilityIdentifier("project.sources.emptyAdd")
                         .modifier(IOSPrimaryAction())

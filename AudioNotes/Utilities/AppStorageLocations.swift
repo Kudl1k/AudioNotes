@@ -17,7 +17,7 @@ enum AppStorageLocations {
     /// On macOS, checks legacy container preferences. On other platforms, this is a no-op.
     static func restorePreferences(
         home: URL = FileManager.default.homeDirectoryForCurrentUser,
-        bundleID: String = Bundle.main.bundleIdentifier ?? "cz.kudladev.AudioNotes",
+        bundleID: String = Bundle.main.bundleIdentifier ?? "cz.kudladev.soniquill",
         defaults: UserDefaults = .standard
     ) {
         MacOSLegacyStorage.restoreLegacyPreferences(home: home, bundleID: bundleID, defaults: defaults)
@@ -28,7 +28,7 @@ enum AppStorageLocations {
     /// On other platforms, resolves against the standard Application Support directory.
     static func applicationSupport(
         home: URL = FileManager.default.homeDirectoryForCurrentUser,
-        bundleID: String = Bundle.main.bundleIdentifier ?? "cz.kudladev.AudioNotes",
+        bundleID: String = Bundle.main.bundleIdentifier ?? "cz.kudladev.soniquill",
         fallback: URL = .applicationSupportDirectory
     ) -> URL {
 #if DEBUG
@@ -45,13 +45,13 @@ enum AppStorageLocations {
 #else
     /// Restores preferences from legacy versions if applicable.
     static func restorePreferences(
-        bundleID: String = Bundle.main.bundleIdentifier ?? "cz.stepankudlacek.audionotes.ios",
+        bundleID: String = Bundle.main.bundleIdentifier ?? "cz.kudladev.soniquill",
         defaults: UserDefaults = .standard
     ) {}
 
     /// Resolves the application support directory on iOS.
     static func applicationSupport(
-        bundleID: String = Bundle.main.bundleIdentifier ?? "cz.stepankudlacek.audionotes.ios",
+        bundleID: String = Bundle.main.bundleIdentifier ?? "cz.kudladev.soniquill",
         fallback: URL = .applicationSupportDirectory
     ) -> URL {
 #if DEBUG

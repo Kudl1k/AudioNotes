@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 @MainActor
 @Observable
 final class ReleaseSupportViewModel {
-    static let diagnosticsFileName = "AudioNotes-Diagnostics.json"
+    static let diagnosticsFileName = "Soniquill-Diagnostics.json"
     static let diagnosticsTypes: [UTType] = [.json]
     static let diagnosticsDisclosure = "Includes app version, macOS, architecture, schema and update availability. Projects, recordings, transcripts, chats, filenames, credentials and logs are excluded."
 

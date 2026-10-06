@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "E817569E306D0BDF00E1DF07"
-               BuildableName = "AudioNotes.app"
+               BuildableName = "Soniquill.app"
                BlueprintName = "AudioNotes"
                ReferencedContainer = "container:AudioNotes.xcodeproj">
             </BuildableReference>
@@ -55,7 +55,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E817569E306D0BDF00E1DF07"
-            BuildableName = "AudioNotes.app"
+            BuildableName = "Soniquill.app"
             BlueprintName = "AudioNotes"
             ReferencedContainer = "container:AudioNotes.xcodeproj">
          </BuildableReference>
@@ -72,7 +72,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E817569E306D0BDF00E1DF07"
-            BuildableName = "AudioNotes.app"
+            BuildableName = "Soniquill.app"
             BlueprintName = "AudioNotes"
             ReferencedContainer = "container:AudioNotes.xcodeproj">
          </BuildableReference>

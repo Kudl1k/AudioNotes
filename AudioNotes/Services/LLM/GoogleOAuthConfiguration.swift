@@ -16,6 +16,10 @@ struct GoogleOAuthConfiguration: Sendable {
 
     static func load(bundle: Bundle = .main) throws -> Self {
 #if os(iOS)
+        guard let configuredBundleID = bundle.object(forInfoDictionaryKey: "GoogleOAuthClientBundleIdentifier") as? String,
+              configuredBundleID == bundle.bundleIdentifier else {
+            throw GoogleOAuthConfigurationError.iOSBundleMismatch
+        }
         guard let clientID = bundle.object(forInfoDictionaryKey: "GoogleOAuthClientID") as? String,
               let redirectScheme = bundle.object(forInfoDictionaryKey: "GoogleOAuthURLScheme") as? String,
               let projectID = bundle.object(forInfoDictionaryKey: "GoogleCloudProjectID") as? String,
@@ -63,6 +67,7 @@ struct GoogleOAuthConfiguration: Sendable {
 
 enum GoogleOAuthConfigurationError: LocalizedError, Equatable {
     case missingFile
+    case iOSBundleMismatch
     case missingIOSClient
     case invalidIOSClient
     case unreadableFile
@@ -70,6 +75,7 @@ enum GoogleOAuthConfigurationError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
+        case .iOSBundleMismatch: "Google sign-in is unavailable until the developer configures an iOS OAuth client for Soniquill’s bundle identifier. API-key authentication remains available."
         case .missingIOSClient: "Google sign-in is unavailable on iOS until its OAuth client, callback URL scheme, and Google Cloud project are configured."
         case .invalidIOSClient: "Google sign-in is unavailable: the iOS callback scheme does not match the configured client ID."
         case .missingFile: "Google sign-in is unavailable: this build does not include GoogleOAuth.json."

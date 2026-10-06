@@ -1,5 +1,7 @@
 # M16.4 — iOS Cloud AI: Transcription, Summary & Recording Chat
 
+Current production identity is **Soniquill**, bundle ID `cz.kudladev.soniquill` on macOS and iOS/iPadOS. Apple Developer setup, physical iPhone installation, App Store Connect and TestFlight (initial 1.0.0 build 1, initial testers) are established, as confirmed by the owner on 2026-10-06. Milestone-era identity/signing statements below are historical and superseded by [SONIQUILL_RENAME.md](SONIQUILL_RENAME.md); individual feature acceptance is not implied. Retain legacy implementation identifiers and the working signing configuration.
+
 ## 1. Executive Summary
 
 M16.4 implementation and automated acceptance are complete under the acceptance amendment. It reuses the existing transcription pipeline, summary generator, chat engine, context retriever, prompt builder, and usage/cost tracking rather than creating a separate mobile AI stack. Gemini transcription is integrated in the shared provider architecture. Live-provider acceptance was not performed because no authorized real account session was available. Physical-device/signing acceptance is intentionally deferred until the company Developer Team and production bundle identity are selected; neither is an M16.4 completion gate.

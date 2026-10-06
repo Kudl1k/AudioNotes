@@ -12,7 +12,7 @@ struct ReleaseCommands: Commands {
             Button("Check for Updates…") { updates.checkForUpdates() }.disabled(!updates.canCheckForUpdates)
         }
         CommandGroup(replacing: .help) {
-            Button("AudioNotes Help") { openInformation(.help) }
+            Button("Soniquill Help") { openInformation(.help) }
             Button("Privacy") { openInformation(.privacy) }
             Button("Third-Party Licenses") { openInformation(.licenses) }
             Divider()

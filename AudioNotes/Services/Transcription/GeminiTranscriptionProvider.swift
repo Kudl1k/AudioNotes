@@ -185,7 +185,7 @@ private actor GeminiTranscriptionHTTPClient {
         start.setValue(String(fileSize), forHTTPHeaderField: "X-Goog-Upload-Header-Content-Length")
         start.setValue("application/json", forHTTPHeaderField: "Content-Type")
         for (key, value) in headers { start.setValue(value, forHTTPHeaderField: key) }
-        start.httpBody = try JSONSerialization.data(withJSONObject: ["file": ["display_name": "AudioNotes audio upload"]])
+        start.httpBody = try JSONSerialization.data(withJSONObject: ["file": ["display_name": "Soniquill audio upload"]])
         let (_, response) = try await session.data(for: start)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
               let uploadURLText = http.value(forHTTPHeaderField: "X-Goog-Upload-URL"),

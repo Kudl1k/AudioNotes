@@ -6,7 +6,7 @@ struct WelcomeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Label("Welcome to AudioNotes", systemImage: "waveform").font(.largeTitle)
+            Label("Welcome to Soniquill", systemImage: "waveform").font(.largeTitle)
             Text("Turn recordings and documents into transcripts, summaries and useful notes.")
             GroupBox("Choose your AI setup") {
                 VStack(alignment: .leading, spacing: 12) {

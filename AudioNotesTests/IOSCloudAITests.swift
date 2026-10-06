@@ -49,7 +49,9 @@ struct IOSCloudAITests {
         #expect(transcriptionSelectable.contains(.localWhisper) == LocalWhisperRuntimeCapabilities.isSupported)
     }
 
-    @Test func iOSGoogleOAuthUsesRegisteredNativeClientAndCallbackScheme() throws {
+    @Test func iOSGoogleOAuthUsesProductionBundleAndNativeCallbackScheme() throws {
+        #expect(Bundle.main.bundleIdentifier == "cz.kudladev.soniquill")
+        #expect(Bundle.main.object(forInfoDictionaryKey: "GoogleOAuthClientBundleIdentifier") as? String == Bundle.main.bundleIdentifier)
         let config = try GoogleOAuthConfiguration.load(bundle: .main)
         #expect(config.redirectScheme == "com.googleusercontent.apps.576974561449-mrqi6hj029poen9emjp0658p09gkd4kt")
         #expect(config.clientID.hasSuffix(".apps.googleusercontent.com"))

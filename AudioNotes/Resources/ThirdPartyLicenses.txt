@@ -1,4 +1,4 @@
-AudioNotes — Third-Party Licenses
+Soniquill — Third-Party Licenses
 
 Models are downloaded on request, not bundled. Each user-installed Ollama model has its own terms. No embedding model is shipped.
 

@@ -1,5 +1,7 @@
 # M16 — iOS / iPadOS port: architecture and portability audit
 
+Current production identity is **Soniquill**, bundle ID `cz.kudladev.soniquill` on macOS and iOS/iPadOS. Apple Developer setup, physical iPhone installation, App Store Connect and TestFlight (initial 1.0.0 build 1, initial testers) are established, as confirmed by the owner on 2026-10-06. Milestone-era identity/signing statements below are historical and superseded by [SONIQUILL_RENAME.md](SONIQUILL_RENAME.md); individual feature acceptance is not implied. Retain legacy implementation identifiers and the working signing configuration.
+
 Status: M16.0 audit, M16.1 boundaries, M16.2 target/navigation, M16.3 audio import/detail, and M16.4 cloud AI completed (2026-10-02).
 Shared/platform boundaries prepared with zero macOS behavior change (see `docs/IOS_PLATFORM_BOUNDARIES.md`).
 iOS target and adaptive navigation shell operational on iPhone/iPad simulators (see `docs/IOS_TARGET_AND_NAVIGATION.md`).

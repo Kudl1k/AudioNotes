@@ -21,11 +21,14 @@ protocol GoogleOAuthClientSecretStoring: Sendable {
 }
 
 actor GoogleOAuthKeychainStore: GoogleOAuthCredentialStoring, GoogleOAuthClientSecretStoring {
+    // Stable lookup identity across the Soniquill product rename.
+    static let defaultService = "cz.kudladev.AudioNotes.provider-credentials"
+
     private let service: String
     private let account = "google-gemini-oauth"
     private let clientSecretAccount = "google-gemini-oauth-client-secret"
 
-    init(service: String = "cz.kudladev.AudioNotes.provider-credentials") { self.service = service }
+    init(service: String = GoogleOAuthKeychainStore.defaultService) { self.service = service }
 
     func load() throws -> GoogleOAuthCredential? {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,

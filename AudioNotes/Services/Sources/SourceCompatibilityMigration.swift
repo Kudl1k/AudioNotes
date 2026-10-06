@@ -9,12 +9,12 @@ struct SourceCompatibilityMigration {
             ensurePrimaryAudio(for: recording, context: context)
             for source in recording.sources where source.status == .processing {
                 source.status = .failed
-                source.processingError = "Processing was interrupted when AudioNotes closed. Reprocess this source."
+                source.processingError = "Processing was interrupted when Soniquill closed. Reprocess this source."
             }
         }
         for source in try context.fetch(FetchDescriptor<RecordingSource>()) where source.project != nil && source.status == .processing {
             source.status = .failed
-            source.processingError = "Processing was interrupted when AudioNotes closed. Retry this source."
+            source.processingError = "Processing was interrupted when Soniquill closed. Retry this source."
         }
         try context.save()
     }

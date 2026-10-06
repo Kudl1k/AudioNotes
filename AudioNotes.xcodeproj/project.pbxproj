@@ -35,10 +35,10 @@
 		AA0000000000000000000001 /* AudioNotesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = AudioNotesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		AC1300000000000000000004 /* Configuration/App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration/App.xcconfig; sourceTree = SOURCE_ROOT; };
-		BB0000000000000000000001 /* AudioNotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioNotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB0000000000000000000001 /* Soniquill.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Soniquill.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB0000000000000000000002 /* Configuration/iOS.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration/iOS.xcconfig; sourceTree = SOURCE_ROOT; };
 		CC0000000000000000000001 /* AudioNotesTests-iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = "AudioNotesTests-iOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		E817569F306D0BDF00E1DF07 /* AudioNotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioNotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E817569F306D0BDF00E1DF07 /* Soniquill.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Soniquill.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -209,8 +209,8 @@
 		E81756A0306D0BDF00E1DF07 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				BB0000000000000000000001 /* AudioNotes.app */,
-				E817569F306D0BDF00E1DF07 /* AudioNotes.app */,
+				BB0000000000000000000001 /* Soniquill.app */,
+				E817569F306D0BDF00E1DF07 /* Soniquill.app */,
 				AA0000000000000000000001 /* AudioNotesTests.xctest */,
 				CC0000000000000000000001 /* AudioNotesTests-iOS.xctest */,
 			);
@@ -265,8 +265,8 @@
 			packageProductDependencies = (
 				AB1000000000000000000002 /* WhisperKit */,
 			);
-			productName = AudioNotes;
-			productReference = BB0000000000000000000001 /* AudioNotes.app */;
+			productName = Soniquill;
+			productReference = BB0000000000000000000001 /* Soniquill.app */;
 			productType = "com.apple.product-type.application";
 		};
 		CC0000000000000000000003 /* AudioNotesTests-iOS */ = {
@@ -308,8 +308,8 @@
 				AB1000000000000000000002 /* WhisperKit */,
 				AC1300000000000000000002 /* Sparkle */,
 			);
-			productName = AudioNotes;
-			productReference = E817569F306D0BDF00E1DF07 /* AudioNotes.app */;
+			productName = Soniquill;
+			productReference = E817569F306D0BDF00E1DF07 /* Soniquill.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -434,7 +434,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cz.kudladev.AudioNotesTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AudioNotes.app/Contents/MacOS/AudioNotes";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Soniquill.app/Contents/MacOS/Soniquill";
 			};
 			name = Debug;
 		};
@@ -453,7 +453,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cz.kudladev.AudioNotesTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AudioNotes.app/Contents/MacOS/AudioNotes";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Soniquill.app/Contents/MacOS/Soniquill";
 			};
 			name = Release;
 		};
@@ -464,7 +464,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				DEVELOPMENT_TEAM = MTYBUX7QS6;
-				PRODUCT_NAME = AudioNotes;
+				PRODUCT_NAME = Soniquill;
 			};
 			name = Debug;
 		};
@@ -475,7 +475,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				DEVELOPMENT_TEAM = MTYBUX7QS6;
-				PRODUCT_NAME = AudioNotes;
+				PRODUCT_NAME = Soniquill;
 			};
 			name = Release;
 		};
@@ -498,7 +498,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AudioNotes.app/AudioNotes";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Soniquill.app/Soniquill";
 			};
 			name = Debug;
 		};
@@ -521,7 +521,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AudioNotes.app/AudioNotes";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Soniquill.app/Soniquill";
 			};
 			name = Release;
 		};
@@ -668,7 +668,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Soniquill;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -701,7 +701,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Soniquill;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Native, selectable local help/privacy/license text; no web-based primary UI.
 struct ReleaseInformationView: View {
-    enum Page: String, Identifiable, Codable, Hashable { case help = "AudioNotes Help", privacy = "Privacy", licenses = "Third-Party Licenses"; var id: String { rawValue } }
+    enum Page: String, Identifiable, Codable, Hashable { case help = "Soniquill Help", privacy = "Privacy", licenses = "Third-Party Licenses"; var id: String { rawValue } }
     static let windowID = "information"
     let page: Page
     @Environment(\.dismiss) private var dismiss

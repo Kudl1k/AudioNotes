@@ -1,5 +1,7 @@
 # M16.4 — iOS account authentication and provider capabilities
 
+Current production identity is **Soniquill**, bundle ID `cz.kudladev.soniquill` on macOS and iOS/iPadOS. Apple Developer setup, physical iPhone installation, App Store Connect and TestFlight (initial 1.0.0 build 1, initial testers) are established, as confirmed by the owner on 2026-10-06. Milestone-era identity/signing statements below are historical and superseded by [SONIQUILL_RENAME.md](SONIQUILL_RENAME.md); individual feature acceptance is not implied. Retain legacy implementation identifiers and the working signing configuration.
+
 Research checked **October 2, 2026** against first-party provider documentation. This report records what the APIs authorize; a connected identity is never treated as inference entitlement.
 
 ## Findings and capability matrix
@@ -31,9 +33,16 @@ Google's documented Gemini OAuth path authorizes the **Gemini Developer API** us
 
 The app's macOS path requests `openid`, `email`, `cloud-platform`, and `generative-language.retriever`, validates state, uses PKCE and the system browser, then stores access/refresh tokens in Keychain. Refresh is serialized by the OAuth actor, rotates the refresh token when returned, and clears unusable credentials on `invalid_grant`. Disconnect attempts provider revocation and always removes the local grant. No Gemini CLI credentials, browser cookies, or private endpoints are copied. The documented Google OAuth quickstart is explicitly a simplified testing flow; production deployment still requires Google consent-screen/scope review and live account validation. Google documents Gemini API OAuth at the API level; this is not a Gemini Advanced subscription path.
 
-The iOS target currently uses development OAuth configuration: an iOS client ID, its registered reversed-client-ID callback scheme, and a non-secret Google Cloud project ID in Info.plist. Google binds an iOS OAuth client to the app's bundle identifier; its redirect scheme is derived from the OAuth client ID. When the production bundle identifier is chosen, update the Google iOS OAuth client registration and app configuration. If Google prevents editing the existing client (for example, an App Check-protected client), create a new iOS client and replace both client ID and reversed-client-ID URL scheme. The Google OAuth client Team ID is optional unless App Check is enabled; AudioNotes does not enable App Check. The current callback scheme is not derived from Apple's Team ID. macOS retains the separate Desktop client and loopback callback. Never send the iOS client through the Desktop loopback flow. [Google iOS OAuth client setup](https://developers.google.com/identity/protocols/oauth2/native-app) · [Google iOS URL scheme setup](https://developers.google.com/identity/sign-in/ios/start-integrating).
+The iOS target currently uses development OAuth configuration: an iOS client ID, its registered reversed-client-ID callback scheme, and a non-secret Google Cloud project ID in Info.plist. Google binds an iOS OAuth client to the app's bundle identifier; its redirect scheme is derived from the OAuth client ID. The production bundle is now `cz.kudladev.soniquill`; the owner confirmed the existing Google Cloud iOS client registration was updated to that identity on 2026-10-06. The local OAuth declaration is now aligned, with the existing client ID and callback scheme retained. Configuration alignment is complete; live signed-device OAuth acceptance remains OPEN. The Console change was performed by the owner, not automatically by this task. If Google prevents editing the existing client (for example, an App Check-protected client), create a new iOS client and replace both client ID and reversed-client-ID URL scheme. The Google OAuth client Team ID is optional unless App Check is enabled; AudioNotes does not enable App Check. The current callback scheme is not derived from Apple's Team ID. macOS retains the separate Desktop client and loopback callback. Never send the iOS client through the Desktop loopback flow. [Google iOS OAuth client setup](https://developers.google.com/identity/protocols/oauth2/native-app) · [Google iOS URL scheme setup](https://developers.google.com/identity/sign-in/ios/start-integrating).
 
-The current `cz.stepankudlacek.audionotes.ios` bundle identifier is a development/project value, not a finalized production identity. ChatGPT's required `127.0.0.1` redirect is independent of bundle identifier and Apple Team ID. Its issued client ID and installation host ID belong to the auth session. The app's Keychain items use the platform's default app access group; changing the signing team or bundle identity may make existing credentials inaccessible, so account reauthorization should be expected unless a valid same-team migration path is established. Signing was not changed; existing iOS project settings contain a `DEVELOPMENT_TEAM` value with automatic signing, while Simulator builds use code-sign identity `-`. Ownership of that existing team value was not verified, and no new personal team was selected. No production App ID, production capability, App Store Connect record, certificate, or provisioning profile was created for this work.
+The final production bundle identifier is `cz.kudladev.soniquill`. The previous
+`cz.stepankudlacek.audionotes.ios` sandbox is a development installation and must
+not be migrated automatically. Existing Soniquill/TestFlight data, preferences,
+Keychain credentials and OAuth state are the compatibility baseline. Preserve the
+established team, bundle, provisioning and entitlements. ChatGPT's loopback redirect
+is independent of bundle identifier and Apple Team ID; service/account identifiers
+and installation host ID remain unchanged. Physical installation is confirmed,
+but signed account continuity requires separate feature-specific evidence.
 
 The Gemini summary/chat implementation currently uses the Gemini Developer API `generateContent` and `streamGenerateContent` endpoints with OAuth bearer credentials and the configured Cloud project. Transcription uses `v1beta/interactions` with Gemini 3.5 Transcribe. It maps `word_info` offsets to `TranscriptSegment.startTime/endTime` and anonymous diarization IDs to “Speaker N”; schema-frozen metadata such as Gemini's confidence values, word-level annotation types, or richer speaker metadata cannot be retained. Google does not expose a transcription duration cost estimate in the interaction response currently consumed, so transcription cost remains unavailable rather than zero. Gemini model listing and live OAuth acceptance remain manual verification items.
 
@@ -48,7 +57,7 @@ The Gemini summary/chat implementation currently uses the Gemini Developer API `
 
 ## iOS, macOS, and status
 
-Settings presents ChatGPT and Google connection controls separately from AI defaults and shows the ChatGPT plan grant separately from identity. macOS ChatGPT behavior remains on its existing shared auth service, and macOS Google OAuth uses its Desktop client. iPhone and iPad Simulator suites pass. No live credentials are used by tests. Live provider testing was not performed because no authorized real account session was available in this environment; physical-device acceptance is intentionally deferred and does not block M16.4 under the acceptance amendment.
+Settings presents ChatGPT and Google connection controls separately from AI defaults and shows the ChatGPT plan grant separately from identity. macOS ChatGPT behavior remains on its existing shared auth service, and macOS Google OAuth uses its Desktop client. iPhone and iPad Simulator suites pass. No live credentials are used by tests. Live provider testing was not performed because no authorized real account session was available in this environment; feature-specific physical-device acceptance remains open and does not block M16.4 under the acceptance amendment.
 
 | Evidence state | ChatGPT | Google/Gemini |
 |---|---|---|
@@ -56,14 +65,15 @@ Settings presents ChatGPT and Google connection controls separately from AI defa
 | Implemented in AudioNotes | Shared account flow, refresh/revocation, Responses summary/chat; not transcription | iOS ASWebAuthenticationSession, summary/chat, shared transcription provider |
 | Automated validation | Auth/provider tests; full macOS and iPhone/iPad Simulator suites/builds | OAuth/provider/mapping tests; full macOS and iPhone/iPad Simulator suites/builds |
 | Live provider tested | Not performed; no authorized real account session was available | Not performed; no authorized real account session was available |
-| Physical iPhone tested | Deferred until final Apple Team/bundle identity and release signing are selected | Deferred until final Apple Team/bundle identity and release signing are selected |
+| Physical iPhone installation | Confirmed; ChatGPT-specific device tests remain unverified | Confirmed; Google-specific device tests remain unverified |
 
-## Physical Device / Signing Acceptance — deferred release work
+## Physical-device feature acceptance — remaining follow-up
 
-This manual acceptance debt belongs to the release/signing milestone and does not block M16.4. Do not select a personal Developer Team, register the development bundle ID, create profiles/certificates, or install on a physical phone to close M16.4. When the owning Apple Developer Team and permanent bundle ID are finalized, the release handoff must cover:
+Apple signing, App ID setup, physical iPhone installation, App Store Connect and
+TestFlight distribution are established. Do not recreate that setup to close old
+M16.4 acceptance debt. Installation alone does not prove account/provider tests.
+Remaining manual feature checks:
 
-- Confirm the final company Developer Team and permanent production bundle identifier; register the production App ID and required capabilities only then.
-- Configure provisioning/signing and install on a physical iPhone; then prepare TestFlight/App Store records in the release milestone.
 - ChatGPT: sign in and verify the loopback callback while AudioNotes is backgrounded, relaunch/account persistence, token refresh, model listing, eligible inference, and disconnect.
 - Google: verify the production iOS OAuth client and callback, relaunch/Keychain persistence, token refresh, inference, and disconnect.
 - Verify background/foreground transitions, VoiceOver, and device-specific audio playback.

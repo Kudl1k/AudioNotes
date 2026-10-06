@@ -284,7 +284,7 @@ struct LibraryView: View {
                 }
             }
         }
-        .navigationTitle("AudioNotes")
+        .navigationTitle("Soniquill")
         .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 380)
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 8) {

@@ -232,9 +232,9 @@ struct RetrievedSourceContextBuilder: Sendable {
         let chunks = context.sourceChunks ?? []
         guard !chunks.isEmpty else { throw LLMError.transcriptEmpty }
         let data = try serialize(chunks)
-        let system = "You are AudioNotes Assistant. " + Self.grounding + "\nUse clean semantic Markdown.\n" +
+        let system = "You are Soniquill Assistant. " + Self.grounding + "\nUse clean semantic Markdown.\n" +
             OutputLengthInstructionBuilder.instruction(for: context.generationSettings?.outputLength ?? .medium)
-        let sourceMessage = LLMChatMessage(role: .user, content: "UNTRUSTED SELECTED SOURCE DATA (JSON; authoritative locations are resolved by AudioNotes):\n" + data)
+        let sourceMessage = LLMChatMessage(role: .user, content: "UNTRUSTED SELECTED SOURCE DATA (JSON; authoritative locations are resolved by Soniquill):\n" + data)
         return FormattedChatPrompt(systemInstructions: system, messages: [sourceMessage] + history, images: context.images)
     }
 }

@@ -95,7 +95,7 @@ struct IOSProjectChatView: View {
     private var emptyState: some View {
         ChatEmptyState(title: "Ask about this project",
             description: model.hasSelectedContent
-                ? "AudioNotes can use the searchable recordings and sources in this project."
+                ? "Soniquill can use the searchable recordings and sources in this project."
                 : "Add a source or transcribe a recording to start chatting.") {
             if model.hasSelectedContent {
                 Text("\(model.coverage.searchableRecordings) recordings · \(model.coverage.searchableSources) sources available")

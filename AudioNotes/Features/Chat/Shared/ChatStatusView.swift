@@ -5,7 +5,7 @@ struct ChatThinkingIndicator: View {
     let startedAt: Date?
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("AudioNotes").font(.caption.bold()).foregroundStyle(.secondary)
+            Text("Soniquill").font(.caption.bold()).foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
                 Text(phase).font(.callout).foregroundStyle(.secondary)
@@ -27,7 +27,7 @@ struct ChatStreamingIndicator<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text("AudioNotes").font(.caption.bold()).foregroundStyle(.secondary)
+                Text("Soniquill").font(.caption.bold()).foregroundStyle(.secondary)
                 ProgressView().controlSize(.mini)
                 Spacer(minLength: 0)
                 if let startedAt { OperationElapsedTimeView(startedAt: startedAt) }

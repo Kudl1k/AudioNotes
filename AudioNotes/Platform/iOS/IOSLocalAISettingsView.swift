@@ -35,9 +35,9 @@ struct IOSLocalAISettingsView: View {
                     Text("Summary · Recording Chat · Project Chat").font(.caption).foregroundStyle(.secondary)
                     Text("4,096-token context · Text only · No API charge").font(.caption).foregroundStyle(.secondary)
                 }.accessibilityIdentifier("localAI.languageModel")
-            } header: { Text("Language Models") } footer: { Text("Apple manages this model through Apple Intelligence in system Settings. AudioNotes cannot download, delete, measure its storage, or select its version. Requires iOS 26 on an eligible device; enabling Apple Intelligence is your choice.") } }
+            } header: { Text("Language Models") } footer: { Text("Apple manages this model through Apple Intelligence in system Settings. Soniquill cannot download, delete, measure its storage, or select its version. Requires iOS 26 on an eligible device; enabling Apple Intelligence is your choice.") } }
             if show("storage") { Section("Storage") {
-                LabeledContent("AudioNotes Models", value: services.localAISettings.storageBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "Unavailable")
+                LabeledContent("Soniquill Models", value: services.localAISettings.storageBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "Unavailable")
                     .accessibilityIdentifier("localAI.storage")
                 Text("Whisper models live in Application Support, are excluded from backups, and remain available offline until you delete them. Apple Intelligence storage is managed separately by iOS.")
                     .font(.footnote).foregroundStyle(.secondary)

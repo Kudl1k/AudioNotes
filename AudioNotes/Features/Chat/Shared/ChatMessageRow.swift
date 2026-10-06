@@ -27,7 +27,7 @@ struct ChatMessageRow<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 // The row's accessibility label already names the speaker.
-                Text(presentation.role == .user ? "You" : "AudioNotes").font(.caption.bold()).foregroundStyle(.secondary)
+                Text(presentation.role == .user ? "You" : "Soniquill").font(.caption.bold()).foregroundStyle(.secondary)
                     .accessibilityHidden(true)
                 if presentation.role == .assistant { GenerationDetailsButton(generationID: presentation.generationID) }
                 if presentation.interrupted { Text("Interrupted").font(.caption).foregroundStyle(.secondary) }

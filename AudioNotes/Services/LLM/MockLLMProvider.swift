@@ -89,7 +89,7 @@ final class MockLLMProvider: LLMProvider {
             break
         }
 
-        let overview = "This recording covers key technical and architectural decisions for AudioNotes. " +
+        let overview = "This recording covers key technical and architectural decisions for Soniquill. " +
             "Discussion focused on clean provider abstractions, robust error resilience, and maintaining privacy with Keychain credentials."
 
         return Summary(
@@ -103,7 +103,7 @@ final class MockLLMProvider: LLMProvider {
             openQuestions: openQuestions,
             importantQuotes: importantQuotes,
             additionalSections: sections,
-            title: "AudioNotes Architecture and Privacy Decisions"
+            title: "Soniquill Architecture and Privacy Decisions"
         )
     }
 

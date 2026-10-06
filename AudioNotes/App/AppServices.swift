@@ -19,7 +19,7 @@ final class AppServices {
     let googleGeminiOAuth = GoogleGeminiOAuthService()
 
     init() {
-        AppStorageLocations.restorePreferences()
+        if !BuildEnvironment.isDevelopmentHost { AppStorageLocations.restorePreferences() }
 #if DEBUG && os(iOS)
         if ProcessInfo.processInfo.arguments.contains("--performance-fixtures") {
             let reviewDefaults = UserDefaults(suiteName: "AudioNotes-iOS-UX-Review")!

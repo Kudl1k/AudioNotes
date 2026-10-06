@@ -70,7 +70,7 @@ struct ChatContextBuilder: Sendable {
         let formattedTranscript = try formatSegments(context.retrievedSegments ?? context.transcript.segmentSnapshots)
 
         var systemLines: [String] = [
-            "You are AudioNotes Assistant, an intelligent conversational partner helping the user explore and understand this specific audio recording.",
+            "You are Soniquill Assistant, an intelligent conversational partner helping the user explore and understand this specific audio recording.",
             "",
             "CRITICAL GROUNDING RULES:",
             "1. Authoritative Source: Answer strictly using facts and information stated in the TRANSCRIPT below.",

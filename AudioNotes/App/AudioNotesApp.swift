@@ -13,7 +13,7 @@ struct AudioNotesApp: App {
     private var container: ModelContainer? { startup.container }
 
     var body: some Scene {
-        WindowGroup("AudioNotes", id: "library") {
+        WindowGroup("Soniquill", id: "library") {
             if let container {
 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--performance-fixtures") {
@@ -61,7 +61,7 @@ struct AudioNotesApp: App {
                 .frame(minWidth: 580, minHeight: 520)
             } else {
                 ContentUnavailableView("Settings unavailable", systemImage: "externaldrive.badge.exclamationmark",
-                                       description: Text("AudioNotes could not initialize its local database."))
+                                       description: Text("Soniquill could not initialize its local database."))
                     .frame(minWidth: 580, minHeight: 520)
             }
         }

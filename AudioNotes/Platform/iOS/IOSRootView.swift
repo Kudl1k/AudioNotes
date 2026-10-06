@@ -218,7 +218,7 @@ struct IOSRootView: View {
             .navigationDestination(for: LibraryDestination.self) { value in
                 destinationView(value)
             }
-            .navigationTitle("AudioNotes")
+            .navigationTitle("Soniquill")
             .toolbar {
                 if destination == .allRecordings || destination == nil {
                     ToolbarItem(placement: .topBarTrailing) { importButton }
@@ -276,7 +276,7 @@ struct IOSRootView: View {
                     }
                 }
             }
-            .navigationTitle("AudioNotes")
+            .navigationTitle("Soniquill")
             .toolbar {
                 if destination == .allRecordings || destination == nil {
                     ToolbarItem(placement: .topBarTrailing) { importButton }

@@ -45,7 +45,7 @@ struct ClaudeCLIConnectionView: View {
             }
             Text("Uses your installed Claude Code and its existing account login. Claude Code handles credentials and opens your browser when signing in. You can also run claude auth login in Terminal, then refresh here.")
                 .font(.caption).foregroundStyle(.secondary)
-            Text("Choose Anthropic Claude for summaries or chat in General. Source text is sent to Claude; original files and images stay local. Usage may consume subscription limits or paid usage credits; AudioNotes cannot determine the billed amount.")
+            Text("Choose Anthropic Claude for summaries or chat in General. Source text is sent to Claude; original files and images stay local. Usage may consume subscription limits or paid usage credits; Soniquill cannot determine the billed amount.")
                 .font(.caption).foregroundStyle(.secondary)
             Link("Install Claude Code…", destination: URL(string: "https://code.claude.com/docs/en/setup")!)
         }

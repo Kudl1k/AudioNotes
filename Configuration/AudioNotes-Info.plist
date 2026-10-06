@@ -18,7 +18,7 @@
 		</dict>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>AudioNotes connects to the Ollama and llama.cpp servers you choose on your local network to discover models and generate summaries and chat responses.</string>
+	<string>Soniquill connects to the Ollama and llama.cpp servers you choose on your local network to discover models and generate summaries and chat responses.</string>
 	<key>SUAutomaticallyUpdate</key>
 	<false/>
 	<key>SUEnableSystemProfiling</key>
@@ -37,7 +37,7 @@
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>AudioNotes recording reference</string>
+			<string>Soniquill recording reference</string>
 			<key>UTTypeIdentifier</key>
 			<string>com.audionotes.recording-reference</string>
 		</dict>

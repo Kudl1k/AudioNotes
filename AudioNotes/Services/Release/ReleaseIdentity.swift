@@ -8,7 +8,7 @@ struct ReleaseIdentity: Codable, Sendable {
     let copyright: String
 
     init(bundle: Bundle = .main) {
-        name = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "AudioNotes"
+        name = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Soniquill"
         bundleIdentifier = bundle.bundleIdentifier ?? "unknown"
         version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"

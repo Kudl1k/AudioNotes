@@ -74,7 +74,7 @@ final class ChatGPTAuthService: ObservableObject, ChatGPTAuthenticating {
     private let urlSession: URLSession
     private let sessionStore: any ChatGPTSessionStoring
 
-    private static let appName = "AudioNotes"
+    private static let appName = "Soniquill"
     private static let authorizeBaseURL = "https://auth.openai.com/api/accounts/authorize"
     private static let tokenURL = "https://auth.openai.com/api/accounts/oauth/token"
     private static let revokeURL = "https://auth.openai.com/api/accounts/oauth/revoke"

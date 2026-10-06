@@ -1,4 +1,4 @@
-# AudioNotes release checklist
+# Soniquill release checklist
 
 ## One-time setup
 
@@ -15,7 +15,7 @@
 ## Each candidate
 
 - [ ] Update `Configuration/Version.xcconfig`; semantic version and build are unique/increasing.
-- [ ] Add `docs/release/<version>.md`; use tag `v<version>` and title `AudioNotes <version>`.
+- [ ] Add `docs/release/<version>.md`; use tag `v<version>` and title `Soniquill <version>`.
 - [ ] Check `origin` resolves to the intended GitHub owner/repository; ensure a clean checkout.
 - [ ] Run Debug suite and release-tool tests; build optimized Release.
 - [ ] Review warnings, concurrency issues, secrets, release-only fixture/UI/logs, outbound hosts, Keychain services, entitlements and third-party/model notices.
@@ -38,4 +38,4 @@ P0: user data loss/corruption, credential/privacy/security breach, app fails to 
 
 ## Current status (2026-10-01)
 
-Repository-side custom Actions Pages deployment and signed-feed validator are prepared. One-time Pages setting is still off. Public appcast and v1 DMG are 404/not yet published. No Developer ID identity, notarytool profile or Sparkle private signing key is available on the release Mac. Full release, notarization, clean-machine, production provider, accessibility/performance, live update, bug-bash and distribution checks remain open. The application is not ready to distribute as v1.0.0.
+Historical macOS direct-distribution audit (2026-10-01; not the current iOS release state): repository-side custom Actions Pages deployment and signed-feed validator are prepared. One-time Pages setting is still off. Public appcast and v1 DMG are 404/not yet published. No Developer ID identity, notarytool profile or Sparkle private signing key is available on the release Mac. Full release, notarization, clean-machine, production provider, accessibility/performance, live update, bug-bash and distribution checks remain open. These macOS direct-distribution checks do not negate the confirmed iOS App Store Connect upload/TestFlight distribution of Soniquill 1.0.0 build 1. See [the established release baseline](SONIQUILL_RENAME.md#established-apple-release-state).

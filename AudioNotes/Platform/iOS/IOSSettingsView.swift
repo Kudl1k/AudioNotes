@@ -68,7 +68,7 @@ struct IOSSettingsView: View {
                     Button("Usage & Costs") { showingUsage = true }.accessibilityIdentifier("settings.usage")
                 }
                 Section("About") {
-                    NavigationLink("About AudioNotes") { Form { aboutSection }.navigationTitle("About AudioNotes") }
+                    NavigationLink("About Soniquill") { Form { aboutSection }.navigationTitle("About Soniquill") }
                 }
             }
             .sheet(isPresented: $showingUsage) { UsageCostView() }
@@ -448,7 +448,7 @@ struct IOSSettingsView: View {
             HStack {
                 Text("Application")
                 Spacer()
-                Text("AudioNotes").foregroundStyle(.secondary)
+                Text("Soniquill").foregroundStyle(.secondary)
             }
             HStack {
                 Text("Version")
