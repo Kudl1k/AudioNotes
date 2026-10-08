@@ -25,12 +25,12 @@ Use Xcode 27 for project format `objectVersion = 110`. GitHub Actions uses the
 `macos-26` runner's default Xcode 26.6 cannot open this project. Keep the project
 format and established signing configuration unchanged.
 
-The native Vision OCR integration test assigns Core ML's CPU device to Vision's
-main stage before capability queries. Querying Vision's supported devices first
-can initialize its default Neural Engine backend, which fails on hosted macOS VMs.
-Application requests retain Vision's default device selection. Download state tests keep their assertions
-and use a bounded 60-second polling deadline to accommodate hosted-runner scheduling.
-See [Apple's Vision compute-device API](https://developer.apple.com/documentation/vision/vnrequest/setcomputedevice(_:for:)).
+The native Vision OCR integration test requires Apple Neural Engine hardware and
+is conditionally enabled when an `MLComputeDevice.neuralEngine` device is present;
+hosted macOS VMs lack Neural Engine acceleration, so the test is automatically skipped
+in those environments while application requests retain Vision's default device selection.
+Download state tests keep their assertions and use a bounded 60-second polling deadline
+to accommodate hosted-runner scheduling.
 
 ```sh
 xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes \

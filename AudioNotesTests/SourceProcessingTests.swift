@@ -6,6 +6,13 @@ import Vision
 @testable import AudioNotes
 
 struct SourceProcessingTests {
+    private static var hasNeuralEngine: Bool {
+        MLComputeDevice.allComputeDevices.contains { device in
+            if case .neuralEngine = device { return true }
+            return false
+        }
+    }
+
     @Test func nativePDFPreservesEveryPageAndUnicodeWithoutOCR() async throws {
         let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
         let pdf = workspace.root.appending(path: "slides.pdf")
@@ -71,19 +78,12 @@ struct SourceProcessingTests {
         #expect(result.units.isEmpty)
         #expect(!result.warnings.isEmpty)
     }
-    @Test(arguments: ["English operating systems", "Příliš žluťoučký kůň"])
+    @Test(
+        .enabled(if: hasNeuralEngine, "Vision OCR requires Apple Neural Engine which is unavailable on hosted macOS virtual machines"),
+        arguments: ["English operating systems", "Příliš žluťoučký kůň"]
+    )
     func realVisionOCRPreservesEnglishAndCzech(text: String) async throws {
-        // Assign the CPU before any Vision capability query: querying Vision's
-        // supported devices can initialize its default ANE backend on hosted VMs.
-        let ocr = VisionOCRService { request in
-            let cpu = try #require(MLComputeDevice.allComputeDevices.first { device in
-                if case .cpu = device { return true }
-                return false
-            }, "The OCR integration test requires a CPU compute device")
-            request.setComputeDevice(cpu, for: .main)
-            #expect(request.computeDevice(for: .main) == cpu)
-        }
-        let output = try await ocr.recognize(sourceTestImage(text: text)).map(\.text).joined(separator: " ")
+        let output = try await VisionOCRService().recognize(sourceTestImage(text: text)).map(\.text).joined(separator: " ")
         #expect(!output.isEmpty)
         #expect(output.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).contains(text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)), "OCR result: \(output)")
         if text.contains("ů") { #expect(output.contains { "říšťčýůň".contains($0) }, "OCR should preserve recognized Unicode") }
