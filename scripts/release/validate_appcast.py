@@ -22,7 +22,7 @@ VERSION = r"[0-9]+\.[0-9]+\.[0-9]+"
 
 
 def https_download(url, destination, limit):
-    request = urllib.request.Request(url, headers={"User-Agent": "AudioNotes-release-validation"})
+    request = urllib.request.Request(url, headers={"User-Agent": "Soniquill-release-validation"})
     with urllib.request.urlopen(request, timeout=60) as response:
         if urllib.parse.urlsplit(response.url).scheme != "https":
             raise ValueError("Download redirected away from HTTPS")
@@ -54,7 +54,9 @@ def verify_signature(path, public_key, signature):
                            check=True, capture_output=True)
 
 
-def validate(feed, repository, public_key, offline_artifacts=None):
+def validate(feed, repository, public_key, offline_artifacts=None, channel="stable"):
+    if channel not in ("stable", "preview"):
+        raise ValueError("Unknown release channel")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("Invalid GitHub repository identity")
     data = Path(feed).read_bytes()
@@ -77,8 +79,13 @@ def validate(feed, repository, public_key, offline_artifacts=None):
         if int(build) in seen:
             raise ValueError("Duplicate build number")
         seen.add(int(build))
-        name = f"AudioNotes-{version}.dmg"
-        expected = f"https://github.com/{repository}/releases/download/v{version}/{name}"
+        if channel == "preview":
+            name = f"Soniquill-{version}-b{build}-preview.dmg"
+            tag = f"preview-v{version}-b{build}"
+        else:
+            name = f"Soniquill-{version}.dmg"
+            tag = f"v{version}"
+        expected = f"https://github.com/{repository}/releases/download/{tag}/{name}"
         if enclosure.get("url") != expected:
             raise ValueError("Enclosure must reference the corresponding real GitHub Release DMG")
         length = int(enclosure.get("length", "0"))
@@ -105,6 +112,7 @@ def main():
     parser.add_argument("--repository", required=True)
     parser.add_argument("--public-key", default=os.environ.get("SPARKLE_PUBLIC_ED_KEY"))
     parser.add_argument("--offline-artifacts")
+    parser.add_argument("--channel", choices=["stable", "preview"], default="stable")
     parser.add_argument("--compare", help="Require downloaded feed to match the deployed file exactly")
     args = parser.parse_args()
     try:
@@ -112,7 +120,7 @@ def main():
             raise ValueError("SPARKLE_PUBLIC_ED_KEY must contain the public update key")
         if args.compare and Path(args.feed).read_bytes() != Path(args.compare).read_bytes():
             raise ValueError("Public feed differs from validated deployment artifact")
-        validate(args.feed, args.repository, args.public_key, args.offline_artifacts)
+        validate(args.feed, args.repository, args.public_key, args.offline_artifacts, args.channel)
     except Exception as error:
         # Never dump HTTP headers, environments, auth/configuration or subprocess output.
         print(f"Appcast validation failed: {type(error).__name__}: {error}", file=sys.stderr)

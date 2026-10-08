@@ -25,7 +25,17 @@ output="$root/release-artifacts/$version-$build"
 derived="$output/DerivedData"
 printf 'Repository: %s\nVersion: %s (%s)\nExpected Pages feed: %s\n' "$repository" "$version" "$build" "$feed"
 if [[ "$mode" == --check ]]; then
-    security find-identity -v -p codesigning | sed -n '/Developer ID Application/p'
+    identities="$(security find-identity -v -p codesigning)"
+    if ! printf '%s\n' "$identities" | grep 'Developer ID Application:'; then
+        echo 'BLOCKED: no Developer ID Application signing identity installed.'
+    fi
+    if [[ -z "${NOTARY_PROFILE:-}" ]]; then
+        echo 'BLOCKED: NOTARY_PROFILE is not configured in this shell.'
+    else
+        xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" --output-format json >/dev/null
+        echo 'Notarization Keychain profile verified.'
+    fi
+    [[ -z "$(git status --porcelain)" ]] || echo 'BLOCKED: signed packaging requires a clean validated checkout.'
     echo 'Packaging requires DEVELOPER_ID_APPLICATION (certificate name), NOTARY_PROFILE (Keychain profile name), and SPARKLE_PUBLIC_ED_KEY (public key).'
     echo 'No private key/password is accepted or printed by this script.'
     exit 0
@@ -34,22 +44,22 @@ if [[ "$mode" == --publish ]]; then
     command -v gh >/dev/null || { echo 'GitHub CLI must be installed and authenticated on the release workstation.'; exit 1; }
     : "${SPARKLE_PUBLIC_ED_KEY:?Set the existing Sparkle public key}"
     : "${RELEASE_ACCEPTANCE_FILE:?Path to the human acceptance JSON for this exact candidate}"
-    [[ -f "$output/AudioNotes-$version.dmg" && -f "$output/feed/appcast.xml" ]] || { echo 'Run --package and complete acceptance before publishing.'; exit 1; }
+    [[ -f "$output/Soniquill-$version.dmg" && -f "$output/feed/appcast.xml" ]] || { echo 'Run --package and complete acceptance before publishing.'; exit 1; }
     [[ "$(cat "$output/source-revision.txt")" == "$(git rev-parse HEAD)" && -z "$(git status --porcelain)" ]] || { echo 'Candidate source no longer matches clean checkout.'; exit 1; }
     (cd "$output" && shasum -a 256 -c SHA256SUMS)
     python3 - "$RELEASE_ACCEPTANCE_FILE" "$output" "$version" "$build" <<'PYACCEPT'
 import hashlib,json,pathlib,sys
 accept=json.load(open(sys.argv[1])); folder=pathlib.Path(sys.argv[2]); version,build=sys.argv[3:]
-expected={"version":version,"build":build,"source_revision":(folder/"source-revision.txt").read_text().strip(),"dmg_sha256":hashlib.sha256((folder/f"AudioNotes-{version}.dmg").read_bytes()).hexdigest()}
+expected={"version":version,"build":build,"source_revision":(folder/"source-revision.txt").read_text().strip(),"dmg_sha256":hashlib.sha256((folder/f"Soniquill-{version}.dmg").read_bytes()).hexdigest()}
 if any(accept.get(k)!=v for k,v in expected.items()): raise SystemExit('Acceptance record does not identify this exact candidate')
 for check in ['clean_machine','quarantine','signed_update','data_preserved','models_preserved','voiceover','bug_bash','no_p0_p1']:
  if accept.get(check) is not True: raise SystemExit('Incomplete human release acceptance: '+check)
 PYACCEPT
-    xcrun stapler validate "$output/AudioNotes-$version.dmg"
-    codesign --verify --verbose=2 "$output/AudioNotes-$version.dmg"
-    spctl --assess --type open --context context:primary-signature --verbose=2 "$output/AudioNotes-$version.dmg"
+    xcrun stapler validate "$output/Soniquill-$version.dmg"
+    codesign --verify --verbose=2 "$output/Soniquill-$version.dmg"
+    spctl --assess --type open --context context:primary-signature --verbose=2 "$output/Soniquill-$version.dmg"
     python3 scripts/release/validate_appcast.py "$output/feed/appcast.xml" --repository "$repository" --offline-artifacts "$output/feed"
-    gh release create "v$version" --repo "$repository" --target "$(git rev-parse HEAD)" --title "Soniquill $version" --notes-file "docs/release/$version.md" --draft "$output/AudioNotes-$version.dmg" "$output/SHA256SUMS" "$output/feed/appcast.xml"
+    gh release create "v$version" --repo "$repository" --target "$(git rev-parse HEAD)" --title "Soniquill $version" --notes-file "docs/release/$version.md" --draft "$output/Soniquill-$version.dmg" "$output/SHA256SUMS" "$output/feed/appcast.xml"
     gh release edit "v$version" --repo "$repository" --draft=false
     gh workflow run publish-appcast.yml --repo "$repository" --ref main -f "release_tag=v$version"
     echo 'Release published; Pages dispatched. Verify the public feed and actual installed update before announcing.'
@@ -72,13 +82,15 @@ if [[ "$mode" != --dry-run ]]; then
 fi
 mkdir -p "$output"
 # Debug and Release are built separately; all native offline tests are required.
-xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes -configuration Debug -destination 'platform=macOS,arch=arm64' -derivedDataPath "$derived" CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES test > "$output/tests.log" 2>&1
+xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes -configuration Debug -destination 'platform=macOS,arch=arm64' -derivedDataPath "$derived" CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES -parallel-testing-enabled NO test > "$output/tests.log" 2>&1
 python3 -m unittest discover -s scripts/release -p 'test_*.py' > "$output/tooling-tests.log" 2>&1
 if [[ "$mode" == --dry-run ]]; then
     xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes -configuration Release -destination 'generic/platform=macOS' -derivedDataPath "$derived" -archivePath "$output/AudioNotes.xcarchive" CODE_SIGNING_ALLOWED=NO archive > "$output/archive.log" 2>&1
     app="$output/AudioNotes.xcarchive/Products/Applications/Soniquill.app"
-    dmg="$output/UNSIGNED-DO-NOT-DISTRIBUTE-AudioNotes-$version.dmg"
+    dmg="$output/UNSIGNED-DO-NOT-DISTRIBUTE-Soniquill-$version.dmg"
 else
+    sparkle="$derived/SourcePackages/artifacts/sparkle/Sparkle/bin"
+    [[ "$("$sparkle/generate_keys" -p)" == "$SPARKLE_PUBLIC_ED_KEY" ]] || { echo 'Existing Sparkle Keychain key does not match the configured public key.'; exit 1; }
     xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes -configuration Release -destination 'generic/platform=macOS' -derivedDataPath "$derived" -archivePath "$output/AudioNotes.xcarchive" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$DEVELOPER_ID_APPLICATION" DEVELOPMENT_TEAM="$team" AUDIONOTES_UPDATE_FEED_URL="$feed" AUDIONOTES_UPDATE_PUBLIC_KEY="$SPARKLE_PUBLIC_ED_KEY" archive > "$output/archive.log" 2>&1
     /usr/libexec/PlistBuddy -c 'Add :method string developer-id' "$output/ExportOptions.plist"
     /usr/libexec/PlistBuddy -c 'Add :signingStyle string manual' "$output/ExportOptions.plist"
@@ -90,6 +102,9 @@ else
     codesign -dv "$app" 2>&1 | grep -F 'Authority=Developer ID Application:' >/dev/null
     codesign -dv "$app" 2>&1 | grep 'flags=.*runtime' >/dev/null
     codesign -dv "$app" 2>&1 | grep -Fx "TeamIdentifier=$team" >/dev/null || { echo 'Exported app is not signed by the Developer ID team.'; exit 1; }
+    # Verify the actual exported updater configuration before notarization.
+    [[ "$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$app/Contents/Info.plist")" == "$feed" ]] || { echo 'Exported app has the wrong Sparkle feed.'; exit 1; }
+    [[ "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$app/Contents/Info.plist")" == "$SPARKLE_PUBLIC_ED_KEY" ]] || { echo 'Exported app has the wrong Sparkle public key.'; exit 1; }
     # Notarize and staple the app first so the dragged application works offline.
     ditto -c -k --keepParent "$app" "$output/notarize-app.zip"
     xcrun notarytool submit "$output/notarize-app.zip" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json > "$output/app-notarization.json"
@@ -97,7 +112,7 @@ else
     xcrun stapler staple "$app"
     xcrun stapler validate "$app"
     spctl --assess --type execute --verbose=2 "$app"
-    dmg="$output/AudioNotes-$version.dmg"
+    dmg="$output/Soniquill-$version.dmg"
 fi
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" == cz.kudladev.soniquill ]]
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" == "$version" ]]
@@ -124,7 +139,7 @@ mkdir "$output/feed"
 cp "$dmg" "$output/feed/"
 notes="docs/release/$version.md"
 [[ -f "$notes" ]] || { echo 'Missing versioned release notes.'; exit 1; }
-cp "$notes" "$output/feed/AudioNotes-$version.md"
+cp "$notes" "$output/feed/Soniquill-$version.md"
 # Preserve old entries for supported older clients. 404 is allowed only for
 # the initial bootstrap; other feed failures are hard errors.
 status="$(curl --silent --show-error --proto '=https' --tlsv1.2 -o "$output/previous-appcast.xml" -w '%{http_code}' "$feed")"
@@ -141,6 +156,6 @@ sparkle="$derived/SourcePackages/artifacts/sparkle/Sparkle/bin"
 # Locally the new artifact is available in feed; previous artifacts must be
 # retained/copied there when packaging a subsequent release.
 python3 scripts/release/validate_appcast.py "$output/feed/appcast.xml" --repository "$repository" --offline-artifacts "$output/feed"
-(cd "$output" && shasum -a 256 "AudioNotes-$version.dmg" > SHA256SUMS)
+(cd "$output" && shasum -a 256 "Soniquill-$version.dmg" > SHA256SUMS)
 git rev-parse HEAD > "$output/source-revision.txt"
 echo "Signed/notarized candidate prepared at $output. Complete exact-artifact manual acceptance, then run --publish."

@@ -73,16 +73,15 @@ struct SourceProcessingTests {
     }
     @Test(arguments: ["English operating systems", "Příliš žluťoučký kůň"])
     func realVisionOCRPreservesEnglishAndCzech(text: String) async throws {
-        // Hosted macOS VMs have no Neural Engine. Exercise real Vision OCR using
-        // its supported CPU devices instead of depending on accelerator availability.
+        // Assign the CPU before any Vision capability query: querying Vision's
+        // supported devices can initialize its default ANE backend on hosted VMs.
         let ocr = VisionOCRService { request in
-            for (stage, devices) in try request.supportedComputeStageDevices {
-                let cpu = try #require(devices.first { device in
-                    if case .cpu = device { return true }
-                    return false
-                }, "Vision must support CPU execution for \(stage)")
-                request.setComputeDevice(cpu, for: stage)
-            }
+            let cpu = try #require(MLComputeDevice.allComputeDevices.first { device in
+                if case .cpu = device { return true }
+                return false
+            }, "The OCR integration test requires a CPU compute device")
+            request.setComputeDevice(cpu, for: .main)
+            #expect(request.computeDevice(for: .main) == cpu)
         }
         let output = try await ocr.recognize(sourceTestImage(text: text)).map(\.text).joined(separator: " ")
         #expect(!output.isEmpty)

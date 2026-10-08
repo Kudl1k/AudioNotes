@@ -1,16 +1,45 @@
 # Soniquill release checklist
 
+For the authorized unnotarized preview path, use [PREVIEW_RELEASE.md](PREVIEW_RELEASE.md).
+The checklist below applies to the Developer ID/notarized stable release.
+
 ## One-time setup
 
-- [ ] Confirm public repository and permanent bundle identity, copyright and Apple Team ID.
-- [ ] Enable GitHub Pages with source **GitHub Actions**.
+- [x] Confirm public repository and permanent Soniquill bundle identity (see SONIQUILL_RENAME.md); verify the Developer ID signing team when installing its certificate.
+- [x] Enable GitHub Pages with source **GitHub Actions** (verified 2026-10-08).
 - [ ] Install a valid Developer ID Application certificate and verify it is not expired/revoked.
 - [ ] Configure and test a notarytool Keychain profile; store only its profile name locally.
-- [ ] Generate the Sparkle Ed25519 key once in the release Keychain; store only its public key as repository Actions variable `SPARKLE_PUBLIC_ED_KEY`.
+- [x] Existing Sparkle Keychain key matches repository Actions variable `SPARKLE_PUBLIC_ED_KEY` (verified 2026-10-08). Retain this key.
 - [ ] Publish and verify a real signed/notarized DMG and signed appcast; verify exact enclosure asset length/signature, HTTPS Pages URL and download URL.
 - [ ] Install an older signed release, create a project/recording/transcript/summary/chat/settings and download a model, then verify a signed update and every item after relaunch.
 - [ ] Archive the v1.0.0 migration fixture, actual signed artifacts, dSYMs and checksums.
 - [ ] Review the final Privacy and Third-Party Licenses notice, model revisions/licenses, OAuth configuration and production logs.
+
+## Workstation signing setup
+
+Use the Apple Developer team that owns Soniquill. For direct DMG distribution the
+required certificate is **Developer ID Application**. Apple Development, Apple
+Distribution and Mac Installer Distribution do not substitute for it. Apple
+requires the Account Holder to create a local Developer ID certificate; see
+[Apple's certificate instructions](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/).
+Create the certificate signing request on the release Mac, upload the CSR through
+the developer portal, then install the downloaded `.cer` on that Mac so its private
+key stays in Keychain. Do not revoke existing development/distribution certificates.
+
+If no notarization profile exists, run this interactively in your own Terminal and
+follow its prompts (never paste its credentials into chat or source files):
+
+```sh
+xcrun notarytool store-credentials Soniquill-release
+```
+
+The profile name is non-secret. Set `NOTARY_PROFILE=Soniquill-release` and
+`DEVELOPER_ID_APPLICATION` to the exact installed certificate name when invoking
+release.sh. Retrieve the existing public Sparkle key with
+`DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys -p` and set
+`SPARKLE_PUBLIC_ED_KEY` to it. Compare it with the repository Actions variable;
+do not generate a replacement key for this release. `release.sh --check` reports
+local blockers and verifies the notary profile when provided.
 
 ## Each candidate
 
@@ -36,6 +65,13 @@
 
 P0: user data loss/corruption, credential/privacy/security breach, app fails to launch, invalid/unsafe installer or updater. P1: core import/transcription/chat/project workflow broken, repeatable crash, serious disclosure/privacy issue, signed update fails. Do not distribute with an unresolved P0/P1.
 
-## Current status (2026-10-01)
+## Current status (2026-10-08)
+
+Pages and the existing Sparkle signing key are ready. No releases exist and the feed
+still returns 404. Developer ID Application signing is unavailable on this Mac; the
+notarytool profile has not been supplied/verified. Signed packaging, exact-candidate
+manual acceptance and public deployment remain open. See [M13 preparation](M13_IMPLEMENTATION.md).
+
+## Historical status (2026-10-01)
 
 Historical macOS direct-distribution audit (2026-10-01; not the current iOS release state): repository-side custom Actions Pages deployment and signed-feed validator are prepared. One-time Pages setting is still off. Public appcast and v1 DMG are 404/not yet published. No Developer ID identity, notarytool profile or Sparkle private signing key is available on the release Mac. Full release, notarization, clean-machine, production provider, accessibility/performance, live update, bug-bash and distribution checks remain open. These macOS direct-distribution checks do not negate the confirmed iOS App Store Connect upload/TestFlight distribution of Soniquill 1.0.0 build 1. See [the established release baseline](SONIQUILL_RENAME.md#established-apple-release-state).

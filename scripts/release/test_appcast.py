@@ -14,7 +14,7 @@ class AppcastValidationTests(unittest.TestCase):
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()
         cls.root = Path(cls.temp.name)
-        cls.asset = cls.root / "AudioNotes-1.0.0.dmg"
+        cls.asset = cls.root / "Soniquill-1.0.0.dmg"
         # Synthetic bytes are only temporary test input, never a production feed.
         cls.asset.write_bytes(b"release validation fixture")
         script = cls.root / "sign.swift"
@@ -35,7 +35,7 @@ print(try key.signature(for: data).base64EncodedString())
         root = ET.Element("rss", version="2.0")
         channel = ET.SubElement(root, "channel")
         item = ET.SubElement(channel, "item")
-        attrs = {"url": "https://github.com/Kudl1k/AudioNotes/releases/download/v1.0.0/AudioNotes-1.0.0.dmg",
+        attrs = {"url": "https://github.com/Kudl1k/AudioNotes/releases/download/v1.0.0/Soniquill-1.0.0.dmg",
                  "length": str(self.asset.stat().st_size), f"{{{SPARKLE}}}shortVersionString": "1.0.0",
                  f"{{{SPARKLE}}}version": "1", f"{{{SPARKLE}}}edSignature": self.signature}
         attrs.update(overrides)
@@ -48,9 +48,9 @@ print(try key.signature(for: data).base64EncodedString())
         self.assertEqual(validate(self.feed(), "Kudl1k/AudioNotes", self.key, self.root), 1)
 
     def test_wrong_repository_http_and_nonexistent_naming_rejected(self):
-        for url in ["http://github.com/Kudl1k/AudioNotes/releases/download/v1.0.0/AudioNotes-1.0.0.dmg",
-                    "https://github.com/attacker/AudioNotes/releases/download/v1.0.0/AudioNotes-1.0.0.dmg",
-                    "https://github.com/Kudl1k/AudioNotes/releases/download/v1.0.1/AudioNotes-1.0.0.dmg"]:
+        for url in ["http://github.com/Kudl1k/AudioNotes/releases/download/v1.0.0/Soniquill-1.0.0.dmg",
+                    "https://github.com/attacker/AudioNotes/releases/download/v1.0.0/Soniquill-1.0.0.dmg",
+                    "https://github.com/Kudl1k/AudioNotes/releases/download/v1.0.1/Soniquill-1.0.0.dmg"]:
             with self.subTest(url=url), self.assertRaises(ValueError):
                 validate(self.feed(url=url), "Kudl1k/AudioNotes", self.key, self.root)
 
@@ -76,6 +76,21 @@ print(try key.signature(for: data).base64EncodedString())
             path.write_bytes(data)
             with self.assertRaises(ValueError):
                 validate(path, "Kudl1k/AudioNotes", self.key)
+
+    def test_channels_cannot_cross(self):
+        preview = self.root / "Soniquill-1.0.0-b1-preview.dmg"
+        preview.write_bytes(self.asset.read_bytes())
+        path = self.feed(url="https://github.com/Kudl1k/AudioNotes/releases/download/preview-v1.0.0-b1/Soniquill-1.0.0-b1-preview.dmg")
+        self.assertEqual(validate(path, "Kudl1k/AudioNotes", self.key, self.root, channel="preview"), 1)
+        with self.assertRaises(ValueError):
+            validate(path, "Kudl1k/AudioNotes", self.key, self.root)
+        with self.assertRaises(ValueError):
+            validate(self.feed(), "Kudl1k/AudioNotes", self.key, self.root, channel="preview")
+
+    def test_preview_rejects_mismatched_build_url(self):
+        with self.assertRaises(ValueError):
+            validate(self.feed(url="https://github.com/Kudl1k/AudioNotes/releases/download/preview-v1.0.0-b2/Soniquill-1.0.0-b1-preview.dmg"),
+                     "Kudl1k/AudioNotes", self.key, self.root, channel="preview")
 
 
 if __name__ == "__main__":
