@@ -12,9 +12,9 @@ struct LocalServerConnectionError: LocalizedError, Equatable, Sendable {
         case .appTransportSecurityRequiresSecureConnection:
             "macOS blocked this HTTP connection. Use HTTPS or an address permitted by the app's transport security settings."
         case .networkConnectionLost:
-            "The connection dropped while the request was in progress. Try again; if it repeats, check the server log, network connection, and any proxy or VPN. For a LAN server, also check AudioNotes access in System Settings → Privacy & Security → Local Network."
+            "The connection dropped while the request was in progress. Try again; if it repeats, check the server log, network connection, and any proxy or VPN. For a LAN server, also check Soniquill access in System Settings → Privacy & Security → Local Network."
         case .notConnectedToInternet:
-            "Network access is unavailable or was interrupted. For a LAN server, check AudioNotes access in System Settings → Privacy & Security → Local Network, then check the network connection."
+            "Network access is unavailable or was interrupted. For a LAN server, check Soniquill access in System Settings → Privacy & Security → Local Network, then check the network connection."
         case .cannotFindHost, .dnsLookupFailed:
             "The server hostname could not be resolved. Check the address or use its IP address."
         case .timedOut:

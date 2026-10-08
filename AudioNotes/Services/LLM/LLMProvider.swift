@@ -7,6 +7,7 @@ enum LLMProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
     case gemini
     case ollama
     case llamaCpp
+    case onDevice
 
     static var selectable: [Self] {
 #if DEBUG
@@ -32,6 +33,7 @@ enum LLMProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
         case .gemini: "Google Gemini"
         case .ollama: "Ollama"
         case .llamaCpp: "llama.cpp Server"
+        case .onDevice: "On Device"
         }
     }
 }
@@ -60,7 +62,7 @@ enum LLMError: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            "Add an OpenAI API key in Settings → AI Providers before generating a summary or chatting."
+            "Connect ChatGPT or Google in Settings → AI Accounts, or add an API key under advanced provider configuration."
         case .invalidAuthentication:
             "OpenAI rejected the API key. Please verify or update it in Settings → AI Providers."
         case .accessDenied:
@@ -112,6 +114,7 @@ protocol LLMProvider: Sendable {
     var isMock: Bool { get }
     var authenticationMethod: ProviderAuthenticationMethod? { get }
     var modelID: String? { get }
+    var modelDisplayName: String? { get }
     var supportsSourceSummaries: Bool { get }
     var inputCapabilities: LLMInputCapabilities { get }
     var executionLocation: ProviderExecutionLocation { get }
@@ -144,6 +147,7 @@ extension LLMProvider {
     var billingKind: BillingKind { BillingKind.resolve(provider: id.rawValue, authentication: authenticationMethod) }
     var authenticationMethod: ProviderAuthenticationMethod? { nil }
     var modelID: String? { nil }
+    var modelDisplayName: String? { modelID }
     var supportsSourceSummaries: Bool { false }
     var inputCapabilities: LLMInputCapabilities { .known(model: modelID, provider: id) }
 

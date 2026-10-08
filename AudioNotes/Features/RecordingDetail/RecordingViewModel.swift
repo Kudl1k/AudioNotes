@@ -8,12 +8,13 @@ final class RecordingViewModel {
     var selectedProvider: TranscriptionProviderID? {
         didSet { if selectedProvider != oldValue { selectedModel = nil } }
     }
+    var selectedLanguage: TranscriptionLanguage?
     var selectedModel: String?
     var availableModels: [GenerationModelOption] {
         let provider = selectedProvider ?? resolvedProvider.providerID.flatMap(TranscriptionProviderID.init(rawValue:))
         return provider.map { resolver.models(for: $0) } ?? []
     }
-    private var resolvedProvider: any TranscriptionProvider { resolver.resolve(provider: selectedProvider, model: selectedModel) }
+    private var resolvedProvider: any TranscriptionProvider { resolver.resolve(provider: selectedProvider, model: selectedModel, language: selectedLanguage) }
     let recording: Recording
     private(set) var state: TranscriptionState
     private(set) var progress: Double?
@@ -61,7 +62,7 @@ final class RecordingViewModel {
         let components = monotonicStart.duration(to: ContinuousClock.now).components
         return max(0, Double(components.seconds) + Double(components.attoseconds) / 1e18)
     }
-    var completionDurationText: String { AudioTime.string(completedDuration ?? 0) }
+    var completionDurationText: String { OperationDurationFormatter.string(completedDuration ?? 0) }
     var showsCompletion: Bool { completedDuration != nil }
 
     /// The view model owns task lifetime; returning the task permits deterministic tests.

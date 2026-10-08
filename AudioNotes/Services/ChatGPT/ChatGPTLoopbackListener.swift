@@ -222,8 +222,8 @@ final class ChatGPTLoopbackListener: ChatGPTLoopbackListening, @unchecked Sendab
         let isSuccess = result.error == nil && (result.code != nil)
         let title = isSuccess ? "Sign-in successful" : "Authorization canceled"
         let message = isSuccess
-            ? "You can close this window and return to AudioNotes."
-            : (result.errorDescription ?? "Sign in was canceled. You can return to AudioNotes.")
+            ? "You can close this window and return to Soniquill."
+            : (result.errorDescription ?? "Sign in was canceled. You can return to Soniquill.")
 
         return """
         <!DOCTYPE html>
@@ -231,7 +231,7 @@ final class ChatGPTLoopbackListener: ChatGPTLoopbackListening, @unchecked Sendab
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>AudioNotes - \(title)</title>
+            <title>Soniquill - \(title)</title>
             <style>
                 body {
                     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

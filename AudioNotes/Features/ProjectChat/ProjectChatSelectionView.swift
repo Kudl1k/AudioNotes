@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 
 struct ProjectChatSelectionView: View {
@@ -48,3 +49,5 @@ struct ProjectChatSelectionView: View {
         })
     }
 }
+
+#endif

@@ -10,6 +10,12 @@ struct ImportedAudio: Sendable {
     let duration: TimeInterval
 }
 
+struct AudioImportBatchResult: Sendable {
+    let importedCount: Int
+    let failures: [String]
+    let cancelled: Bool
+}
+
 enum AudioImportError: LocalizedError {
     case notAudio, invalidAudio
 
@@ -62,6 +68,8 @@ actor AudioImportService: AudioImporting {
                                  originalFileName: source.lastPathComponent, fileName: fileName, duration: duration)
         } catch {
             try? FileManager.default.removeItem(at: destination)
+            // AVFoundation describes undecodable files with text such as "Cannot Open".
+            if (error as NSError).domain == AVFoundationErrorDomain { throw AudioImportError.invalidAudio }
             throw error
         }
     }

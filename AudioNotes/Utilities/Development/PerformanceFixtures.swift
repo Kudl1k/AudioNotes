@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG && os(macOS)
 import Foundation
 
 /// Deterministic, offline fixtures. Never inserted into the user's library automatically.

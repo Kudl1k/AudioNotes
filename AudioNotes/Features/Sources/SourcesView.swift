@@ -1,4 +1,4 @@
-import AppKit
+#if os(macOS)
 import SwiftData
 import SwiftUI
 
@@ -22,8 +22,10 @@ struct SourcesView: View {
             HStack {
                 TextField("Search all sources", text: $model.searchQuery).textFieldStyle(.roundedBorder)
                     .onChange(of: model.searchQuery) { _, _ in model.search() }
+                    .accessibilityIdentifier("sources.search")
                 Button("Add Source…", systemImage: "plus") { showImporter() }.disabled(model.isImporting)
-                if model.isImporting { ProgressView().controlSize(.small) }
+                    .accessibilityIdentifier("sources.add")
+                if model.isImporting { ProgressView().controlSize(.small).accessibilityLabel("Importing sources") }
             }.padding(12)
             if let phase = model.importPhase { Text(phase).font(.caption).foregroundStyle(.secondary).padding(.horizontal) }
             List {
@@ -43,6 +45,12 @@ struct SourcesView: View {
                             }
                         }.buttonStyle(.plain)
                     }
+                }
+            }
+            .overlay {
+                if !model.searchQuery.isEmpty {
+                    if model.isSearching { ProgressView("Searching sources…") }
+                    else if model.searchResults.isEmpty { ContentUnavailableView.search(text: model.searchQuery) }
                 }
             }
             Text("Originals are stored locally. PDF extraction, OCR, and search have no API cost.")
@@ -75,27 +83,31 @@ struct SourcesView: View {
             SourceThumbnailView(url: model.thumbnailURL(for: source), revision: source.statusRaw,
                 icon: source.type.icon, loader: model.imageLoader)
             VStack(alignment: .leading, spacing: 5) {
-                Text(source.displayName).font(.headline)
+                Text(source.displayName).font(.headline).lineLimit(2).truncationMode(.middle).help(source.displayName)
                 Text(statusText(source)).font(.caption).foregroundStyle(.secondary)
                 if let error = source.processingError { Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-                if let started = model.startedAt[source.id] {
-                    TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Elapsed \(Int(max(0, timeline.date.timeIntervalSince(started))))s").font(.caption).foregroundStyle(.secondary)
-                            if timeline.date.timeIntervalSince(started) > 15 && source.type != .audio {
-                                Text("Local OCR can take longer on first use. You can continue using other ready sources or cancel.")
-                                    .font(.caption).foregroundStyle(.secondary)
+                if model.isProcessing(source) {
+                    let update = model.progress[source.id]
+                    let audio = model.transcriptionProgress[source.id]
+                    OperationProgressView(title: audio?.phase.message ?? "Processing locally…",
+                        status: audio.map { snapshot in
+                            if let part = snapshot.partDescription {
+                                return "\(part) · \(snapshot.completedParts) completed"
                             }
-                        }
-                    }
+                            return snapshot.phase.message
+                        } ?? update?.phase,
+                        progress: audio.map { OperationProgressValue(fraction: $0.overallProgress) }
+                            ?? OperationProgressValue(completed: update?.completed, total: update?.total),
+                        startedAt: model.startedAt[source.id], estimatedRemaining: audio?.estimatedRemainingTime,
+                        cancel: { model.cancel(source) })
+
                 }
+
             }
             Spacer()
-            if model.isProcessing(source) {
-                ProgressView().controlSize(.small)
-                Button("Cancel") { model.cancel(source) }
-            } else if source.type == .audio, !source.isContextReady {
+            if !model.isProcessing(source), source.type == .audio, !source.isContextReady {
                 Button("Transcribe…") { transcriptionOptionsSourceID = source.id }
+                    .accessibilityLabel("Transcribe \(source.displayName)")
                     .disabled(source.isPrimaryAudio && primaryTranscriptionBusy)
                     .popover(isPresented: Binding(
                         get: { transcriptionOptionsSourceID == source.id },
@@ -118,15 +130,19 @@ struct SourcesView: View {
                             }
                         }.padding().frame(width: 390)
                     }
-            } else if source.status == .failed || source.status == .partial {
+            } else if !model.isProcessing(source), source.status == .failed || source.status == .partial {
                 Button("Retry") { model.reprocess(source, context: context) }
+                    .accessibilityLabel("Retry \(source.displayName)")
             }
             Button("Open", systemImage: "eye") { preview = .init(source: source) }.labelStyle(.iconOnly).buttonStyle(.borderless)
+                .accessibilityLabel("Open \(source.displayName)").help("Open \(source.displayName)")
         }
         .padding(.vertical, 6)
         .contextMenu {
             Button("Open") { preview = .init(source: source) }
-            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([model.url(for: source)]) }
+            #if os(macOS)
+            Button("Reveal in Finder") { Workspace.revealInFinder([model.url(for: source)]) }
+#endif
             Button("Rename…") { renaming = source; newName = source.displayName }
             if source.type != .audio { Button("Reprocess") { model.reprocess(source, context: context) }.disabled(model.isProcessing(source)) }
             Divider()
@@ -139,18 +155,18 @@ struct SourcesView: View {
         if source.type == .audio { return source.isContextReady ? "Transcribed" : "Audio · \(source.status.rawValue.capitalized)" }
         let prefix: String
         switch source.metadata {
-        case .pdf(let count, _): prefix = "\(count) pages · "
+        case .pdf(let count, _): prefix = "\(count) \(count == 1 ? "page" : "pages") · "
         case .image(let width, let height): prefix = "\(width) × \(height) · "
         default: prefix = ""
         }
         return prefix + source.status.rawValue.capitalized
     }
     private func showImporter() {
-        let panel = NSOpenPanel()
-        panel.title = "Add Sources"
-        panel.allowedContentTypes = SourceImportService.supportedTypes
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        Task { if await panel.begin() == .OK { await model.importURLs(panel.urls, context: context) } }
+        Task {
+            let urls = await FilePanels.chooseFiles(title: "Add Sources", types: SourceImportService.supportedTypes)
+            if !urls.isEmpty { await model.importURLs(urls, context: context) }
+        }
     }
 }
+
+#endif

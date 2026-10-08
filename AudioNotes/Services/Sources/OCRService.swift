@@ -11,12 +11,19 @@ protocol SourceOCR: Sendable {
 }
 
 struct VisionOCRService: SourceOCR {
+    private let configureRequest: @Sendable (VNRecognizeTextRequest) throws -> Void
+
+    init(configureRequest: @escaping @Sendable (VNRecognizeTextRequest) throws -> Void = { _ in }) {
+        self.configureRequest = configureRequest
+    }
+
     func recognize(_ image: CGImage) async throws -> [RecognizedSourceText] {
         try Task.checkCancellation()
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
         request.automaticallyDetectsLanguage = true
+        try configureRequest(request)
         // Never ask Vision for an unsupported language on the installed OS.
         let supported = try request.supportedRecognitionLanguages()
         let preferred = ["cs-CZ", "en-US"].filter(supported.contains)

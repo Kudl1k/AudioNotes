@@ -130,7 +130,7 @@ struct ProviderSettingsTests {
         #expect(transcriptionConfig.availableVoiceModels.map(\.rawValue).contains("gpt-4o-transcribe"))
     }
 
-    @Test func fetchChatGPTModelsFiltersMiniAndUpdatesConfiguration() async throws {
+    @Test func fetchChatGPTModelsUsesAccountVisibilityAndUpdatesConfiguration() async throws {
         let store = MockCredentialStore()
         let mockAuth = MockChatGPTAuthService()
         mockAuth.authState = .signedIn(account: ChatGPTAccount(
@@ -172,11 +172,11 @@ struct ProviderSettingsTests {
         let slugs = model.availableChatGPTModels.map(\.slug)
         #expect(slugs.contains("gpt-4o"))
         #expect(slugs.contains("o3-mini"))
-        #expect(!slugs.contains("gpt-4o-mini")) // Filtered out
+        #expect(slugs.contains("gpt-4o-mini")) // Account catalog ordering/visibility is authoritative
         #expect(!slugs.contains("internal-model")) // Hidden filtered out
 
         // Model selection should have adjusted away from gpt-4o-mini
-        #expect(llmConfig.chatGPTModel != "gpt-4o-mini")
+        #expect(llmConfig.chatGPTModel == "gpt-4o-mini")
         #expect(llmConfig.cachedChatGPTModels.map(\.slug).contains("gpt-4o"))
     }
 }

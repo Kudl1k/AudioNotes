@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG && os(macOS)
 import AppKit
 import SwiftData
 import SwiftUI
@@ -22,7 +22,7 @@ final class PerformanceFixtureApplicationDelegate: NSObject, NSApplicationDelega
             }
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 750),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "AudioNotes · Development Fixtures"
+            window.title = "Soniquill · Development Fixtures"
             window.minSize = NSSize(width: 760, height: 500)
             window.contentView = NSHostingView(rootView: content.frame(minWidth: 760, maxWidth: .infinity, minHeight: 500, maxHeight: .infinity))
             window.isReleasedWhenClosed = false

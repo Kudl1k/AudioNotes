@@ -25,7 +25,7 @@ enum KeychainError: Error, LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .accessDenied: "Keychain access was denied. Allow AudioNotes to access its saved credential."
+        case .accessDenied: "Keychain access was denied. Allow Soniquill to access its saved credential."
         case .locked: "Keychain is locked or cannot prompt for access. Unlock it and try again."
         case .unavailable: "macOS Keychain is currently unavailable. Please try again."
         case .invalidKey: "Enter a nonempty API key without spaces or line breaks."
@@ -47,9 +47,12 @@ enum APIKeyInput {
 
 /// Uses a device-local generic-password item. No credentials are stored in preferences.
 actor KeychainService: CredentialStoring {
+    // Stable lookup identity across the Soniquill product rename.
+    static let defaultService = "cz.kudladev.AudioNotes.provider-credentials"
+
     private let service: String
 
-    init(service: String = "cz.kudladev.AudioNotes.provider-credentials") {
+    init(service: String = KeychainService.defaultService) {
         self.service = service
     }
 

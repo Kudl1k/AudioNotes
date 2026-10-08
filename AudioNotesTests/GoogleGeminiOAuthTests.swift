@@ -129,7 +129,7 @@ struct GoogleGeminiOAuthTests {
         do { _ = try await service.validAccessToken() }
         catch { message = error.localizedDescription }
         #expect(message.contains("HTTP 400, invalid_request"))
-        #expect(message.contains("Missing required parameter: client_secret"))
+        #expect(!message.contains("Missing required parameter: client_secret"))
     }
 
     private static func session(stub: (Int, Data)) -> URLSession {

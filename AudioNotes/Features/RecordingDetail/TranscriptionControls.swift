@@ -7,7 +7,7 @@ struct TranscriptionControls: View {
     @State private var isShowingDetails = false
 
     private var visibleProgress: Double? {
-        model.progressSnapshot?.overallProgress ?? model.progress.map { 0.1 + 0.8 * min(1, max(0, $0)) }
+        model.progressSnapshot?.overallProgress ?? model.progress
     }
 
     var body: some View {
@@ -22,13 +22,16 @@ struct TranscriptionControls: View {
                     }
                 }
                 Spacer()
-                SettingsLink { Image(systemName: "gearshape") }.help("Transcription settings")
+                OpenSettingsLink { Image(systemName: "gearshape") }.help("Transcription settings")
+                    .accessibilityLabel("Transcription settings").accessibilityIdentifier("transcription.settings")
                 if model.state.isProcessing {
                     Button("Cancel", action: model.cancelTranscription)
                         .disabled(!model.state.canCancel)
+                        .accessibilityLabel("Cancel transcription").accessibilityIdentifier("progress.cancel")
                 } else if model.canTranscribe {
-                    Button(model.state == .idle ? "Transcribe" : "Try Again", action: transcribe)
+                    Button(model.state == .idle ? "Transcribe" : "Retry", action: transcribe)
                         .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier(model.state == .idle ? "transcription.start" : "transcription.retry")
                 } else if model.canRegenerate, let regenerate {
                     Button("Regenerate…", action: regenerate)
                 }
@@ -41,33 +44,12 @@ struct TranscriptionControls: View {
 
             if model.state.isProcessing, let snapshot = model.progressSnapshot {
                 VStack(alignment: .leading, spacing: 8) {
-                    if let progress = visibleProgress {
-                        ProgressView(value: progress)
-                            .accessibilityLabel("Transcription progress")
-                            .accessibilityValue(Text("\(Int(progress * 100)) percent"))
-                            .animation(.easeInOut(duration: 0.25), value: progress)
-                    } else {
-                        ProgressView().progressViewStyle(.linear)
-                            .accessibilityLabel("Transcription in progress")
-                    }
-                    HStack {
-                        Label(activityTitle(snapshot), systemImage: "waveform")
-                            .font(.subheadline)
-                        Spacer()
-                        Text(partLabel(snapshot)).font(.caption).foregroundStyle(.secondary)
-                    }
+                    OperationProgressView(title: activityTitle(snapshot), status: partStatus(snapshot),
+                        progress: OperationProgressValue(fraction: visibleProgress),
+                        startedAt: snapshot.startedAt, estimatedRemaining: snapshot.estimatedRemainingTime)
                     if let duration = snapshot.totalAudioDuration {
-                        Text("\(AudioTime.string(snapshot.processedAudioDuration ?? 0)) / \(AudioTime.string(duration)) processed")
+                        Text("\(AudioTime.string(snapshot.processedAudioDuration ?? 0)) / \(AudioTime.string(duration)) audio processed")
                             .font(.caption).foregroundStyle(.secondary)
-                    }
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        HStack(spacing: 16) {
-                            Text("Elapsed  \(AudioTime.string(model.elapsedTime ?? 0))")
-                            if let eta = snapshot.estimatedRemainingTime {
-                                Text("Est. remaining  ~\(AudioTime.string(eta))")
-                            }
-                        }
-                        .font(.caption).foregroundStyle(.secondary)
                     }
                     Button {
                         isShowingDetails.toggle()
@@ -89,7 +71,7 @@ struct TranscriptionControls: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(accessibilityProgress(snapshot))
             } else if model.state == .completed {
-                Label("Transcription complete · \(AudioTime.string(model.recording.duration)) · \(max(1, model.progressSnapshot?.completedParts ?? 1)) part · completed in \(model.completionDurationText)", systemImage: "checkmark.circle.fill")
+                Label("Transcription complete · \(AudioTime.string(model.recording.duration)) · ^[\(max(1, model.progressSnapshot?.completedParts ?? 1)) part](inflect: true) · completed in \(model.completionDurationText)", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.subheadline)
             }
@@ -97,6 +79,7 @@ struct TranscriptionControls: View {
             if case .failed(let message) = model.state {
                 Label(message, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red).textSelection(.enabled)
+                    .accessibilityLabel("Transcription failed: \(message)")
                 if let snapshot = model.progressSnapshot {
                     VStack(alignment: .leading, spacing: 3) {
                         if let part = snapshot.currentPart {
@@ -142,16 +125,21 @@ struct TranscriptionControls: View {
         return switch snapshot.phase {
         case .preparing: "Preparing audio…"
         case .splitting: "Optimizing audio…"
-        case .transcribing: "Transcribing part \(snapshot.currentPart ?? 1) of \(snapshot.totalParts ?? 1)…"
+        case .uploading: "Uploading audio…"
+        case .processing: "Processing audio…"
+        case .transcribing: "Transcribing audio…"
         case .merging: "Combining transcript…"
         case .saving: "Saving transcript…"
         case .completed: "Transcription complete"
         }
     }
 
+    private func partStatus(_ snapshot: TranscriptionProgressSnapshot) -> String? {
+        snapshot.partDescription.map { "\($0) · \(snapshot.completedParts) completed" }
+    }
+
     private func partLabel(_ snapshot: TranscriptionProgressSnapshot) -> String {
-        if let current = snapshot.currentPart, let total = snapshot.totalParts { "Part \(current) of \(total)" }
-        else { snapshot.phase.message }
+        snapshot.partDescription ?? snapshot.phase.message
     }
 
     private func accessibilityProgress(_ snapshot: TranscriptionProgressSnapshot) -> String {
@@ -179,5 +167,7 @@ struct TranscriptionControls: View {
     private func detailRow(_ title: String, done: Bool, active: Bool) -> some View {
         Label(title, systemImage: done ? "checkmark.circle.fill" : (active ? "arrow.trianglehead.2.clockwise.rotate.90" : "circle"))
             .foregroundStyle(done ? .secondary : (active ? .primary : .tertiary))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(title).accessibilityValue(done ? "Completed" : (active ? "In progress" : "Waiting"))
     }
 }

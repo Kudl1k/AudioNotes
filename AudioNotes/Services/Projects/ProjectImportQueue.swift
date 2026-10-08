@@ -98,6 +98,27 @@ final class ProjectImportQueue {
     func waitUntilIdle() async { await worker?.value }
     func clearFinished(for projectID: UUID) { items.removeAll { $0.projectID == projectID && !$0.isActive } }
 
+#if DEBUG
+    /// Static offline import-progress presentation. Never starts copies or processing work.
+    func prepareReviewProgress(projectID: UUID) {
+        items.removeAll { $0.projectID == projectID }
+        items += (0..<7).map { index in
+            var item = ProjectImportItem(id: UUID(), projectID: projectID,
+                filename: ["lecture.pdf", "whiteboard.png", "notes.md", "assignment.pdf", "corrupted.pdf", "glossary.md", "diagram.png"][index])
+            item.startedAt = .now
+            switch index {
+            case 0: item.state = .added
+            case 1: item.state = .processing
+            case 2: item.state = .waiting
+            case 3: item.state = .added
+            case 4: item.state = .failed(SourceImportError.invalidFile.localizedDescription)
+            default: item.state = .waiting
+            }
+            return item
+        }
+    }
+#endif
+
     private func start() {
         guard worker == nil else { return }
         worker = Task { [weak self] in
@@ -190,13 +211,23 @@ final class ProjectImportQueue {
             try context.save()
             update(job.id) { $0.state = .added }
         } catch {
+            let message = userFacingFailure(error)
             if let source = processingSource, !source.isDeleted, source.project?.id == project.id {
                 source.status = .failed
-                source.processingError = error is CancellationError ? "Processing cancelled. Retry to continue." : error.localizedDescription
+                source.processingError = message
                 try? context.save()
             }
-            update(job.id) { $0.state = error is CancellationError ? .cancelled : .failed(error.localizedDescription) }
+            update(job.id) { $0.state = error is CancellationError ? .cancelled : .failed(message) }
         }
+    }
+
+    private func userFacingFailure(_ error: Error) -> String {
+        if error is CancellationError { return "Processing cancelled. Retry to continue." }
+        if let error = error as? SourceImportError { return error.localizedDescription }
+        if let error = error as? CocoaError, error.code == .fileReadNoPermission {
+            return "This file couldn't be opened. Check that it is downloaded in Files, then retry."
+        }
+        return "This file couldn't be read. Retry processing or import another copy."
     }
     private func setProgress(_ value: SourceProcessingProgress, id: UUID) { update(id) { $0.progress = value } }
 }

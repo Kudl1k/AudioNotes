@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>GoogleOAuthClientBundleIdentifier</key>
+	<string>cz.kudladev.soniquill</string>
+	<key>GoogleOAuthClientID</key>
+	<string>576974561449-mrqi6hj029poen9emjp0658p09gkd4kt.apps.googleusercontent.com</string>
+	<key>GoogleOAuthURLScheme</key>
+	<string>com.googleusercontent.apps.576974561449-mrqi6hj029poen9emjp0658p09gkd4kt</string>
+	<key>GoogleCloudProjectID</key>
+	<string>sublime-elixir-474816-b4</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.576974561449-mrqi6hj029poen9emjp0658p09gkd4kt</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

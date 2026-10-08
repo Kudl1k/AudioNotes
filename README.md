@@ -1,36 +1,47 @@
-# AudioNotes
+# Soniquill
 
-Native macOS audio library built with Swift 6, SwiftUI, SwiftData, and AVFoundation. Targets macOS 15 or later; no third-party dependencies.
+A native AI-assisted audio and document workspace for macOS, iPhone, and iPad, built with Swift 6, SwiftUI, SwiftData, and AVFoundation. Import recordings and documents, transcribe audio, generate summaries, chat with recording or project evidence, and export results. Provider selection, local execution, and cloud credentials stay separate from the UI.
 
-Open `AudioNotes.xcodeproj`, select the **AudioNotes** scheme, and run on My Mac. Select a development signing team if needed for a signed build.
+Open `AudioNotes.xcodeproj`. The retained **AudioNotes** scheme builds macOS; **AudioNotesiOS** builds iPhone/iPad. Both products are `Soniquill.app`, display **Soniquill**, and use the final production bundle ID `cz.kudladev.soniquill`. Apple Developer setup and App Store Connect are established; version 1.0.0 build 1 was archived/uploaded and TestFlight is active with initial testers. Physical iPhone installation is confirmed; individual feature acceptance requires separate evidence. Preserve the working signing configuration. Use My Mac or a Simulator for local validation without provisioning updates.
 
-Import audio with **File → Import Audio…** (⌘O), the toolbar, or by dropping audio files into the window. Select a recording to play, pause, or seek. The detail has Summary and Transcript tabs and a Chat toolbar button that toggles the right inspector. Choose **Transcribe** to use the provider selected in **AudioNotes → Settings…** (⌘,). Mock works offline; OpenAI uses a key saved in macOS Keychain and cloud `whisper-1` for segment timestamps. Transcripts are saved with clickable timestamps; mock transcripts remain labeled as samples. OpenAI processing uses indeterminate progress and supports cancellation/retry. AI summaries and sending chat messages are not implemented yet.
+Soniquill was previously developed under the name AudioNotes. Internal targets/modules and the `AudioNotes` managed-data directory remain for compatibility. macOS startup reuses existing desktop/legacy sandbox libraries and restores known non-secret preferences without replacing current choices. Existing Soniquill TestFlight installations are the compatibility baseline for data, preferences, imported files and credentials. Do not automatically migrate the old `cz.stepankudlacek.audionotes.ios` development sandbox; that transfer is not an M16.7.0 blocker. See [identity and compatibility details](docs/SONIQUILL_RENAME.md), including Google OAuth follow-up and production Keychain caveats.
 
 ## Structure
 
-- `AudioNotes/App`: app lifecycle, SwiftData container, and menu commands.
-- `AudioNotes/Models`: six persistence models with inverse relationships and cascade deletion.
-- `AudioNotes/Services`: actor-isolated audio import, main-actor playback, storage configuration, recording repository, and provider-based transcription.
-- `AudioNotes/Features`: library and recording MVVM, transcription controls, recording details, and chat inspector.
-- `AudioNotes/Utilities`: shared timestamp formatting.
-- `AudioNotesTests`: Swift Testing tests using generated WAV fixtures and isolated temporary storage.
+- `AudioNotes/App`: app lifecycle and composition.
+- `AudioNotes/Models`: shared SwiftData models, frozen v1 schema and migration plan.
+- `AudioNotes/Services`: storage, importing, retrieval, providers, authentication, exports, and usage.
+- `AudioNotes/Features`: feature-based MVVM and shared native SwiftUI UI.
+- `AudioNotes/Platform`: iOS UI and small native platform adapters.
+- `AudioNotes/Utilities`: formatting and isolated DEBUG fixtures.
+- `AudioNotesTests`: offline service, persistence, provider, and compatibility tests.
 
-Imported audio is copied to `Application Support/AudioNotes/Recordings` in the app's sandbox container. Metadata is stored beside it in `Library.store`. Recordings reference relative filenames with UUIDs, so moving or deleting the original file does not affect playback and duplicate names never overwrite files. Import failures are reported per file; a failed metadata save removes the copied audio. File I/O runs in an actor and UI/persistence operations run on the main actor.
+Production startup opens `default.store` in the resolved Application Support directory. Managed audio, documents, and models remain beneath its `AudioNotes` folder; original imports are copied locally. Test helpers may explicitly use `AudioNotes/Library.store` or temporary roots. Secrets remain in Keychain, never in the database or preferences.
 
 ## Validation
 
+Use Xcode 27 for project format `objectVersion = 110`. GitHub Actions uses the
+`xcode-27` runner and verifies the selected toolchain before building; the
+`macos-26` runner's default Xcode 26.6 cannot open this project. Keep the project
+format and established signing configuration unchanged.
+
+The native Vision OCR integration test requires Apple Neural Engine hardware and
+is conditionally enabled when an `MLComputeDevice.neuralEngine` device is present;
+hosted macOS VMs lack Neural Engine acceleration, so the test is automatically skipped
+in those environments while application requests retain Vision's default device selection.
+Download state tests keep their assertions and use a bounded 60-second polling deadline
+to accommodate hosted-runner scheduling.
+
 ```sh
 xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes \
-  -configuration Debug -destination 'platform=macOS' \
-  CODE_SIGNING_ALLOWED=NO build
+  -configuration Debug -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES test
 
-xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotes \
-  -configuration Debug -destination 'platform=macOS' \
-  CODE_SIGNING_ALLOWED=NO test
+xcodebuild -project AudioNotes.xcodeproj -scheme AudioNotesiOS \
+  -configuration Debug -destination 'platform=iOS Simulator,id=<simulator-uuid>' \
+  CODE_SIGNING_ALLOWED=NO -collect-test-diagnostics never test
 ```
 
-Tests also cover mock transcription, processing states, cancellation/retry races, transcript save failures, chronological ordering, persisted mock provenance, and timestamp formatting. Tests cover copying and duplicate imports, invalid and corrupt audio, cancellation, storage failure, playback loading and seeking, recovery from missing files, batch import errors, metadata-save cleanup, persistent model relationships, and cascade deletion. Use a signed run for a manual Finder drag-and-drop and file-panel sandbox check.
+macOS tests use a local ad-hoc host signature; Simulator builds need no production registration. Do not pass `-allowProvisioningUpdates`. Native interaction, live-provider and signed credential-continuity acceptance are tracked separately from offline tests; Apple signing/installation and TestFlight distribution are already established.
 
-## Transcription providers
-
-See [the transcription architecture](docs/TRANSCRIPTION.md) for state handling, persistence, cancellation, and extension points. Mock and OpenAI are connected. The interface also supports a future local Whisper provider without coupling the recording UI to an inference runtime. See [OpenAI setup, limitations, and the pending live acceptance checklist](docs/OPENAI_TRANSCRIPTION.md).
+See the [roadmap](docs/ROADMAP.md), [project architecture](docs/PROJECTS.md), [retrieval](docs/PROJECT_RETRIEVAL.md), [project chat](docs/PROJECT_CHAT.md), [iOS platform boundaries](docs/IOS_PLATFORM_BOUNDARIES.md), and [Local AI architecture](docs/LOCAL_AI.md).

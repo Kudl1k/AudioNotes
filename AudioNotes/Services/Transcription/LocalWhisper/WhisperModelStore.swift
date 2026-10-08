@@ -7,6 +7,13 @@ struct WhisperModelDescriptor: Codable, Identifiable, Sendable {
     let title: String
     let files: [File]
     var downloadBytes: Int64 { files.reduce(0) { $0 + $1.size } }
+    static var selectable: [Self] {
+#if os(iOS)
+        bundled.filter { ["openai_whisper-tiny", "openai_whisper-base", "openai_whisper-small"].contains($0.id) }
+#else
+        bundled
+#endif
+    }
     static var bundled: [Self] {
         guard let url = Bundle.main.url(forResource: "WhisperModels", withExtension: "json"),
               let bytes = try? Data(contentsOf: url), let models = try? JSONDecoder().decode([Self].self, from: bytes) else { return [] }
@@ -64,6 +71,23 @@ actor WhisperModelStore {
          capacity: @escaping @Sendable (URL) throws -> Int64? = { try $0.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage }) {
         self.root = root; self.downloader = downloader; self.capacity = capacity
     }
+    func diskUsage() throws -> Int64 {
+        guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey]) else { return 0 }
+        var bytes: Int64 = 0
+        for case let url as URL in enumerator {
+            let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+            if values.isRegularFile == true { bytes += Int64(values.fileSize ?? 0) }
+        }
+        return bytes
+    }
+    /// Called once at process startup, before any download/inference can begin.
+    func cleanAbandonedDownloads() throws {
+        guard !leased else { return }
+        for url in (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+            where url.lastPathComponent.hasPrefix(".download-") {
+            try FileManager.default.removeItem(at: url)
+        }
+    }
     func acquire() throws { if leased { throw LocalAIError.modelBusy }; leased = true }
     func release() { leased = false }
     func folder(_ model: WhisperModelDescriptor) -> URL { root.appendingPathComponent(model.id, isDirectory: true) }
@@ -82,6 +106,11 @@ actor WhisperModelStore {
     func install(_ model: WhisperModelDescriptor, progress: @escaping @Sendable (LocalModelDownloadProgress) -> Void) async throws {
         try acquire(); defer { release() }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+#if os(iOS)
+        var managedRoot = root
+        var values = URLResourceValues(); values.isExcludedFromBackup = true
+        try managedRoot.setResourceValues(values)
+#endif
         let capacity = try? capacity(root)
         if let capacity, capacity < model.downloadBytes + 256 * 1024 * 1024 { throw LocalAIError.insufficientDiskSpace }
         let staging = root.appendingPathComponent(".download-" + UUID().uuidString, isDirectory: true)

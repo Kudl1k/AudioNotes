@@ -160,9 +160,7 @@ struct PresetEditorView: View {
 
                 if let errorMessage {
                     Section {
-                        Text(errorMessage)
-                            .foregroundStyle(.red)
-                            .font(.callout)
+                        InlineErrorLabel(errorMessage, font: .callout)
                     }
                 }
             }
@@ -177,7 +175,9 @@ struct PresetEditorView: View {
                         .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+#if os(macOS)
             .frame(minWidth: 460, minHeight: 480)
+#endif
         }
     }
 

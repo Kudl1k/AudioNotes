@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import ImageIO
 import PDFKit
@@ -57,8 +56,9 @@ actor NativeSourceProcessingService: SourceProcessing {
             if native.filter({ $0.isLetter || $0.isNumber }).count < 3 {
                 await progress(.init(phase: "Reading scanned pages", completed: index, total: document.pageCount))
                 do {
-                    let image = page.thumbnail(of: CGSize(width: 2200, height: 2200), for: .mediaBox)
-                    guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { throw SourceImportError.invalidFile }
+                    guard let cgImage = Self.renderPage(page, targetSize: CGSize(width: 2200, height: 2200), box: .mediaBox) else {
+                        throw SourceImportError.invalidFile
+                    }
                     text = try await ocr.recognize(cgImage).map(\.text).joined(separator: "\n")
                     origin = .ocr
                 } catch is CancellationError { throw CancellationError() }
@@ -69,7 +69,9 @@ actor NativeSourceProcessingService: SourceProcessing {
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !unreadable.contains(index) { unreadable.append(index) }
             // Preserve empty pages too; they never become retrieval candidates.
             units.append(.init(position: index, text: text, origin: origin, locator: .pdf(pageIndex: index)))
-            if index == 0 { try? writeThumbnail(page.thumbnail(of: CGSize(width: 220, height: 280), for: .mediaBox), beside: url) }
+            if index == 0, let thumbnail = Self.renderPage(page, targetSize: CGSize(width: 220, height: 280), box: .mediaBox) {
+                try? writeThumbnail(thumbnail, beside: url)
+            }
             await progress(.init(phase: "Extracting text", completed: index + 1, total: document.pageCount))
         }
         guard units.contains(where: { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else { throw SourceImportError.noText }
@@ -84,7 +86,7 @@ actor NativeSourceProcessingService: SourceProcessing {
               let height = properties[kCGImagePropertyPixelHeight] as? Int,
               let image = Self.downsample(url: url, maximumDimension: 2000) else { throw SourceImportError.invalidFile }
         if let thumb = Self.downsample(url: url, maximumDimension: 220) {
-            try? writeThumbnail(NSImage(cgImage: thumb, size: .zero), beside: url)
+            try? writeThumbnail(thumb, beside: url)
         }
         await progress(.init(phase: "Extracting text locally", completed: 0, total: 1))
         let observations = try await ocr.recognize(image)
@@ -131,13 +133,50 @@ actor NativeSourceProcessingService: SourceProcessing {
         return .init(units: units, metadata: .document(characterCount: text.count), warnings: [])
     }
 
+    static func renderPage(_ page: PDFPage, targetSize: CGSize, box: PDFDisplayBox = .mediaBox) -> CGImage? {
+        let bounds = page.bounds(for: box)
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+
+        let isRotated = (page.rotation == 90 || page.rotation == 270)
+        let effectiveWidth = isRotated ? bounds.height : bounds.width
+        let effectiveHeight = isRotated ? bounds.width : bounds.height
+        guard effectiveWidth > 0, effectiveHeight > 0 else { return nil }
+
+        let scale = min(targetSize.width / effectiveWidth, targetSize.height / effectiveHeight)
+        let pixelWidth = max(1, Int(round(effectiveWidth * scale)))
+        let pixelHeight = max(1, Int(round(effectiveHeight * scale)))
+
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        guard let context = CGContext(
+            data: nil,
+            width: pixelWidth,
+            height: pixelHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else { return nil }
+
+        context.setFillColor(CGColor(gray: 1.0, alpha: 1.0))
+        context.fill(CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+
+        context.saveGState()
+        context.scaleBy(x: scale, y: scale)
+        let transform = page.transform(for: box)
+        context.concatenate(transform)
+        page.draw(with: box, to: context)
+        context.restoreGState()
+
+        return context.makeImage()
+    }
+
     static func downsample(url: URL, maximumDimension: Int) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         return CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceThumbnailMaxPixelSize: maximumDimension, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary)
     }
-    private func writeThumbnail(_ image: NSImage, beside url: URL) throws {
-        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+    private func writeThumbnail(_ cg: CGImage, beside url: URL) throws {
         let destination = url.deletingLastPathComponent().appending(path: "thumbnail.jpg")
         guard let writer = CGImageDestinationCreateWithURL(destination as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else { return }
         CGImageDestinationAddImage(writer, cg, nil)

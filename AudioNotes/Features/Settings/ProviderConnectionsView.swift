@@ -128,9 +128,7 @@ struct ProviderConnectionsView: View {
                     }
 
                     if let err = model.chatGPTErrorMessage {
-                        Text(err)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+                        InlineErrorLabel(err)
                     }
                 }
                 .padding(.vertical, 4)
@@ -140,7 +138,21 @@ struct ProviderConnectionsView: View {
 
     private var anthropicSection: some View {
         Group {
-            ClaudeCLIConnectionView(configuration: llmConfig, settings: model)
+#if os(macOS)
+            if PlatformCapabilities.current.supportsClaudeCLI {
+                ClaudeCLIConnectionView(configuration: llmConfig, settings: model)
+            } else {
+                Section("Anthropic Claude") {
+                    Text("Claude CLI is unavailable on this system.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+#else
+            Section("Anthropic Claude") {
+                Text("Claude Code CLI integration is available on macOS.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+#endif
             if model.anthropicKeyIsConfigured {
                 Section("Previously saved API key") {
                     Text("Claude Code uses its account login. This saved API key is not used for summaries or chat.")
@@ -176,7 +188,7 @@ struct ProviderConnectionsView: View {
             }
             Text("Google OAuth authorizes Gemini API access for the configured Google Cloud project. It does not imply that a consumer Gemini subscription pays for API use.")
                 .font(.caption).foregroundStyle(.secondary)
-            if let error = model.googleOAuthError { Text(error).font(.caption).foregroundStyle(.red) }
+            if let error = model.googleOAuthError { InlineErrorLabel(error) }
             Label(model.geminiKeyIsConfigured ? "API key configured" : "No API key configured",
                   systemImage: model.geminiKeyIsConfigured ? "key.fill" : "key")
             SecureField(model.geminiKeyIsConfigured ? "Enter a replacement Gemini API key" : "Enter a Gemini API key",

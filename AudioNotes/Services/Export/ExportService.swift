@@ -13,7 +13,12 @@ struct NativeExportService: ExportWriting {
             let data: Data
             switch options.format {
             case .markdown: data = Data(MarkdownExporter().export(content: content, options: options).utf8)
-            case .pdf: data = try PDFExporter().exportCancellable(content: content, options: options)
+            case .pdf:
+#if os(macOS)
+                data = try PDFExporter().exportCancellable(content: content, options: options)
+#else
+                throw CocoaError(.featureUnsupported)
+#endif
             }
             try Task.checkCancellation()
             guard !data.isEmpty else { throw CocoaError(.fileWriteUnknown) }

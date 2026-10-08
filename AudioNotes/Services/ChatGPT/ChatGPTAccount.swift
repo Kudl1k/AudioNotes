@@ -16,6 +16,7 @@ struct ChatGPTAccount: Identifiable, Codable, Equatable, Sendable {
     let planUsageEnabled: Bool
     /// Expiration timestamp of the current access token.
     let expiresAt: Date
+    let earliestRefreshAt: Date?
 
     init(
         id: String,
@@ -24,7 +25,8 @@ struct ChatGPTAccount: Identifiable, Codable, Equatable, Sendable {
         issuedClientID: String,
         grantedScopes: [String],
         planUsageEnabled: Bool,
-        expiresAt: Date
+        expiresAt: Date,
+        earliestRefreshAt: Date? = nil
     ) {
         self.id = id
         self.email = email
@@ -33,6 +35,7 @@ struct ChatGPTAccount: Identifiable, Codable, Equatable, Sendable {
         self.grantedScopes = grantedScopes
         self.planUsageEnabled = planUsageEnabled
         self.expiresAt = expiresAt
+        self.earliestRefreshAt = earliestRefreshAt
     }
 }
 
@@ -61,6 +64,7 @@ struct ChatGPTTokenResponse: Codable, Sendable {
     let idToken: String?
     let tokenType: String
     let expiresIn: Int
+    let earliestRefreshAt: Date?
     let scope: String?
 
     enum CodingKeys: String, CodingKey {
@@ -70,6 +74,7 @@ struct ChatGPTTokenResponse: Codable, Sendable {
         case tokenType = "token_type"
         case expiresIn = "expires_in"
         case scope
+        case earliestRefreshAt = "earliest_refresh_at"
     }
 
     init(
@@ -86,6 +91,27 @@ struct ChatGPTTokenResponse: Codable, Sendable {
         self.refreshToken = refreshToken
         self.idToken = idToken
         self.scope = scope
+        self.earliestRefreshAt = nil
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        accessToken = try values.decode(String.self, forKey: .accessToken)
+        refreshToken = try values.decodeIfPresent(String.self, forKey: .refreshToken)
+        idToken = try values.decodeIfPresent(String.self, forKey: .idToken)
+        tokenType = try values.decode(String.self, forKey: .tokenType)
+        expiresIn = try values.decode(Int.self, forKey: .expiresIn)
+        scope = try values.decodeIfPresent(String.self, forKey: .scope)
+        if let timestamp = try? values.decode(Double.self, forKey: .earliestRefreshAt), timestamp.isFinite {
+            earliestRefreshAt = Date(timeIntervalSince1970: timestamp)
+        } else if let text = try? values.decode(String.self, forKey: .earliestRefreshAt) {
+            let formatter = ISO8601DateFormatter()
+            let fractionalFormatter = ISO8601DateFormatter()
+            fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            earliestRefreshAt = formatter.date(from: text) ?? fractionalFormatter.date(from: text)
+        } else {
+            earliestRefreshAt = nil
+        }
     }
 
     var grantedScopes: [String] {

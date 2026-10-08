@@ -1,21 +1,21 @@
-import AppKit
+import Foundation
 import Observation
 import UniformTypeIdentifiers
 
 @MainActor
 @Observable
 final class ReleaseSupportViewModel {
+    static let diagnosticsFileName = "Soniquill-Diagnostics.json"
+    static let diagnosticsTypes: [UTType] = [.json]
+    static let diagnosticsDisclosure = "Includes app version, macOS, architecture, schema and update availability. Projects, recordings, transcripts, chats, filenames, credentials and logs are excluded."
+
     private(set) var exporting = false
     var errorMessage: String?
     private let exporter = DiagnosticExporter()
 
-    func exportDiagnostics(updateConfigured: Bool, libraryOpenFailed: Bool) async {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "AudioNotes-Diagnostics.json"
-        panel.message = "Includes app version, macOS, architecture, schema and update availability. Projects, recordings, transcripts, chats, filenames, credentials and logs are excluded."
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+    func exportDiagnostics(to url: URL, updateConfigured: Bool, libraryOpenFailed: Bool) async {
         exporting = true
+        errorMessage = nil
         defer { exporting = false }
         do {
             try await exporter.export(DiagnosticReport(updateConfigured: updateConfigured, libraryOpenFailed: libraryOpenFailed), to: url)

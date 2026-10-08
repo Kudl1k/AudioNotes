@@ -118,7 +118,7 @@ extension GenerationRecord {
         var parts = [provider, modelDisplayNameSnapshot ?? modelID ?? "Unknown model", usageCost.displayText]
         if let location = executionLocationRaw.flatMap(ProviderExecutionLocation.init(rawValue:)) { parts.append(location.title) }
         if authenticationMethodRaw != nil { parts.append(path) }
-        parts.append("Processing time: " + AudioTime.string(durationSeconds))
+        parts.append("Processing time: " + OperationDurationFormatter.string(durationSeconds))
         if billingKind == .local, let recording, featureRaw == "transcription", durationSeconds > 0 {
             parts.append(String(format: "%.1f× realtime", recording.duration / durationSeconds))
         }

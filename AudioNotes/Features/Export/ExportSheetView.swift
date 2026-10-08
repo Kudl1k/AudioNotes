@@ -1,4 +1,4 @@
-import AppKit
+#if os(macOS)
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -51,9 +51,7 @@ struct ExportSheetView: View {
                 }
                 if let errorMessage = model.errorMessage {
                     Section {
-                        Text(errorMessage)
-                            .foregroundStyle(.red)
-                            .font(.callout)
+                        InlineErrorLabel(errorMessage, font: .callout)
                     }
                 }
             }
@@ -92,18 +90,13 @@ struct ExportSheetView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let defaultFileName = "\(sanitizedTitle).\(format.fileExtension)"
 
-        let panel = NSSavePanel()
-        panel.canCreateDirectories = true
-        panel.showsTagField = true
-        panel.nameFieldStringValue = defaultFileName
-
-        if let utType = UTType(filenameExtension: format.fileExtension) {
-            panel.allowedContentTypes = [utType]
-        }
-
-        panel.begin { response in
-            guard response == .OK, let targetURL = panel.url else { model.cancel(); return }
+        let types = UTType(filenameExtension: format.fileExtension).map { [$0] } ?? []
+        Task {
+            guard let targetURL = await FilePanels.chooseSaveDestination(fileName: defaultFileName, types: types)
+            else { model.cancel(); return }
             model.export(recording: recording, options: selectedOptions, to: targetURL)
         }
     }
 }
+
+#endif

@@ -28,7 +28,7 @@ struct TranscriptionProgressModelTests {
         #expect(tracker.smoothedAudioSecondsPerWallSecond == 25)
         #expect(tracker.snapshot.processedAudioDuration == 3_000)
         #expect(tracker.snapshot.estimatedRemainingTime == nil)
-        #expect(tracker.snapshot.overallProgress == 0.9)
+        #expect(tracker.snapshot.overallProgress == 1)
     }
 
     @Test func phaseProgressRemainsBoundedAndCompletes() {
@@ -36,9 +36,9 @@ struct TranscriptionProgressModelTests {
         var tracker = TranscriptionProgressTracker(startedAt: start, totalAudioDuration: 100)
         tracker.setPhase(.transcribing, currentPart: 1, totalParts: 1)
         tracker.completePart(audioDuration: 100, atElapsed: 10)
-        #expect(tracker.snapshot.overallProgress == 0.9)
+        #expect(tracker.snapshot.overallProgress == 1)
         tracker.setPhase(.saving)
-        #expect(tracker.snapshot.overallProgress == 0.95)
+        #expect(tracker.snapshot.overallProgress == 1)
         tracker.setPhase(.completed)
         #expect(tracker.snapshot.overallProgress == 1)
         #expect(tracker.snapshot.estimatedRemainingTime == nil)

@@ -1,12 +1,14 @@
 import Foundation
 
 enum TranscriptionPhase: String, Sendable, CaseIterable {
-    case preparing, splitting, transcribing, merging, saving, completed
+    case preparing, splitting, uploading, processing, transcribing, merging, saving, completed
 
     var message: String {
         switch self {
         case .preparing: "Preparing audio…"
         case .splitting: "Splitting recording…"
+        case .uploading: "Uploading audio…"
+        case .processing: "Processing audio…"
         case .transcribing: "Transcribing audio…"
         case .merging: "Combining transcript…"
         case .saving: "Saving transcript…"
@@ -26,6 +28,10 @@ struct TranscriptionProgressSnapshot: Equatable, Sendable {
     var overallProgress: Double?
     var estimatedRemainingTime: TimeInterval?
 
+    var partDescription: String? {
+        guard let currentPart, let totalParts, totalParts > 0, currentPart > 0, currentPart <= totalParts else { return nil }
+        return "Part \(currentPart) of \(totalParts)"
+    }
 }
 
 /// Tracks measured part throughput; callers only complete a part after its result arrives.
@@ -49,7 +55,7 @@ struct TranscriptionProgressTracker: Sendable {
         snapshot.phase = phase
         snapshot.currentPart = currentPart
         snapshot.totalParts = totalParts
-        if phase == .saving { snapshot.overallProgress = 0.95 }
+        if phase != .transcribing { snapshot.estimatedRemainingTime = nil }
         if phase == .completed { snapshot.overallProgress = 1; snapshot.estimatedRemainingTime = nil }
     }
 
@@ -85,7 +91,7 @@ struct TranscriptionProgressTracker: Sendable {
         }
         previousCompletedElapsed = elapsed
         if let total = snapshot.totalAudioDuration, total > 0 {
-            snapshot.overallProgress = min(0.9, 0.1 + 0.8 * min(1, previousCompletedAudio / total))
+            snapshot.overallProgress = min(1, previousCompletedAudio / total)
             if let rate = smoothedAudioSecondsPerWallSecond, previousCompletedAudio < total {
                 snapshot.estimatedRemainingTime = max(0, total - previousCompletedAudio) / rate
             } else {

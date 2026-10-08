@@ -56,15 +56,9 @@ actor ChatGPTResponsesClient {
             "stream": true
         ]
 
-        var capabilities = LLMModelCapabilities.capabilities(for: model, provider: .openAI)
-        // The ChatGPT-plan endpoint rejects max_output_tokens even though the
-        // corresponding OpenAI API model may support it.
-        capabilities.supportsMaxOutputTokens = false
-        let sanitized = settings?.sanitized(for: capabilities)
-
-        if let maxTokens = sanitized?.maxOutputTokens {
-            requestBody["max_output_tokens"] = maxTokens
-        }
+        // Sign in with ChatGPT's documented plan-sharing preview rejects
+        // max_output_tokens. OutputLength remains a prompt-level preference.
+        let sanitized = settings?.sanitized(for: LLMModelCapabilities.capabilities(for: model, provider: .openAI))
         if let effort = sanitized?.reasoningEffort {
             requestBody["reasoning"] = ["effort": effort.rawValue]
         }
@@ -200,13 +194,9 @@ actor ChatGPTResponsesClient {
             "stream": true
         ]
 
-        var capabilities = LLMModelCapabilities.capabilities(for: model, provider: .openAI)
-        capabilities.supportsMaxOutputTokens = false
-        let sanitized = settings?.sanitized(for: capabilities)
-
-        if let maxTokens = sanitized?.maxOutputTokens {
-            requestBody["max_output_tokens"] = maxTokens
-        }
+        // max_output_tokens is explicitly unsupported on the ChatGPT-plan
+        // endpoint. Keep the selected OutputLength in prompt instructions.
+        let sanitized = settings?.sanitized(for: LLMModelCapabilities.capabilities(for: model, provider: .openAI))
         if let effort = sanitized?.reasoningEffort {
             requestBody["reasoning"] = ["effort": effort.rawValue]
         }

@@ -1,12 +1,27 @@
-# AudioNotes — Codex Instructions
+# Soniquill — Codex Instructions
 
 ## Project
 
-AudioNotes is a fully native macOS application for importing audio
+Soniquill is a native macOS, iPhone and iPad application for importing audio
 recordings, transcribing them, generating AI summaries, chatting about
 their contents, and exporting the results to Markdown or PDF.
 
 The application must remain a native macOS application.
+
+## Production identity baseline (M16.7.0)
+
+Product Soniquill and bundle ID `cz.kudladev.soniquill` are final on both platforms.
+Apple Developer setup, physical iPhone installation, App Store Connect creation,
+archive/upload of 1.0.0 build 1, TestFlight and initial testers are owner-confirmed.
+Preserve the working signing configuration and existing Soniquill/TestFlight data,
+preferences, imported files, Keychain credentials and OAuth state. Do not add bundle
+suffixes or automatically migrate `cz.stepankudlacek.audionotes.ios`; that old
+sandbox is development-only and is not an acceptance blocker. Keep the legacy
+`cz.kudladev.AudioNotes.provider-credentials` and
+`cz.kudladev.AudioNotes.chatgpt-credentials` Keychain services. Installation alone
+does not prove feature-specific device acceptance. The owner updated the Google
+iOS client bundle registration; the local declaration is aligned. Live OAuth
+verification remains open. See docs/SONIQUILL_RENAME.md.
 
 ## Technology
 
@@ -631,3 +646,13 @@ the library's current recording list, then move each through SwiftDataProjectRep
 never reimport/copy audio or recreate history. Preserve active recording tasks. Show
 drop hover feedback. Menu-based Move to Project remains available. Native drag/drop
 acceptance is still required.
+
+## SwiftUI-first UI (M14 — first pass; desktop acceptance pending)
+
+SwiftUI is the default UI technology. AppKit belongs in `Platform/macOS/AppKit` behind
+small intent-named adapters (`FilePanels`, `Clipboard`, `Workspace`, `Alerts`,
+`PDFPreviewRepresentable`); features and services must not import AppKit. `PDFExporter`
+is the documented exception. Representables keep logic outside and guard state sync in
+a coordinator. Keep the SwiftUI transcript and Markdown renderers unless a measured
+benchmark justifies change. Do not move SwiftData models across modules while v1
+migration guarantees depend on them. See docs/SWIFTUI_MIGRATION.md. Do not start iOS.

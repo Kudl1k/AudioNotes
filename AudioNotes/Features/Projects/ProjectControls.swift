@@ -1,4 +1,3 @@
-import AppKit
 import SwiftData
 import SwiftUI
 
@@ -51,13 +50,14 @@ struct ProjectImportActivityView: View {
             List(queue.items.filter { $0.projectID == projectID }) { item in
                 VStack(alignment: .leading, spacing: 4) {
                     Label(item.filename, systemImage: icon(item)).lineLimit(1)
-                    Text(item.statusText).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                    if item.state == .processing, let progress = item.progress, progress.total > 0 {
-                        ProgressView(value: Double(progress.completed), total: Double(progress.total))
+                    if item.isActive, item.state != .waiting {
+                        OperationProgressView(title: "Importing source…", status: item.statusText,
+                            progress: OperationProgressValue(completed: item.progress?.completed, total: item.progress?.total),
+                            startedAt: item.startedAt)
+                    } else {
+                        Text(item.statusText).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     }
-                    if item.isActive, let started = item.startedAt {
-                        Text(started, style: .relative).font(.caption).foregroundStyle(.secondary)
-                    }
+
                 }.accessibilityElement(children: .combine)
             }.frame(width: 380, height: 300)
             HStack {

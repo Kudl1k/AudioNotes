@@ -5,6 +5,32 @@ import Testing
 @MainActor
 struct ChatGPTAuthTests {
 
+    @Test func planCapabilitiesHideUnsupportedSamplingFieldsWithoutDiscardingPresets() {
+        let suite = "ChatGPTPlanCapabilityTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let configuration = LLMConfiguration(defaults: defaults)
+        configuration.summaryProvider = .openAI
+        configuration.chatProvider = .openAI
+        configuration.summaryAuthMethod = .chatGPT
+        configuration.chatAuthMethod = .chatGPT
+        configuration.summarySettings = LLMGenerationSettings(maxOutputTokens: 800, temperature: 0.2, topP: 0.8)
+        configuration.chatSettings = LLMGenerationSettings(maxOutputTokens: 900, temperature: 0.4, topP: 0.7)
+        #expect(!configuration.summaryCapabilities.supportsTemperature)
+        #expect(!configuration.summaryCapabilities.supportsTopP)
+        #expect(!configuration.summaryCapabilities.supportsMaxOutputTokens)
+        #expect(!configuration.chatCapabilities.supportsTemperature)
+        #expect(!configuration.chatCapabilities.supportsTopP)
+        #expect(!configuration.chatCapabilities.supportsMaxOutputTokens)
+        #expect(configuration.summarySettings.temperature == 0.2)
+        #expect(configuration.summarySettings.topP == 0.8)
+        #expect(configuration.summarySettings.maxOutputTokens == 800)
+        configuration.summaryAuthMethod = .apiKey
+        configuration.chatAuthMethod = .apiKey
+        #expect(configuration.summaryCapabilities.supportsTemperature)
+        #expect(configuration.summarySettings.temperature == 0.2)
+    }
+
     // MARK: - PKCE Helper & Cryptography Tests
 
     @Test func pkceMatchesRFC7636Vector() throws {
@@ -225,6 +251,26 @@ struct ChatGPTAuthTests {
         #expect(token == "valid_token_xyz")
     }
 
+    @Test func tokenRefresherHonorsEarliestRefreshAt() async throws {
+        let store = MockChatGPTCredentialStore()
+        try await store.saveTokens(accessToken: "still_valid", refreshToken: "refresh_later", idToken: nil)
+        let account = ChatGPTAccount(id: "user_1", issuedClientID: "oaiapp_123",
+            grantedScopes: ["chatgpt.tokens.use.direct"], planUsageEnabled: true,
+            expiresAt: Date().addingTimeInterval(20), earliestRefreshAt: Date().addingTimeInterval(600))
+        let fixture = OpenAINetworkFixture(data: Data())
+        defer { fixture.cleanUp() }
+        let refresher = ChatGPTTokenRefresher(credentialStore: store, urlSession: fixture.session,
+            sessionStore: MockChatGPTSessionStore(account: account))
+        #expect(try await refresher.validAccessToken() == "still_valid")
+        #expect(fixture.probe.requests.withLock { $0.isEmpty })
+    }
+
+    @Test func tokenResponseDecodesEarliestRefreshTimestamp() throws {
+        let date = try #require(try JSONDecoder().decode(ChatGPTTokenResponse.self,
+            from: Data(#"{"access_token":"access","refresh_token":"refresh","token_type":"Bearer","expires_in":3600,"scope":"openid","earliest_refresh_at":"2026-10-02T16:00:00Z"}"#.utf8)).earliestRefreshAt)
+        #expect(date == ISO8601DateFormatter().date(from: "2026-10-02T16:00:00Z"))
+    }
+
     @Test func tokenRefresherRefreshesExpiredToken() async throws {
         let mockStore = MockChatGPTCredentialStore()
         try await mockStore.saveTokens(accessToken: "expired_token_abc", refreshToken: "refresh_123", idToken: nil)
@@ -265,6 +311,25 @@ struct ChatGPTAuthTests {
         // Verify tokens updated in store
         let storedRefresh = try await mockStore.refreshToken()
         #expect(storedRefresh == "rotated_refresh_token")
+    }
+
+    @Test func simultaneousExpiredTokenRequestsShareOneRotatingRefresh() async throws {
+        let store = MockChatGPTCredentialStore()
+        try await store.saveTokens(accessToken: "expired", refreshToken: "refresh_once", idToken: nil)
+        let account = ChatGPTAccount(id: "account", email: nil, displayName: nil, issuedClientID: "issued-client",
+            grantedScopes: ["chatgpt.tokens.use.direct"], planUsageEnabled: true, expiresAt: .distantPast)
+        let sessionStore = MockChatGPTSessionStore(account: account)
+        let response = #"{"access_token":"fresh","token_type":"Bearer","refresh_token":"rotated_once","expires_in":3600,"scope":"chatgpt.tokens.use.direct"}"#
+        let fixture = OpenAINetworkFixture(data: Data(response.utf8))
+        defer { fixture.cleanUp() }
+        let refresher = ChatGPTTokenRefresher(credentialStore: store, urlSession: fixture.session, sessionStore: sessionStore)
+        async let first = refresher.validAccessToken()
+        async let second = refresher.validAccessToken()
+        let tokens = try await (first, second)
+        #expect(tokens.0 == "fresh")
+        #expect(tokens.1 == "fresh")
+        #expect(fixture.probe.requests.withLock { $0.count } == 1)
+        #expect(try await store.refreshToken() == "rotated_once")
     }
 
     // MARK: - LLM Provider Resolver Tests
@@ -324,6 +389,20 @@ struct ChatGPTAuthTests {
         #expect(resolved.id == .openAI)
         #expect(resolved.authenticationMethod == .apiKey)
         #expect(resolved.supportsSourceSummaries)
+    }
+
+    @Test func resolverMapsGeminiOAuthToDeveloperAPIProviderAndKnownModels() {
+        let suiteName = "cz.kudladev.test.gemini.models.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let config = LLMConfiguration(defaults: defaults)
+        config.summaryGeminiAuthenticationMethod = .oauth
+        let resolver = LLMProviderResolver(configuration: config, credentials: MockCredentialStore())
+        let provider = resolver.resolveSummary(provider: .gemini, model: "gemini-2.5-pro")
+        #expect(provider.id == .gemini)
+        #expect(provider.modelID == "gemini-2.5-pro")
+        #expect(provider.authenticationMethod == .oauth)
+        #expect(resolver.summaryModels(for: .gemini).map(\.id) == ["gemini-3.8-flash"])
     }
 
     // MARK: - Settings ViewModel Tests

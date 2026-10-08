@@ -12,8 +12,12 @@ final class SourcesViewModel {
     var importPhase: String?
     var progress: [UUID: SourceProcessingProgress] = [:]
     var startedAt: [UUID: Date] = [:]
+    private(set) var transcriptionProgress: [UUID: TranscriptionProgressSnapshot] = [:]
     var searchQuery = ""
     var searchResults: [SourceChunk] = []
+    /// The query whose results are in `searchResults`, so "no matches" is distinguishable from "still searching".
+    private(set) var searchedQuery: String?
+    var isSearching: Bool { !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && searchedQuery != searchQuery }
     @ObservationIgnored private let importer: any SourceImporting
     @ObservationIgnored private let processor: any SourceProcessing
     @ObservationIgnored private let storage: LibraryStorage
@@ -31,7 +35,7 @@ final class SourcesViewModel {
 
     func prepare(context: ModelContext) {
         SourceCompatibilityMigration().ensurePrimaryAudio(for: recording, context: context)
-        do { try context.save() } catch { self.error = error.localizedDescription }
+        do { try context.save() } catch { self.error = "The library could not be updated. Try again." }
     }
     func url(for source: RecordingSource) -> URL { storage.sourceURL(source) }
     func thumbnailURL(for source: RecordingSource) -> URL { storage.sourceDirectory(id: source.id).appending(path: "thumbnail.jpg") }
@@ -78,10 +82,10 @@ final class SourcesViewModel {
     func reprocess(_ source: RecordingSource, context: ModelContext) {
         guard source.type != .audio, !isProcessing(source) else { return }
         source.status = .processing
-        progress[source.id] = .init(phase: "Preparing local extraction", completed: 0, total: 1)
+        progress[source.id] = nil // Unit totals are known only after the processor reports them.
         source.processingError = nil
         startedAt[source.id] = .now
-        do { try context.save() } catch { self.error = error.localizedDescription; source.status = .failed; return }
+        do { try context.save() } catch { self.error = "The source could not be prepared for processing. Try again."; source.status = .failed; return }
         let processor = processor
         let fileURL = url(for: source)
         let sourceID = source.id
@@ -127,15 +131,30 @@ final class SourcesViewModel {
         let tracker = OperationUsageTracker(generation: generation) { try? context.save() }
         var requestIDs: [UUID: UUID] = [:]
         let fileURL = url(for: source)
+        let started = startedAt[source.id] ?? .now
+        let duration: TimeInterval
+        if case .audio(let value) = source.metadata { duration = value } else { duration = 0 }
+        var audioProgress = TranscriptionProgressTracker(startedAt: started, totalAudioDuration: duration)
+        transcriptionProgress[source.id] = audioProgress.snapshot
         tasks[source.id] = Task { [weak self] in
             guard let self else { return }
             defer {
                 if generation.statusRaw == GenerationStatus.inProgress.rawValue { tracker.finish(status: Task.isCancelled ? .cancelled : .failed) }
                 try? context.save()
                 self.tasks[source.id] = nil; self.startedAt[source.id] = nil
+                self.transcriptionProgress[source.id] = nil
             }
             do {
-                let transcript = try await provider.transcribe(audioURL: fileURL, progress: { _ in }, status: { _ in }, usage: { event in
+                let transcript = try await provider.transcribe(audioURL: fileURL, progress: { [weak self] fraction in
+                    guard let self, !Task.isCancelled else { return }
+                    var snapshot = self.transcriptionProgress[source.id] ?? audioProgress.snapshot
+                    snapshot.overallProgress = OperationProgressValue(fraction: fraction).fraction
+                    self.transcriptionProgress[source.id] = snapshot
+                }, status: { [weak self] status in
+                    guard let self, !Task.isCancelled else { return }
+                    audioProgress.apply(status, elapsed: OperationDurationFormatter.elapsed(since: started, now: .now))
+                    self.transcriptionProgress[source.id] = audioProgress.snapshot
+                }, usage: { event in
                     switch event {
                     case .began(let id): requestIDs[id] = tracker.beginRequest()
                     case .finished(let id, let usage, let succeeded):
@@ -168,7 +187,7 @@ final class SourcesViewModel {
         guard !name.isEmpty else { return }
         let previous = source.displayName
         source.displayName = name
-        do { try context.save() } catch { source.displayName = previous; self.error = error.localizedDescription }
+        do { try context.save() } catch { source.displayName = previous; self.error = "The source could not be renamed. Try again." }
     }
 
     func remove(_ source: RecordingSource, context: ModelContext) {
@@ -211,13 +230,14 @@ final class SourcesViewModel {
                 }
             }
             search()
-        } catch { self.error = error.localizedDescription }
+        } catch { self.error = "The source could not be removed. Try again." }
     }
 
     func search() {
         searchTask?.cancel()
         let query = searchQuery
         searchResults = []
+        searchedQuery = nil
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         searchTask = Task { [weak self] in
             do {
@@ -233,6 +253,7 @@ final class SourcesViewModel {
                 } onCancel: { worker.cancel() }
                 try Task.checkCancellation()
                 self.searchResults = Array(results.prefix(100))
+                self.searchedQuery = query
             } catch { /* Superseded searches never publish. */ }
         }
     }

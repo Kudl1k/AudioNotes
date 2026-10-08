@@ -6,6 +6,9 @@ struct UsageCostView: View {
     var projectID: UUID? = nil
     var feature: GenerationFeature? = nil
     @Environment(\.dismiss) private var dismiss
+#if os(iOS)
+    @Environment(\.dynamicTypeSize) private var typeSize
+#endif
     @Query(sort: \GenerationRecord.startedAt, order: .reverse) private var records: [GenerationRecord]
     @State private var range: UsageTimeRange = .month
     @State private var snapshot = UsageDashboardSnapshot()
@@ -13,6 +16,21 @@ struct UsageCostView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+#if os(iOS)
+            ViewThatFits(in: .horizontal) {
+                HStack { Text("Usage & Cost").font(.title2.bold()); Spacer(); Button("Done") { dismiss() } }
+                VStack(alignment: .leading) { Text("Usage & Cost").font(.title2.bold()); Button("Done") { dismiss() } }
+            }
+            if typeSize.isAccessibilitySize {
+                Picker("Time range", selection: $range) {
+                    ForEach(UsageTimeRange.allCases) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.menu)
+            } else {
+                Picker("Time range", selection: $range) {
+                    ForEach(UsageTimeRange.allCases) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.segmented)
+            }
+#else
             HStack {
                 Text("Usage & Cost").font(.title2.bold())
                 Spacer()
@@ -21,6 +39,7 @@ struct UsageCostView: View {
             Picker("Time range", selection: $range) {
                 ForEach(UsageTimeRange.allCases) { Text($0.rawValue).tag($0) }
             }.pickerStyle(.segmented)
+#endif
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     GroupBox("Metered API usage · USD") {
@@ -68,7 +87,11 @@ struct UsageCostView: View {
                 }
             }
         }
+#if os(macOS)
         .padding(24).frame(minWidth: 600, idealWidth: 680, minHeight: 500)
+#else
+        .padding(16).frame(maxWidth: 760).frame(maxWidth: .infinity)
+#endif
         .task(id: records.map { "\($0.id)-\($0.requestUsageData?.hashValue ?? 0)-\($0.statusRaw)" }.joined() + range.rawValue) {
             let scoped = records.filter { (recordingID == nil || $0.recordingID == recordingID) && (projectID == nil || $0.projectID == projectID) && (feature == nil || $0.featureRaw == feature?.rawValue) }
             let interval = range.interval()

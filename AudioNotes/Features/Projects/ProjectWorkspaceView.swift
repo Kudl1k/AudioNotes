@@ -1,4 +1,4 @@
-import AppKit
+#if os(macOS)
 import SwiftData
 import SwiftUI
 
@@ -16,11 +16,7 @@ struct ProjectWorkspaceView: View {
     @State private var query = ""
     @State private var preview: SourcePreviewTarget?
     @State private var exporting: Recording?
-    @State private var deletingRecording: Recording?
-    @State private var removing: RecordingSource?
-    @State private var renaming: RecordingSource?
-    @State private var sourceName = ""
-    @State private var error: String?
+    @State private var model = ProjectWorkspaceViewModel()
     @State private var showsActivity = false
     @State private var recordingDropTargeted = false
     private enum WorkspaceTab: Hashable { case overview, recordings, sources, chat }
@@ -36,57 +32,80 @@ struct ProjectWorkspaceView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(project.name).font(.largeTitle.bold()).textSelection(.enabled)
-                Text("\(project.recordings.count) recordings · \(project.sources.count) sources").foregroundStyle(.secondary)
-                if let description = project.projectDescription { Text(description).foregroundStyle(.secondary).textSelection(.enabled) }
-                HStack {
-                    Picker("Project section", selection: $tab) {
-                        Text("Overview").tag(WorkspaceTab.overview)
-                        Text("Recordings").tag(WorkspaceTab.recordings)
-                        Text("Sources").tag(WorkspaceTab.sources)
-                        Text("Chat").tag(WorkspaceTab.chat)
-                    }.pickerStyle(.segmented).frame(maxWidth: 360)
-                    Spacer()
-                    TextField("Filter titles and filenames", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 230)
+            VStack(alignment: .leading, spacing: WorkspaceSpacing.section) {
+                VStack(alignment: .leading, spacing: WorkspaceSpacing.compact) {
+                    Text(project.name).font(.title.bold()).textSelection(.enabled)
+                        .lineLimit(2).truncationMode(.tail).help(project.name)
+                    Text("^[\(project.recordings.count) recording](inflect: true) · ^[\(project.sources.count) source](inflect: true)")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    if let description = project.projectDescription {
+                        Text(description).font(.subheadline).foregroundStyle(.secondary)
+                            .lineLimit(2).textSelection(.enabled).help(description)
+                    }
                 }
-            }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-            Divider()
-            if tab == .chat {
-                ProjectChatView(model: library.projectChatModel(for: project, resolver: llmResolver), library: library)
-            } else if project.recordings.isEmpty && project.sources.isEmpty {
-                ContentUnavailableView {
-                    Label("This project is empty", systemImage: "folder")
-                } description: {
-                    Text("Add recordings, PDFs, documents, images and notes. You can also drop files here.")
-                } actions: { Button("Import Files…", action: importFiles) }
-            } else {
-                List {
-                    switch tab {
-                    case .overview:
-                        Section("Recent Recordings") { ForEach(Array(recordings.prefix(8))) { recordingRow($0) } }
-                        Section("Recent Sources · Shared with this project") { ForEach(Array(sources.prefix(8))) { sourceRow($0) } }
-                        let active = queue.items.filter { $0.projectID == project.id && $0.isActive }
-                        if !active.isEmpty {
-                            Section("Processing") {
-                                ForEach(active) { item in
-                                    VStack(alignment: .leading) { Text(item.filename); Text(item.statusText).font(.caption).foregroundStyle(.secondary) }
-                                }
-                            }
-                        }
-                        let operations = library.activeOperations.filter { activity in project.recordings.contains { $0.id == activity.recordingID } }
-                        if !operations.isEmpty {
-                            Section("Recording Activity") {
-                                ForEach(operations) { activity in Button(activity.title) { openRecording(activity.recordingID) } }
-                            }
-                        }
-                    case .recordings: ForEach(recordings) { recordingRow($0) }
-                    case .chat: EmptyView()
-                    case .sources:
-                        Section("Shared with this project") { ForEach(sources) { sourceRow($0) } }
+                // Title, counts and description are read as one project summary.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Self.headerLabel(name: project.name, recordings: project.recordings.count,
+                    sources: project.sources.count, description: project.projectDescription))
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("project.header")
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: WorkspaceSpacing.section) {
+                        sectionPicker
+                        Spacer(minLength: WorkspaceSpacing.section)
+                        if tab != .chat { searchField.frame(width: 230) }
+                    }
+                    VStack(alignment: .leading, spacing: WorkspaceSpacing.standard) {
+                        sectionPicker
+                        if tab != .chat { searchField }
                     }
                 }
             }
+            .padding(WorkspaceSpacing.majorSection)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+            Divider()
+            Group {
+                if tab == .chat {
+                    ProjectChatView(model: library.projectChatModel(for: project, resolver: llmResolver), library: library)
+                } else if project.recordings.isEmpty && project.sources.isEmpty {
+                    ContentUnavailableView {
+                        Label("This project is empty", systemImage: "folder")
+                    } description: {
+                        Text("Add recordings, PDFs, documents, images and notes. You can also drop files here.")
+                    } actions: { Button("Import Files…", action: importFiles) }
+                } else if tab != .chat && tabIsEmpty {
+                    emptyTabState
+                } else {
+                    List {
+                        switch tab {
+                        case .overview:
+                            if !recordings.isEmpty { Section("Recent Recordings") { ForEach(Array(recordings.prefix(8))) { recordingRow($0) } } }
+                            if !sources.isEmpty { Section("Recent Sources · Shared with this project") { ForEach(Array(sources.prefix(8))) { sourceRow($0) } } }
+                            let active = queue.items.filter { $0.projectID == project.id && $0.isActive }
+                            if !active.isEmpty {
+                                Section("Processing") {
+                                    ForEach(active) { item in
+                                        projectImportProgress(item)
+                                    }
+                                }
+                            }
+                            let operations = library.activeOperations.filter { activity in project.recordings.contains { $0.id == activity.recordingID } }
+                            if !operations.isEmpty {
+                                Section("Recording Activity") {
+                                    ForEach(operations) { activity in Button(activity.title) { openRecording(activity.recordingID) } }
+                                }
+                            }
+                        case .recordings: ForEach(recordings) { recordingRow($0) }
+                        case .chat: EmptyView()
+                        case .sources:
+                            Section("Shared with this project") { ForEach(sources) { sourceRow($0) } }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+
         }
         .dropDestination(for: RecordingDragItem.self) { items, _ in
             let ids = Array(Set(items.map(\.recordingID)))
@@ -124,40 +143,115 @@ struct ProjectWorkspaceView: View {
                 .popover(isPresented: $showsActivity) { ProjectImportActivityView(projectID: project.id, queue: queue) } }
         }
         .sheet(item: $exporting) { ExportSheetView(recording: $0) }
-        .alert("Delete Recording?", isPresented: Binding(get: { deletingRecording != nil }, set: { if !$0 { deletingRecording = nil } })) {
-            Button("Cancel", role: .cancel) { deletingRecording = nil }
-            Button("Delete", role: .destructive) {
-                if let recording = deletingRecording {
-                    library.delete(recording, using: SwiftDataRecordingRepository(context: context, storage: queue.storage))
-                }
-                deletingRecording = nil
-            }
-        } message: { Text("This recording and its managed files, transcript, summaries, chats and history will be permanently deleted. Project sources and your original files remain.") }
         .sheet(item: $preview) { SourcePreviewView(target: $0, url: queue.storage.sourceURL($0.source)) }
-        .alert("Delete Project Source?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
-            Button("Cancel", role: .cancel) { removing = nil }
-            Button("Delete", role: .destructive) {
-                if let source = removing {
-                    do { try SwiftDataProjectRepository(context: context, storage: queue.storage).deleteSource(source, from: project) }
-                    catch { self.error = error.localizedDescription }
-                }
-                removing = nil
-            }
-        } message: { Text("The managed copy and extracted text will be removed. Your original file remains on your Mac.") }
-        .alert("Rename Source", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Name", text: $sourceName)
-            Button("Cancel", role: .cancel) { renaming = nil }
-            Button("Rename") {
-                if let source = renaming {
-                    do { try SwiftDataProjectRepository(context: context).renameSource(source, in: project, name: sourceName) }
-                    catch { self.error = error.localizedDescription }
-                }
-                renaming = nil
-            }.disabled(sourceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .alert(promptTitle, isPresented: Binding(get: { model.prompt != nil }, set: { if !$0 { model.prompt = nil } }),
+               presenting: model.prompt) { prompt in
+            promptActions(prompt)
+        } message: { prompt in
+            promptMessage(prompt)
         }
-        .alert("Project could not be updated", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button("OK", role: .cancel) { error = nil }
-        } message: { Text(error ?? "") }
+        .alert("Project could not be updated", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
+            Button("OK", role: .cancel) { model.errorMessage = nil }
+        } message: { Text(model.errorMessage ?? "") }
+    }
+
+    static func headerLabel(name: String, recordings: Int, sources: Int, description: String?) -> String {
+        ["\(name)", "\(recordings) \(recordings == 1 ? "recording" : "recordings"), \(sources) \(sources == 1 ? "source" : "sources")", description].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: ". ")
+    }
+
+    private var sectionPicker: some View {
+        Picker("Project section", selection: $tab) {
+            Text("Overview").tag(WorkspaceTab.overview)
+            Text("Recordings").tag(WorkspaceTab.recordings)
+            Text("Sources").tag(WorkspaceTab.sources)
+            Text("Chat").tag(WorkspaceTab.chat)
+        }
+        .pickerStyle(.segmented).labelsHidden()
+        .fixedSize(horizontal: true, vertical: true)
+        .accessibilityIdentifier("project.tabs")
+    }
+
+    private var searchField: some View {
+        TextField("Filter titles and filenames", text: $query)
+            .textFieldStyle(.roundedBorder).accessibilityLabel("Filter project titles and filenames")
+            .accessibilityIdentifier("project.search")
+    }
+
+    @ViewBuilder private func projectImportProgress(_ item: ProjectImportItem) -> some View {
+        if item.state == .waiting {
+            Label(item.filename + " · Waiting", systemImage: "clock").font(.caption).foregroundStyle(.secondary)
+        } else {
+            OperationProgressView(title: item.filename, status: item.statusText,
+                progress: OperationProgressValue(completed: item.progress?.completed, total: item.progress?.total),
+                startedAt: item.startedAt)
+        }
+    }
+
+    private var projectRepository: SwiftDataProjectRepository {
+        SwiftDataProjectRepository(context: context, storage: queue.storage)
+    }
+
+    private var promptTitle: String {
+        switch model.prompt {
+        case .deleteRecording: "Delete Recording?"
+        case .deleteSource: "Delete Project Source?"
+        case .renameSource: "Rename Source"
+        case nil: ""
+        }
+    }
+
+    @ViewBuilder private func promptActions(_ prompt: ProjectWorkspaceViewModel.Prompt) -> some View {
+        switch prompt {
+        case .deleteRecording(let recording):
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                model.confirmDelete(recording, library: library, using: SwiftDataRecordingRepository(context: context, storage: queue.storage))
+            }
+        case .deleteSource(let source):
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) { model.confirmDelete(source, from: project, using: projectRepository) }
+        case .renameSource(let source):
+            TextField("Name", text: $model.sourceName)
+            Button("Cancel", role: .cancel) {}
+            Button("Rename") { model.confirmRename(source, in: project, using: projectRepository) }
+                .disabled(model.sourceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+
+    @ViewBuilder private func promptMessage(_ prompt: ProjectWorkspaceViewModel.Prompt) -> some View {
+        switch prompt {
+        case .deleteRecording: Text("This recording and its managed files, transcript, summaries, chats and history will be permanently deleted. Project sources and your original files remain.")
+        case .deleteSource: Text("The managed copy and extracted text will be removed. Your original file remains on your Mac.")
+        case .renameSource: EmptyView()
+        }
+    }
+
+    /// A tab with nothing to show: either the filter excludes everything, or this kind of content is absent.
+    private var tabIsEmpty: Bool {
+        switch tab {
+        case .overview: recordings.isEmpty && sources.isEmpty
+        case .recordings: recordings.isEmpty
+        case .sources: sources.isEmpty
+        case .chat: false
+        }
+    }
+
+    @ViewBuilder private var emptyTabState: some View {
+        if !query.isEmpty {
+            ContentUnavailableView.search(text: query)
+        } else if tab == .recordings {
+            ContentUnavailableView {
+                Label("No recordings in this project", systemImage: "waveform")
+            } description: {
+                Text("Import audio here, or drag a recording from the library onto this project.")
+            } actions: { Button("Import Files…", action: importFiles).accessibilityIdentifier("project.import") }
+        } else {
+            ContentUnavailableView {
+                Label("No shared sources", systemImage: "doc.on.doc")
+            } description: {
+                Text("Add PDFs, documents, images and notes that every recording in this project can use.")
+            } actions: { Button("Import Files…", action: importFiles).accessibilityIdentifier("project.import") }
+        }
     }
 
     private func recordingRow(_ recording: Recording) -> some View {
@@ -165,21 +259,20 @@ struct ProjectWorkspaceView: View {
             HStack {
                 Image(systemName: "waveform").foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(recording.title).foregroundStyle(.primary)
+                    Text(recording.title).foregroundStyle(.primary).lineLimit(1).truncationMode(.middle).help(recording.title)
                     Text(AudioTime.string(recording.duration) + " · " + recordingStatus(recording)).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text(recording.importedAt, format: .dateTime.month(.abbreviated).day()).font(.caption).foregroundStyle(.secondary)
             }.padding(.vertical, 4).contentShape(Rectangle())
         }.buttonStyle(.plain)
+        .accessibilityElement(children: .combine).accessibilityHint("Opens the recording")
+        .accessibilityIdentifier("project.recording.\(recording.id.uuidString)")
         .contextMenu {
             Button("Open") { openRecording(recording.id) }
-            RecordingProjectMenu(recording: recording, projects: projects) { target in
-                do { try SwiftDataProjectRepository(context: context).move(recording, to: target) }
-                catch { self.error = error.localizedDescription }
-            }
+            RecordingProjectMenu(recording: recording, projects: projects) { model.move(recording, to: $0, using: projectRepository) }
             Button("Export…") { exporting = recording }
-            Button("Delete…", role: .destructive) { deletingRecording = recording }.disabled(!library.canDelete(recording))
+            Button("Delete…", role: .destructive) { model.requestDelete(recording) }.disabled(!library.canDelete(recording))
         }
     }
     private func recordingStatus(_ recording: Recording) -> String {
@@ -195,31 +288,31 @@ struct ProjectWorkspaceView: View {
                 Text(source.displayName).lineLimit(1)
                 Text(sourceDescription(source)).font(.caption).foregroundStyle(.secondary)
                 if let item = queue.items.last(where: { $0.sourceID == source.id && $0.isActive }) {
-                    Text(item.statusText).font(.caption).foregroundStyle(.secondary)
-                    if let progress = item.progress, progress.total > 0 {
-                        ProgressView(value: Double(progress.completed), total: Double(progress.total)).frame(maxWidth: 240)
-                    }
+                    projectImportProgress(item)
                 } else if let problem = source.processingError { Text(problem).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
             }
             Spacer()
             Button("Open") { preview = .init(source: source) }
+                .accessibilityLabel("Open \(source.displayName)")
             if source.status == .failed || source.status == .partial {
                 Button("Retry") { queue.retry(source, in: project, context: context) }.disabled(queue.isProcessing(source.id))
+                    .accessibilityLabel("Retry \(source.displayName)")
             }
         }.padding(.vertical, 4).accessibilityElement(children: .contain)
+        .accessibilityIdentifier("project.source.\(source.id.uuidString)")
         .contextMenu {
             Button("Open") { preview = .init(source: source) }
-            Button("Rename…") { sourceName = source.displayName; renaming = source }
+            Button("Rename…") { model.requestRename(source) }
             Button("Retry") { queue.retry(source, in: project, context: context) }.disabled(queue.isProcessing(source.id))
-            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([queue.storage.sourceURL(source)]) }
-            Button("Delete…", role: .destructive) { removing = source }.disabled(queue.isProcessing(source.id))
+            Button("Show in Finder") { Workspace.revealInFinder([queue.storage.sourceURL(source)]) }
+            Button("Delete…", role: .destructive) { model.requestDelete(source) }.disabled(queue.isProcessing(source.id))
         }
     }
     private func sourceDescription(_ source: RecordingSource) -> String {
         let kind: String
         switch source.type {
         case .pdf:
-            if case .pdf(let count, _) = source.metadata { kind = "PDF · \(count) pages" } else { kind = "PDF" }
+            if case .pdf(let count, _) = source.metadata { kind = "PDF · \(count) \(count == 1 ? "page" : "pages")" } else { kind = "PDF" }
         case .image: kind = "Image"
         case .document: kind = "Text / Markdown"
         case .audio: kind = "Audio"
@@ -236,3 +329,5 @@ struct ProjectWorkspaceView: View {
         return kind + " · " + status
     }
 }
+
+#endif

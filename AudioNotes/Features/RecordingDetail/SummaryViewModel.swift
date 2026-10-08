@@ -14,11 +14,12 @@ final class SummaryViewModel {
         resolver.resolveSummary(provider: selectedProvider ?? selectedUserPreset?.provider,
             model: selectedModel ?? (selectedProvider == nil ? selectedUserPreset?.model : nil))
     }
-    var selectedModelName: String? { (activeProvider ?? resolvedProvider).modelID }
+    var selectedModelName: String? { (activeProvider ?? resolvedProvider).modelDisplayName }
     let recording: Recording
     private(set) var state: SummaryState
     var selectedSourceIDs: Set<UUID>? = nil
     var allowImageUpload = false
+    var providerExecutionLocation: ProviderExecutionLocation { (activeProvider ?? resolvedProvider).executionLocation }
     var executionDescription: String { (activeProvider ?? resolvedProvider).executionLocation.title }
     var supportsImageInput: Bool { resolvedProvider.inputCapabilities.supportsImageInput }
     var usesUnifiedContext: Bool { (!recording.sources.isEmpty && resolvedProvider.supportsSourceSummaries) || recording.sources.contains { !$0.isPrimaryAudio } || selectedSourceIDs != nil || recording.transcript == nil }
@@ -29,6 +30,7 @@ final class SummaryViewModel {
     var generationSettings: LLMGenerationSettings?
     var outputLength: OutputLength = .medium
     private(set) var progressMessage: String?
+    private(set) var operationStartedAt: Date?
 
     @ObservationIgnored private let resolver: any LLMProviderResolving
     @ObservationIgnored private var activeProvider: (any LLMProvider)?
@@ -122,6 +124,7 @@ final class SummaryViewModel {
         attemptID = id
         state = .generating
         let startedAt = Date.now
+        operationStartedAt = startedAt
 
         var effectiveSettings = generationSettings ?? resolver.summarySettings()
         effectiveSettings.outputLength = outputLength
@@ -149,6 +152,7 @@ final class SummaryViewModel {
         generation.estimatedCostRangeData = costEstimate.flatMap { try? JSONEncoder().encode($0) }
         generation.selectedSourceIDsData = selectionData
         generation.executionLocationRaw = provider.executionLocation.rawValue
+        generation.modelDisplayNameSnapshot = provider.modelDisplayName
         lastGeneration = generation
         let tracker = OperationUsageTracker(generation: generation) { try? repository.record(generation) }
         let trackedProvider = UsageTrackingLLMProvider(base: provider, tracker: tracker)
@@ -223,6 +227,33 @@ final class SummaryViewModel {
         }
 
         return task
+    }
+
+    /// A failed version-history change; shown by whichever view started it.
+    var historyError: String?
+
+    /// Restores a previous version as current. Returns whether it succeeded.
+    @discardableResult
+    func makeCurrent(_ summary: Summary, using repository: any SummaryStoring) -> Bool {
+        do {
+            try repository.makeCurrent(summary, for: recording)
+            return true
+        } catch {
+            historyError = "This summary version could not be made current. Try again."
+            return false
+        }
+    }
+
+    /// Deletes a non-current version. Returns whether it succeeded.
+    @discardableResult
+    func deleteVersion(_ summary: Summary, using repository: any SummaryStoring) -> Bool {
+        do {
+            try repository.delete(summary, for: recording)
+            return true
+        } catch {
+            historyError = "This summary version could not be deleted. Nothing was removed."
+            return false
+        }
     }
 
     func cancelGeneration() {

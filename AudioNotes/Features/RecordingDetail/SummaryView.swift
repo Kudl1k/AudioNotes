@@ -8,6 +8,9 @@ struct SummaryView: View {
     var onOpenSource: (SourceReference) -> Void = { _ in }
     @Environment(\.modelContext) private var modelContext
     @State private var showsRegenerateOptions = false
+#if os(iOS)
+    @State private var showingIOSConfiguration = false
+#endif
     @State private var showingSavePreset = false
     @State private var showingManagePresets = false
     @State private var showingHistory = false
@@ -34,16 +37,32 @@ struct SummaryView: View {
             }
         }
         .sheet(isPresented: $showingHistory) {
-            SummaryHistorySheet(recording: recording) { historicalSummary = $0 }
+            SummaryHistorySheet(recording: recording, model: model, repository: repository) { historicalSummary = $0 }
+#if os(macOS)
                 .frame(minWidth: 440, minHeight: 360)
+#endif
         }
+        // While the history sheet is open, it presents its own version errors.
+        .alert("Summary history", isPresented: Binding(get: { model.historyError != nil && !showingHistory },
+                                                       set: { if !$0 { model.historyError = nil } })) {
+            Button("OK", role: .cancel) { model.historyError = nil }
+        } message: { Text(model.historyError ?? "") }
     }
+
+    private var repository: SwiftDataSummaryRepository { SwiftDataSummaryRepository(context: modelContext) }
 
     private var emptyStateGenerator: some View {
         ScrollView {
-            generatorForm
+            Group {
+#if os(iOS)
+                iosGenerator
+#else
+                generatorForm
+#endif
+            }
                 .frame(maxWidth: .infinity)
-                .padding(24)
+                .padding(.horizontal, generatorHorizontalPadding)
+                .padding(.vertical, generatorVerticalPadding)
         }
         .sheet(isPresented: $showingSavePreset) {
             PresetEditorView(
@@ -56,17 +75,62 @@ struct SummaryView: View {
         }
         .sheet(isPresented: $showingManagePresets) {
             PresetsManagementView()
+#if os(macOS)
                 .frame(minWidth: 500, minHeight: 400)
+#endif
         }
     }
+
+#if os(iOS)
+    private var iosGenerator: some View {
+        IOSCreationPrompt(title: "Create Summary", symbol: "doc.text",
+            description: "Generate structured notes from this recording's transcript.") {
+            Text(model.providerName + " · " + (model.selectedUserPreset?.name ?? model.selectedPreset.title))
+                .font(.subheadline).foregroundStyle(.secondary)
+            Button("Change") { showingIOSConfiguration = true }.accessibilityIdentifier("summary.configure")
+            if model.state.isGenerating { summaryProgress }
+            else {
+                Button("Generate Summary", action: startGeneration)
+                    .modifier(IOSPrimaryAction()).disabled(!model.canGenerate)
+                    .accessibilityIdentifier("summary.generate")
+            }
+        }
+        .sheet(isPresented: $showingIOSConfiguration) {
+            NavigationStack {
+                Form {
+                    Section("Sources") { sourceSelection }
+                    Section("Provider") { SummaryProviderControls(model: model) }
+                    Section("Summary") {
+                        presetMenu
+                        Picker("Length", selection: $model.outputLength) {
+                            ForEach(OutputLength.allCases) { Text($0.title).tag($0) }
+                        }
+                        if model.selectedPreset == .custom {
+                            TextField("Custom instructions", text: $model.customInstructions, axis: .vertical)
+                            Button("Save as Preset") { showingSavePreset = true }
+                        }
+                    }
+                    Section {
+                        DisclosureGroup("Advanced") {
+                            Text("Advanced generation parameters are saved with custom presets. Unsupported parameters are filtered by the provider.")
+                                .foregroundStyle(.secondary)
+                            Button("Manage Presets") { showingManagePresets = true }
+                        }
+                    }
+                }
+                    .navigationTitle("Summary Settings").navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingIOSConfiguration = false } } }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+#endif
 
     // Keep the form's natural height independent of the TabView's available
     // height. Native controls must not be compressed to fit a short detail pane.
     private var generatorForm: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 40))
-                .foregroundStyle(.secondary)
+        VStack(spacing: WorkspaceSpacing.section) {
             Text("No summary yet")
                 .font(.title2.bold())
             Text("Select a summary preset to generate a structured analysis of the transcript.")
@@ -119,12 +183,7 @@ struct SummaryView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if model.state.isGenerating {
-                        HStack(alignment: .top, spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text(model.progressMessage ?? "Generating summary…")
-                                .font(.callout)
-                            Button("Cancel", action: model.cancelGeneration)
-                        }
+                        summaryProgress
                     } else {
                         HStack {
                             Spacer(minLength: 0)
@@ -145,9 +204,15 @@ struct SummaryView: View {
                 Label(message, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
+                    .accessibilityLabel("Summary failed: \(message)")
                     .padding(.horizontal)
             }
         }
+    }
+
+    private var summaryProgress: some View {
+        OperationProgressView(title: "Generating summary…", status: model.progressMessage,
+            startedAt: model.operationStartedAt, cancel: model.cancelGeneration)
     }
 
     private var presetMenu: some View {
@@ -196,16 +261,27 @@ struct SummaryView: View {
                 }
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary).accessibilityHidden(true)
             }
         }
     }
 
+    private var summaryHeaderLayout: AnyLayout {
+#if os(iOS)
+        AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+#else
+        AnyLayout(HStackLayout(alignment: .center))
+#endif
+    }
+
     private func summaryContent(_ summary: Summary) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Header bar
-                HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: contentSectionSpacing) {
+                // Version controls recede so the notes begin near the content selector.
+#if os(iOS)
+                iosSummaryHeader(summary)
+#else
+                summaryHeaderLayout {
                     if historicalSummary != nil {
                         Text("Historical version").font(.caption.bold()).foregroundStyle(.orange)
                     }
@@ -234,33 +310,33 @@ struct SummaryView: View {
 
                     if historicalSummary != nil {
                         Button("Make Current") {
-                            try? SwiftDataSummaryRepository(context: modelContext).makeCurrent(summary, for: recording)
-                            historicalSummary = nil
+                            if model.makeCurrent(summary, using: repository) { historicalSummary = nil }
                         }
                     }
                     Button("History") { showingHistory = true }
 
-                    if model.state.isGenerating {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text(model.progressMessage ?? "Regenerating…")
-                                .font(.caption)
-                            Button("Cancel", action: model.cancelGeneration)
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                        }
-                    } else {
+                    if !model.state.isGenerating {
                         Button {
                             showsRegenerateOptions.toggle()
                         } label: {
                             Label("Regenerate…", systemImage: "arrow.clockwise")
                         }
                         .controlSize(.small)
-                        .popover(isPresented: $showsRegenerateOptions) {
-                            regeneratePopover
+#if os(iOS)
+                        .sheet(isPresented: $showsRegenerateOptions) {
+                            NavigationStack {
+                                ScrollView { regeneratePopover }
+                                    .navigationTitle("Summary Settings").navigationBarTitleDisplayMode(.inline)
+                            }
                         }
+#else
+                        .popover(isPresented: $showsRegenerateOptions) { regeneratePopover }
+#endif
                     }
                 }
+
+#endif
+                if model.state.isGenerating { summaryProgress }
 
                 SourceReferenceChips(references: SourceReferenceResolver().validate(summary.sourceReferences, recording: recording), onOpen: onOpenSource)
 
@@ -274,10 +350,14 @@ struct SummaryView: View {
                 if !summary.overview.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Overview")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
+#if os(iOS)
+                        IOSSummaryOverviewView(text: summary.overview)
+#else
                         Text(summary.overview)
                             .textSelection(.enabled)
                             .lineSpacing(3)
+#endif
                     }
                 }
 
@@ -285,7 +365,7 @@ struct SummaryView: View {
                 if !summary.keyPoints.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Key Points")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                         ForEach(summary.keyPoints) { point in
                             HStack(alignment: .top, spacing: 8) {
                                 Text("•")
@@ -302,12 +382,12 @@ struct SummaryView: View {
                 if !summary.decisions.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Decisions")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                         ForEach(summary.decisions) { decision in
                             HStack(alignment: .top, spacing: 8) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
-                                    .padding(.top, 2)
+                                    .padding(.top, 2).accessibilityHidden(true)
                                 Text(decision.text)
                                     .textSelection(.enabled)
                                 Spacer()
@@ -315,8 +395,7 @@ struct SummaryView: View {
                                     SummaryTimestampButton(timestamp: ts) { onSeek(ts) }
                                 }
                             }
-                            .padding(10)
-                            .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+                            .modifier(SummaryItemSurface())
                         }
                     }
                 }
@@ -325,13 +404,13 @@ struct SummaryView: View {
                 if !summary.actionItems.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Action Items")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                         ForEach(summary.actionItems) { item in
                             HStack(alignment: .top, spacing: 10) {
                                 Image(systemName: "square")
                                     .font(.body)
                                     .foregroundStyle(.secondary)
-                                    .padding(.top, 2)
+                                    .padding(.top, 2).accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(item.text)
                                         .textSelection(.enabled)
@@ -353,8 +432,7 @@ struct SummaryView: View {
                                     SummaryTimestampButton(timestamp: ts) { onSeek(ts) }
                                 }
                             }
-                            .padding(10)
-                            .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+                            .modifier(SummaryItemSurface())
                         }
                     }
                 }
@@ -363,12 +441,12 @@ struct SummaryView: View {
                 if !summary.openQuestions.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Open Questions")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                         ForEach(summary.openQuestions) { question in
                             HStack(alignment: .top, spacing: 8) {
                                 Image(systemName: "questionmark.circle")
                                     .foregroundStyle(.orange)
-                                    .padding(.top, 2)
+                                    .padding(.top, 2).accessibilityHidden(true)
                                 Text(question.text)
                                     .textSelection(.enabled)
                                 Spacer()
@@ -376,8 +454,7 @@ struct SummaryView: View {
                                     SummaryTimestampButton(timestamp: ts) { onSeek(ts) }
                                 }
                             }
-                            .padding(10)
-                            .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+                            .modifier(SummaryItemSurface())
                         }
                     }
                 }
@@ -386,7 +463,7 @@ struct SummaryView: View {
                 if !summary.importantQuotes.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Important Quotes")
-                            .font(.title3.bold())
+                            .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                         ForEach(summary.importantQuotes) { quote in
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack(alignment: .top) {
@@ -404,9 +481,8 @@ struct SummaryView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            .padding(12)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
+                            .modifier(SummaryItemSurface(isQuote: true))
                         }
                     }
                 }
@@ -416,7 +492,7 @@ struct SummaryView: View {
                     if !section.items.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(section.title)
-                                .font(.title3.bold())
+                                .font(.title3.bold()).accessibilityAddTraits(.isHeader)
                             ForEach(section.items, id: \.self) { item in
                                 HStack(alignment: .top, spacing: 8) {
                                     Text("•")
@@ -430,10 +506,114 @@ struct SummaryView: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(.horizontal, contentPadding)
+            .padding(.vertical, contentVerticalPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+
+    private var generatorHorizontalPadding: CGFloat {
+#if os(iOS)
+        0
+#else
+        WorkspaceSpacing.majorSection
+#endif
+    }
+    private var generatorVerticalPadding: CGFloat {
+#if os(iOS)
+        8
+#else
+        WorkspaceSpacing.majorSection
+#endif
+    }
+    private var contentVerticalPadding: CGFloat {
+#if os(iOS)
+        8
+#else
+        20
+#endif
+    }
+    private var contentPadding: CGFloat {
+#if os(iOS)
+        0 // The detail shell owns the reading margin.
+#else
+        20
+#endif
+    }
+    private var contentSectionSpacing: CGFloat {
+#if os(iOS)
+        12
+#else
+        20
+#endif
+    }
+
+#if os(iOS)
+    private func iosSummaryHeader(_ summary: Summary) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    Label(summary.preset.title, systemImage: summary.preset.iconName)
+                    Spacer(minLength: 8)
+                    summaryVersionMenu(summary)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(summary.preset.title, systemImage: summary.preset.iconName)
+                    summaryVersionMenu(summary)
+                }
+            }
+            HStack(spacing: 4) {
+                Text(summary.createdAt, format: .dateTime.month().day().hour().minute())
+                if !summary.providerName.isEmpty { Text("· " + summary.providerName) }
+                GenerationCostLabel(generationID: summary.generationID)
+            }
+            .font(.caption).foregroundStyle(.secondary)
+            if historicalSummary != nil { Text("Historical version").font(.caption).foregroundStyle(.secondary) }
+        }
+        .font(.subheadline)
+    }
+
+    private func summaryVersionMenu(_ summary: Summary) -> some View {
+        Menu {
+            Button("History") { showingHistory = true }
+            if historicalSummary != nil {
+                Button("Make Current") {
+                    if model.makeCurrent(summary, using: repository) { historicalSummary = nil }
+                }
+            }
+            if !model.state.isGenerating {
+                Button("Regenerate…", systemImage: "arrow.clockwise") { showsRegenerateOptions = true }
+            }
+        } label: {
+            Label("Versions", systemImage: "clock.arrow.circlepath").padding(.vertical, 8)
+        }
+        .sheet(isPresented: $showsRegenerateOptions) {
+            NavigationStack {
+                Form {
+                    Section("Sources") { sourceSelection }
+                    Section("Provider") { SummaryProviderControls(model: model) }
+                    Section("Summary") {
+                        presetMenu
+                        Picker("Length", selection: $model.outputLength) {
+                            ForEach(OutputLength.allCases) { Text($0.title).tag($0) }
+                        }
+                        if model.selectedPreset == .custom {
+                            TextField("Custom instructions…", text: $model.customInstructions, axis: .vertical)
+                        }
+                    }
+                    Section {
+                        Button("Regenerate") { showsRegenerateOptions = false; startGeneration() }
+                            .disabled(!model.canGenerate)
+                    }
+                }
+                .navigationTitle("Summary Settings").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showsRegenerateOptions = false } } }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+#endif
 
     private var sourceSelection: some View {
         SourceSelectionView(recording: recording, selectedSourceIDs: $model.selectedSourceIDs,
@@ -468,19 +648,21 @@ struct SummaryView: View {
             }
         }
         .padding(16)
+#if os(macOS)
         .frame(width: 320)
+#endif
     }
 
     private func startGeneration() {
-        let repo = SwiftDataSummaryRepository(context: modelContext)
-        model.generateSummary(using: repo)
+        model.generateSummary(using: repository)
     }
 }
 
 private struct SummaryHistorySheet: View {
     let recording: Recording
+    let model: SummaryViewModel
+    let repository: any SummaryStoring
     let select: (Summary) -> Void
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var deleteCandidate: Summary?
 
@@ -514,10 +696,14 @@ private struct SummaryHistorySheet: View {
         ), titleVisibility: .visible) {
             Button("Delete Version", role: .destructive) {
                 guard let candidate = deleteCandidate else { return }
-                try? SwiftDataSummaryRepository(context: modelContext).delete(candidate, for: recording)
+                model.deleteVersion(candidate, using: repository)
                 deleteCandidate = nil
             }
         } message: { Text("This cannot be undone.") }
+        .alert("Summary history", isPresented: Binding(get: { model.historyError != nil },
+                                                       set: { if !$0 { model.historyError = nil } })) {
+            Button("OK", role: .cancel) { model.historyError = nil }
+        } message: { Text(model.historyError ?? "") }
     }
 }
 
@@ -536,5 +722,21 @@ private struct SummaryTimestampButton: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Seek audio to \(AudioTime.format(timestamp))")
         .help("Jump to \(AudioTime.format(timestamp)) in audio")
+    }
+}
+
+/// iOS content remains flat; preserve the established desktop summary presentation.
+private struct SummaryItemSurface: ViewModifier {
+    var isQuote = false
+    func body(content: Content) -> some View {
+#if os(iOS)
+        content.padding(.vertical, 4)
+#else
+        if isQuote {
+            content.padding(12).background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
+        } else {
+            content.padding(10).background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+        }
+#endif
     }
 }

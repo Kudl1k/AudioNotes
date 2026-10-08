@@ -1,10 +1,32 @@
-#if DEBUG
+#if DEBUG && os(macOS)
 import Foundation
 import SwiftData
 
 /// Explicitly launched, synthetic project. Uses the existing temporary managed root.
 @MainActor enum ProjectChatFixtures {
     static let projectID = PerformanceFixtures.id("project-chat-operating-systems")
+    static let longNamesProjectID = PerformanceFixtures.id("project-long-names")
+
+    /// Worst-case strings for truncation checks (`--performance-long-names`): project, recording, source and filename.
+    static func prepareLongNames(context: ModelContext) throws {
+        let project = Project(id: longNamesProjectID,
+            name: "Quarterly Product Planning, Roadmap Alignment and Cross-Team Dependency Review for the Next Fiscal Year",
+            projectDescription: "A deliberately long synthetic description that keeps going so the header has to bound it to two lines instead of letting one string push the workspace controls out of the window or collapse the segmented navigation and search field.")
+        context.insert(project)
+        let recording = Recording(id: PerformanceFixtures.id("long-recording"),
+            title: "Interview with the Head of Infrastructure about Migration Risks, Rollback Plans and the Disaster Recovery Exercise Scheduled After the Holidays",
+            audioFileName: "", originalFileName: "interview-with-an-extremely-long-original-file-name.m4a", duration: 5400)
+        recording.project = project
+        context.insert(recording)
+        let source = RecordingSource(type: .pdf, displayName: "Infrastructure Migration Risk Register and Rollback Procedure Handbook, Revision 14 (Final, Reviewed).pdf",
+            originalFilename: "Infrastructure_Migration_Risk_Register_and_Rollback_Procedure_Handbook_Revision_14_Final_Reviewed.pdf",
+            localFileReference: "original.pdf", status: .partial)
+        source.metadata = .pdf(pageCount: 212, unreadablePages: [4, 7])
+        source.project = project
+        context.insert(source)
+        try context.save()
+    }
+
     static func prepare(context: ModelContext) throws {
         let project = Project(id: projectID, name: "Operating Systems", projectDescription: "Offline Project Chat fixture. All material is synthetic.")
         context.insert(project)

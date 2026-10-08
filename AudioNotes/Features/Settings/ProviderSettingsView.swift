@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 
 struct ProviderSettingsView: View {
@@ -174,21 +175,25 @@ struct ProviderSettingsView: View {
 
             GenerationDefaultsView(transcriptionConfig: transcriptionConfig, llmConfig: llmConfig, model: model)
 
-            Section("Updates") {
-                Toggle("Automatically check for updates", isOn: $updates.automaticallyChecksForUpdates)
-                    .disabled(!updates.isConfigured)
-                Button("Check for Updates…") { updates.checkForUpdates() }.disabled(!updates.canCheckForUpdates)
-                if !updates.isConfigured {
-                    Text("Updates are unavailable in this build. Release hosting and signing must be configured by the publisher.")
-                        .font(.caption).foregroundStyle(.secondary)
+            if PlatformCapabilities.current.supportsSparkleUpdates {
+                Section("Updates") {
+                    Toggle("Automatically check for updates", isOn: $updates.automaticallyChecksForUpdates)
+                        .disabled(!updates.isConfigured)
+                    Button("Check for Updates…") { updates.checkForUpdates() }.disabled(!updates.canCheckForUpdates)
+                    if !updates.isConfigured {
+                        Text("Updates are unavailable in this build. Release hosting and signing must be configured by the publisher.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }
             Section("Storage & Privacy") {
-                Button("Reveal Data Folder") { NSWorkspace.shared.open(AppStorageLocations.applicationSupport()) }
+                if PlatformCapabilities.current.supportsFinderReveal {
+                    Button("Reveal Data Folder") { Workspace.open(AppStorageLocations.applicationSupport()) }
+                }
                 Button("Privacy") { information = .privacy }
-                Button("AudioNotes Help") { information = .help }
+                Button("Soniquill Help") { information = .help }
                 Button("Third-Party Licenses") { information = .licenses }
-                Text("Use Help → Export Diagnostics for a report that excludes your content and credentials. To make a full backup, quit AudioNotes and copy the data folders described in Help.")
+                Text("Use Help → Export Diagnostics for a report that excludes your content and credentials. To make a full backup, quit Soniquill and copy the data folders described in Help.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 #if DEBUG
@@ -197,9 +202,9 @@ struct ProviderSettingsView: View {
             }
 #endif
 
-            Section("About AudioNotes") {
+            Section("About Soniquill") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("AudioNotes \(ReleaseIdentity().version) (\(ReleaseIdentity().build))")
+                    Text("Soniquill \(ReleaseIdentity().version) (\(ReleaseIdentity().build))")
                         .font(.headline)
                     Text("Native audio transcription, AI summaries, and interactive transcript chat.")
                         .font(.caption)
@@ -223,7 +228,7 @@ struct ProviderSettingsView: View {
 
                 HStack {
                     Image(systemName: "doc.text")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(.blue).accessibilityHidden(true)
                     VStack(alignment: .leading) {
                         Text("Markdown (.md)")
                             .font(.headline)
@@ -236,7 +241,7 @@ struct ProviderSettingsView: View {
 
                 HStack {
                     Image(systemName: "doc.richtext")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.red).accessibilityHidden(true)
                     VStack(alignment: .leading) {
                         Text("PDF Document (.pdf)")
                             .font(.headline)
@@ -252,3 +257,5 @@ struct ProviderSettingsView: View {
         .padding(16)
     }
 }
+
+#endif

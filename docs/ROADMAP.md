@@ -1,4 +1,4 @@
-# AudioNotes Roadmap
+# Soniquill Roadmap
 
 ## v0.1 — MVP
 
@@ -143,9 +143,9 @@ Oversized OpenAI uploads are split locally into temporary M4A parts. Progress wi
 
 ### Authentication and privacy notes
 
-Google OAuth is an API authorization flow for Gemini API access in the configured Google Cloud project; it does not grant use of a consumer Gemini plan for API billing. Developer setup requires a Google Cloud project, the Generative Language API, an OAuth consent screen, and a Desktop OAuth client ID. The app loads the client ID, project ID, and optional desktop client secret from a developer-supplied bundled `GoogleOAuth.json` file; users cannot edit them in Settings. Access and refresh tokens remain in Keychain, and the file’s optional client secret is synchronized into Keychain before sign-in or refresh. See [Google OAuth setup](GOOGLE_OAUTH.md). The current flow requests OpenID email plus the documented Gemini API scope, uses the system browser and a loopback IP redirect, validates `state`, and uses PKCE. Google may require test-user enrollment or verification depending on deployment. See [Gemini OAuth](https://ai.google.dev/gemini-api/docs/oauth) and [Google OAuth for desktop apps](https://developers.google.com/identity/protocols/oauth2/native-app).
+Google OAuth is an API authorization flow for Gemini API access in the configured Google Cloud project; it does not grant use of a consumer Gemini plan for API billing. iOS uses the supplied platform-specific native OAuth client and registered reversed-client-ID callback scheme; macOS retains its Desktop client, system browser and loopback IP redirect. The iOS client ID/scheme are public OAuth configuration in the iOS Info.plist; no client secret is embedded. The app requests OpenID email plus the documented Gemini API scope, validates `state`, uses PKCE where supported, and stores tokens in Keychain. Google may require test-user enrollment or verification depending on deployment. See [Gemini OAuth](https://ai.google.dev/gemini-api/docs/oauth), [Google OAuth native apps](https://developers.google.com/identity/protocols/oauth2/native-app), and [iOS Sign-In setup](https://developers.google.com/identity/sign-in/ios/start-integrating).
 
-Anthropic officially documents App Attest for direct Claude API use by registered iOS/macOS apps; usage bills to the app developer's workspace and App Attest does not identify an end user. The documented Swift package that implements this flow currently requires macOS 27 beta and Xcode 27, while AudioNotes targets macOS 15. This milestone therefore does not implement App Attest until it can be done without violating the deployment target or inventing an undocumented token exchange. It does not emulate Claude Code/CLI sign-in, use undocumented OAuth clients, access browser data, or claim Claude Pro/Max billing. The Anthropic API-key field remains available independently. See [Anthropic authentication](https://platform.claude.com/docs/en/manage-claude/authentication), [Anthropic App Attest](https://platform.claude.com/docs/en/manage-claude/app-attest), and the [official Swift package requirements](https://github.com/anthropics/ClaudeForFoundationModels).
+Anthropic officially documents App Attest for direct Claude API use by registered iOS/macOS apps; usage bills to the app developer's workspace and App Attest does not identify an end user. The documented Swift package that implements this flow currently requires macOS 27 beta and Xcode 27, while Soniquill targets macOS 15. This milestone therefore does not implement App Attest until it can be done without violating the deployment target or inventing an undocumented token exchange. It does not emulate Claude Code/CLI sign-in, use undocumented OAuth clients, access browser data, or claim Claude Pro/Max billing. The Anthropic API-key field remains available independently. See [Anthropic authentication](https://platform.claude.com/docs/en/manage-claude/authentication), [Anthropic App Attest](https://platform.claude.com/docs/en/manage-claude/app-attest), and the [official Swift package requirements](https://github.com/anthropics/ClaudeForFoundationModels).
 
 Transcript chunks are derived in memory from authoritative `TranscriptSegment` snapshots and are not persisted as duplicate transcript text. Lexical retrieval is local and deterministic; approximate token counts are used only for chunk and context budgeting. Provider usage, when later returned by a provider, remains the only source of reported token usage. No embedding provider or vector store is required; `EmbeddingProvider` is an optional future seam.
 
@@ -428,10 +428,108 @@ BM25 remains the production behavior. Do not start M12.4 as part of M12.3.5.
 - [ ] Install Developer ID certificate and configure notarytool Keychain profile; no production certificate/profile/Sparkle key exists on the audit Mac
 - [ ] Validate notarized/stapled DMG, Gatekeeper and signed Sparkle update against the real public appcast and release assets
 - [ ] Clean-user/quarantine install, complete on-device provider/Local Only/privacy/accessibility/performance/stability bug bash, clear all P0/P1
-- [ ] Publish and accept actual AudioNotes 1.0.0; archive production release artifacts and final per-build acceptance record
+- [ ] Publish and accept actual Soniquill 1.0.0; archive production release artifacts and final per-build acceptance record
 
 See [M13 implementation status](M13_IMPLEMENTATION.md), [release audit](RELEASE_AUDIT.md),
 [release checklist](RELEASE_CHECKLIST.md) and [release guide](RELEASING.md). Public
 repository is `Kudl1k/AudioNotes`; Pages currently reports disabled and the stable
 feed / v1 asset return 404. No production update URL is embedded. The application is
 not ready to distribute until the remaining manual/credential/live gates pass.
+
+## M14 — SwiftUI-first UI architecture (first pass; desktop acceptance pending)
+
+- [x] UI architecture audit: app was already SwiftUI-first (SwiftUI `App`, `NavigationSplitView`, 53 SwiftUI views, one PDFKit representable); SwiftUI transcript and Markdown renderers retained
+- [x] AppKit classified and confined to `Platform/macOS/AppKit` (file panels, clipboard, Finder/browser, alerts, PDF preview); services no longer import AppKit except the retained CoreText `PDFExporter`
+- [x] Help/Privacy/Licenses windows migrated from manual `NSWindow` controllers to a SwiftUI window scene; composer Shift+Return uses key-event modifiers instead of global `NSEvent` state
+- [x] Debug tests (389/73) and Release build pass; no new warnings; no schema, signing, Sparkle or bundle changes
+- [ ] Desktop acceptance of migrated menus, panels, copy, Finder reveal, composer keys and PDF citation jumps
+- [ ] Presentation-boundary cleanup, single shared chat UI, shared progress component, previews/accessibility identifiers
+
+See [M14 migration report](SWIFTUI_MIGRATION.md).
+
+## M14.2 — Unified Chat UI (implementation; broader desktop acceptance pending)
+
+- [x] Audit and duplication map; separate Recording/Project domain engines retained
+- [x] Shared composed composer, rows, lazy list, thinking/streaming, errors and empty states
+- [x] Native cursor-aware Shift+Return, marked-text gating, keyboard focus and bounded editor
+- [x] Stable assistant identity, retained scroll intent, message-targeted Latest and manual-scroll protection
+- [x] Markdown, authoritative citations/navigation, Copy, provider settings and existing usage semantics retained
+- [x] Cancelled-publisher race fixed; deterministic cancellation tests preserve/strengthen assertions
+- [x] Isolated DEBUG 500-message/long-stream fixtures and native paste/resize/scroll/Stop/Copy checks
+- [ ] Physical IME, VoiceOver, complete full-screen/Reduce Motion and live-provider desktop acceptance
+
+See [M14.2 audit and implementation report](UNIFIED_CHAT_UI.md). M14.1 remains committed
+separately; older manual acceptance is not closed.
+
+## M14.3 — Workspace density and operation progress (committed)
+
+- [x] Compact project/recording workspace layout, shared progress and elapsed-time presentation, factual multipart transcription progress and ETA
+- [x] Native fixture review (sizes, Light/Dark, multipart, cancel/failure, model download)
+- [x] Committed separately from M14.4 (`refactor(ui): improve workspace layout and progress UX`); 424 tests in 76 suites, Release build
+
+See [UX layout and progress report](UX_LAYOUT_AND_PROGRESS.md).
+
+## M14.4 — Accessibility, previews, performance and final UX QA (committed)
+
+- [x] Accessibility audit and fixes: labels, grouping, selection, citations, progress, errors, identifiers; 0 unlabeled controls on the surfaces swept
+- [x] SwiftUI previews on deterministic in-memory fixtures (DEBUG only)
+- [x] Fixed: Export… disabled with composer focus, window-wide Escape stop, raw AVFoundation import error, usage-cost key rebuilt per render
+- [x] Narrow-window Recording Chat crash **mitigated** (release-safety guard: Chat unavailable in a detail pane narrower than ~640 pt, with an explanation); the underlying constraint loop is not fixed
+- [x] Search/empty states, long-name truncation, pluralization; no performance regression against M14.2
+- [x] 431 tests in 77 suites (twice), Release build, no new warnings, Xcode 16 project format kept
+- [x] Committed separately from M14.3 (`refactor(ui): improve accessibility and final QA`)
+
+## M14 — closed
+
+M14 (initial architecture pass, M14.1 presentation boundaries, M14.2 unified chat, M14.3 layout and progress,
+M14.4 accessibility and QA) is **complete as an engineering milestone**. It is not a statement that physical
+acceptance was performed. Explicitly deferred and still open (none of these was completed):
+
+- [ ] Physical VoiceOver validation (narration and focus order)
+- [ ] Physical IME composition validation
+- [ ] Reduce Motion validation
+- [ ] Increase Contrast validation
+- [ ] Real/live provider acceptance
+- [ ] Prolonged OCR/import acceptance
+- [ ] Real model-download acceptance
+- [ ] Ollama fixture discrepancy
+- [ ] **Technical debt:** investigate the underlying AppKit constraint loop in narrow Recording Chat (the < ~640 pt guard is a mitigation only)
+- [ ] Markdown streaming CPU profiling
+- [ ] UI-test target
+- [ ] Menu equivalents for context-menu-only Rename/Delete
+- [ ] Older M11–M13 acceptance debt (see those milestones)
+
+See [M14.4 report](ACCESSIBILITY_AND_QA.md) and the [M14 migration report](SWIFTUI_MIGRATION.md).
+
+## M16 — iOS / iPadOS Port
+
+Goal: deliver native iPhone and iPad companion targets sharing core models, persistence, business logic, and providers with macOS, without duplicating architecture or code. M15 is reserved for the macOS Release Candidate / signing / notarization / distribution work and is not part of M16.
+
+- [x] M16.0 — Architecture and portability audit ([audit report](IOS_PORT_AUDIT.md))
+- [x] M16.1 — Shared/platform boundary preparation (zero behavior change on macOS; [boundary report](IOS_PLATFORM_BOUNDARIES.md))
+- [x] M16.2 — iOS target + library and navigation shell ([implementation report](IOS_TARGET_AND_NAVIGATION.md))
+- [x] M16.3 — Native audio import + recording detail, foreground playback, stored transcript/summary/history and management ([report](IOS_AUDIO_AND_RECORDING.md)); implementation and Simulator QA complete, physical device/VoiceOver acceptance pending
+- [x] M16.4 — Cloud AI + chats and account authentication; implementation, iPhone/iPad Simulator suites, macOS regression, and required builds pass. Live-provider testing was not performed (no authorized account session available). Physical Device / Signing Acceptance is intentionally deferred to release work; it does not block this milestone ([account authentication and deferred acceptance](IOS_ACCOUNT_AUTH.md), [cloud AI implementation/status](IOS_CLOUD_AI.md))
+- [x] M16.5 — Native iOS UX and project organization, including M16.5.1 visual refinement — committed in `a73f72f` (`feat(ios): polish recording workflows and project UX`). Automated regression/build validation and visual review are recorded; Simulator gestures/keyboard, feature-specific physical-device tests, VoiceOver and live providers remain deferred. Apple signing/installation and TestFlight are now established; see the M16.7.0 release correction. See [final acceptance record](IOS_UX_AND_PROJECTS.md#final-m165-acceptance-record). Sources/OCR/Project Chat are not introduced in this UX pass.
+- [x] M16.6 — Project sources and shared Project Chat — implementation and deterministic visual review complete. Source imports/viewers and Project Chat reuse the shared queue, retrieval, persistence, provider, and citation architecture. Populated iPhone/iPad chat and mixed import/failure fixtures are captured; retrieval/context and 250-message preparation measurements are recorded; persistence, citation intents, and import recovery are covered. macOS 456 passed / 6 expected skips; iPhone and iPad each 50 passed. Release/debug builds and integrity checks are recorded in the [implementation report](IOS_PROJECT_SOURCES_AND_CHAT.md). Native Files/citation/gesture/keyboard/scroll interactions, feature-specific physical-device tests/VoiceOver and live providers remain deferred. Apple signing/installation and TestFlight are now established. Markdown chat sharing uses native `ShareLink`; PDF export remains a separate platform capability.
+- [x] **M16.7.0 — Soniquill product rename / production identity baseline** — final validation passed; finalized in the rename commit with results recorded in the [rename report](SONIQUILL_RENAME.md). Final bundle ID `cz.kudladev.soniquill`; Apple Developer/App Store Connect configured, 1.0.0 build 1 uploaded, TestFlight active with initial testers, physical iPhone installation confirmed. Signing, schema and migration are preserved. Old development-iOS sandbox migration is explicitly excluded. Google iOS OAuth registration is owner-confirmed and the local bundle declaration aligned; live verification remains open. M16.7 Local AI may continue.
+- [ ] M16.7 — Local capabilities (LAN Ollama/llama.cpp, Whisper feasibility spike)
+- [ ] M16.8 — iPad polish (adaptive split, inspector, keyboard shortcuts, drag & drop)
+- [ ] M16.9 — iOS QA, accessibility, memory, performance, and validation
+
+### Established release baseline and remaining physical-device acceptance
+
+- [x] Final product **Soniquill**, production bundle ID `cz.kudladev.soniquill` on both platforms; preserve without platform variants.
+- [x] Apple Developer/App ID/signing setup and physical iPhone installation confirmed by the owner.
+- [x] App Store Connect app created; initial 1.0.0 build 1 archived/uploaded, TestFlight active/configured, initial testers installed/tested.
+- [ ] Feature-specific ChatGPT loopback/background and Google OAuth callback acceptance.
+- [x] Google iOS client registration for `cz.kudladev.soniquill` updated manually by the owner; local bundle declaration aligned while retaining the existing client ID and callback scheme. Live signed-device verification remains open.
+- [ ] Verify signed Keychain persistence, provider inference, token refresh, disconnect and background/foreground behavior.
+- [ ] Validate VoiceOver and device-specific audio playback.
+
+Installation does not establish acceptance of unrecorded feature tests. Do not modify
+working Apple signing, upload another build or alter App Store Connect to close this
+rename. Existing Soniquill TestFlight data/credentials are the compatibility baseline;
+automatic migration from `cz.stepankudlacek.audionotes.ios` is not required or authorized.
+
+See [iOS Port Architecture and Portability Audit](IOS_PORT_AUDIT.md), [iOS Platform Boundaries](IOS_PLATFORM_BOUNDARIES.md), and [iOS Target & Navigation Shell](IOS_TARGET_AND_NAVIGATION.md).

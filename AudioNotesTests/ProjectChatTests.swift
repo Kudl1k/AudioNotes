@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import SwiftData
 import Testing
 @testable import AudioNotes
@@ -20,6 +21,7 @@ struct ProjectChatTests {
         var fail = false
         var delay: Duration = .zero
         var beforeCompletion: (() -> Void)?
+        var holdCompletion = false
         func generateSummary(transcript: Transcript, configuration: SummaryConfiguration) async throws -> Summary { throw LLMError.invalidResponse }
         func streamChat(messages: [LLMChatMessage], context: ChatContext) async throws -> AsyncThrowingStream<ChatStreamEvent, Error> {
             calls.append((messages, context))
@@ -28,7 +30,15 @@ struct ProjectChatTests {
                 let task = Task {
                     do {
                         continuation.yield(.textDelta("## Answer\n\nGrounded answer [S1]"))
-                        try await Task.sleep(for: delay)
+                        if holdCompletion {
+                            // Cancellation of the consumer terminates this gate; no wall-clock race.
+                            let gate = AsyncStream<Void>.makeStream()
+                            defer { gate.continuation.finish() }
+                            for await _ in gate.stream { }
+                            try Task.checkCancellation()
+                        } else {
+                            try await Task.sleep(for: delay)
+                        }
                         beforeCompletion?()
                         let chunks = context.sourceChunks ?? []
                         let refs = SourceReferenceResolver().resolve(chunkIDs: ["S1", "S2", "S1", "S999"], against: chunks)
@@ -97,11 +107,14 @@ struct ProjectChatTests {
         let vm = f.model(p)
         vm.inputText = "How are character devices registered?"
         vm.send()
+        let assistantID = vm.assistantMessageID
+        #expect(vm.sentQuestionID == vm.session?.orderedMessages.first?.id)
         #expect(vm.isGenerating)
         #expect(vm.inputText.isEmpty)
         #expect(vm.session?.messages.first?.role == .user)
         try await finished(vm)
         #expect(vm.state == .completed)
+        #expect(vm.session?.orderedMessages.last?.id == assistantID)
         #expect(p.calls.count == 1)
         let call = try #require(p.calls.first)
         #expect(Set(call.context.sourceChunks?.map(\.sourceID) ?? []) == [f.lectures[3].id, f.slides.id])
@@ -113,6 +126,10 @@ struct ProjectChatTests {
         #expect(answer.projectCitations.count == 2)
         #expect(answer.projectCitations.contains { $0.reference.locator == .pdf(pageIndex: 22) })
         #expect(answer.projectCitations.contains { $0.reference.sourceName == "Lecture 4" })
+        let audioCitation = try #require(answer.projectCitations.first { $0.recordingID == f.lectures[3].id })
+        #expect(ProjectCitationNavigation.intent(audioCitation, project: f.project) == .recording(id: f.lectures[3].id, timestamp: 3106))
+        let pdfCitation = try #require(answer.projectCitations.first { $0.reference.locator == .pdf(pageIndex: 22) })
+        #expect(ProjectCitationNavigation.intent(pdfCitation, project: f.project) == .source(id: f.slides.id, pageIndex: 22))
         #expect(vm.session?.project?.id == f.project.id && vm.session?.recording == nil)
         #expect(f.lectures.allSatisfy { $0.chatSessions.isEmpty })
         let generation = try #require(f.project.generationRecords.first)
@@ -125,6 +142,21 @@ struct ProjectChatTests {
         #expect(costs.byProject[f.project.id]?.operationCount == 1 && costs.byRecording.isEmpty)
         #expect(model.session?.id == vm.session?.id)
         #expect(vm.exportContent().chat.last?.sourceLabels.count == 2)
+    }
+
+    @Test func citationActionIntentCarriesTextAndImageSourceIdentity() async throws {
+        let f = try Fixture(); defer { f.workspace.cleanUp() }
+        let image = RecordingSource(type: .image, displayName: "whiteboard.png", originalFilename: "whiteboard.png", localFileReference: "image.png", status: .ready)
+        image.textUnits = [try SourceTextUnit(position: 0, text: "copy_from_user", origin: .ocr, locator: .image(region: nil))]
+        image.project = f.project; f.context.insert(image)
+        let result = try await RetrievalService().retrieve(query: "Exam topics", scope: .project(f.project.id), context: f.context)
+        let textEntry = try #require(result.context.entries.first { $0.document.chunk.sourceID == f.notes.id })
+        let imageResult = try await RetrievalService().retrieve(query: "copy_from_user", scope: .project(f.project.id), context: f.context)
+        let imageEntry = try #require(imageResult.context.entries.first { $0.document.chunk.sourceID == image.id })
+        let textCitation = ProjectCitation(projectID: f.project.id, entry: textEntry)
+        let imageCitation = ProjectCitation(projectID: f.project.id, entry: imageEntry)
+        #expect(ProjectCitationNavigation.intent(textCitation, project: f.project) == .source(id: f.notes.id, pageIndex: nil))
+        #expect(ProjectCitationNavigation.intent(imageCitation, project: f.project) == .source(id: image.id, pageIndex: nil))
     }
 
     @Test func followupSelectedScopeEmptyEvidenceAndHistoryExclusion() async throws {
@@ -148,7 +180,7 @@ struct ProjectChatTests {
         #expect(vm.selection == model.selection)
     }
 
-    @Test func retryReretrievesWithoutDuplicatingQuestionAndCancellationPersistsPartial() async throws {
+    @Test(.timeLimit(.minutes(1))) func retryReretrievesWithoutDuplicatingQuestionAndCancellationPersistsPartial() async throws {
         let f = try Fixture(); defer { f.workspace.cleanUp() }
         let p = CapturingProvider(); p.fail = true
         let model = f.model(p)
@@ -158,13 +190,25 @@ struct ProjectChatTests {
         p.fail = false; model.retry(); try await finished(model)
         #expect(p.calls.count == 2 && model.session?.messages.filter { $0.role == .user }.count == 1)
         #expect(p.calls.last?.context.projectEvidence?.contains("changedfixturetoken") == true)
-        p.delay = .seconds(10)
+        p.holdCompletion = true
         model.inputText = "character device cleanup"; model.send()
-        for _ in 0..<100 where model.streamingDraft == nil { try await Task.sleep(for: .milliseconds(10)) }
-        #expect(model.streamingDraft != nil)
+        while model.streamingDraft == nil && model.isGenerating {
+            await withCheckedContinuation { continuation in
+                withObservationTracking {
+                    _ = model.streamingDraft
+                    _ = model.state
+                } onChange: {
+                    continuation.resume()
+                }
+            }
+        }
+        #expect(model.streamingDraft?.trimmingCharacters(in: .whitespacesAndNewlines) == "## Answer\n\nGrounded answer")
+        let interruptedID = model.assistantMessageID
         await model.cancelAndWait()
         #expect(model.state == .cancelled && model.canRetry)
         #expect(model.session?.orderedMessages.last?.status == .interrupted)
+        #expect(model.session?.orderedMessages.last?.id == interruptedID)
+        #expect(model.session?.orderedMessages.last?.text == "## Answer\n\nGrounded answer")
         #expect(model.session?.orderedMessages.last?.text.contains("[S") == false)
         #expect(f.project.generationRecords.last?.statusRaw != "inProgress")
     }
@@ -298,13 +342,33 @@ struct ProjectChatTests {
     @Test func projectChatDiskReopenPreservesSelectionMessagesAndRecoversInterruptedWork() throws {
         let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
         let projectID = UUID(), messageID = UUID()
+        let recordingID = UUID(), segmentID = UUID(), pdfSourceID = UUID(), pdfUnitID = UUID()
         do {
             let context = ModelContext(try workspace.storage.makeContainer())
             let project = Project(id: projectID, name: "Persistent Project"); context.insert(project)
+            let recording = Recording(id: recordingID, title: "Lecture", audioFileName: "", originalFileName: "lecture.m4a", duration: 3600)
+            let transcript = Transcript(); transcript.segments = [TranscriptSegment(id: segmentID, position: 0, startTime: 3106, endTime: 3120, text: "copy_from_user")]
+            recording.transcript = transcript; recording.project = project; context.insert(recording)
+            let pdf = RecordingSource(id: pdfSourceID, type: .pdf, displayName: "kernel-modules.pdf", originalFilename: "kernel-modules.pdf", localFileReference: "managed.pdf", status: .ready)
+            pdf.textUnits = [try SourceTextUnit(id: pdfUnitID, position: 22, text: "copy_from_user", origin: .nativeText, locator: .pdf(pageIndex: 22))]
+            pdf.project = project; context.insert(pdf)
             let repository = SwiftDataChatRepository(context: context)
             let session = try repository.ensureProjectSession(for: project)
             session.projectSelectionData = try JSONEncoder().encode(ProjectChatSelection(entireProject: false))
             try repository.appendMessage(ChatMessage(id: messageID, role: .user, text: "Interrupted"), to: session)
+            let audioChunk = SourceChunk(id: UUID(), sourceID: recordingID, sourceName: "Lecture", sourceType: .audio,
+                text: "copy_from_user", locator: .audio(segmentIDs: [segmentID], start: 3106, end: 3120), origin: .transcript)
+            let audioDocument = RetrievalDocument(id: audioChunk.id, projectID: projectID, recordingID: recordingID, recordingTitle: "Lecture",
+                contentType: .transcript, chunk: audioChunk, unitIDs: [segmentID], contentRevision: UUID())
+            let pdfChunk = SourceChunk(id: UUID(), sourceID: pdfSourceID, sourceName: "kernel-modules.pdf", sourceType: .pdf,
+                text: "copy_from_user", locator: .pdf(pageIndex: 22), origin: .nativeText)
+            let pdfDocument = RetrievalDocument(id: pdfChunk.id, projectID: projectID, recordingID: nil, recordingTitle: nil,
+                contentType: .pdfText, chunk: pdfChunk, unitIDs: [pdfUnitID], contentRevision: UUID())
+            let audioCitation = ProjectCitation(projectID: projectID, entry: ContextEntry(document: audioDocument, relevance: 1))
+            let pdfCitation = ProjectCitation(projectID: projectID, entry: ContextEntry(document: pdfDocument, relevance: 1))
+            let answer = ChatMessage(role: .assistant, text: "The kernel copies the user data after validation.")
+            answer.projectCitations = [audioCitation, pdfCitation]
+            try repository.appendMessage(answer, to: session)
             session.pendingProjectQuestionID = messageID
             let generation = GenerationRecord(feature: .chat, provider: .openAI, model: "gpt-4o-mini", presetName: nil,
                 outputLength: .medium, settings: nil, status: .inProgress, project: project)
@@ -316,6 +380,10 @@ struct ProjectChatTests {
         let vm = ProjectChatViewModel(project: project, resolver: Resolver(provider: CapturingProvider()), retrieval: RetrievalService())
         vm.attach(context: context)
         #expect(vm.session?.messages.first?.id == messageID && vm.selection.entireProject == false)
+        let restoredAnswer = try #require(vm.session?.orderedMessages.last)
+        #expect(restoredAnswer.text == "The kernel copies the user data after validation." && restoredAnswer.projectCitations.count == 2)
+        #expect(ProjectCitationNavigation.intent(restoredAnswer.projectCitations[0], project: project) == .recording(id: recordingID, timestamp: 3106))
+        #expect(ProjectCitationNavigation.intent(restoredAnswer.projectCitations[1], project: project) == .source(id: pdfSourceID, pageIndex: 22))
         #expect(vm.session?.interruptedProjectQuestionID == messageID && !vm.isGenerating)
         #expect(project.generationRecords.first?.statusRaw == "cancelled")
         #expect(project.generationRecords.first?.recordingID == nil && project.generationRecords.first?.projectID == projectID)

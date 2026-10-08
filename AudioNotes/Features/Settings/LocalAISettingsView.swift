@@ -21,7 +21,7 @@ struct LocalAISettingsView: View {
                     if model.checking { ProgressView().controlSize(.small) }
                     Link("Open Ollama Website", destination: URL(string: "https://ollama.com/download/mac")!)
                 }
-                Text("\(configuration.models.count) installed chat models available. AudioNotes does not install or start Ollama.")
+                Text("\(configuration.models.count) installed chat models available. Soniquill does not install or start Ollama.")
                     .font(.caption).foregroundStyle(.secondary)
                 TextField("Context budget (tokens)", value: $configuration.contextTokens, format: .number)
                 Text("Uses the smaller of this budget and the model's reported context window. Larger contexts require more memory.")
@@ -32,13 +32,13 @@ struct LocalAISettingsView: View {
                 Text((try? OllamaEndpoint(configuration.llamaCppAddress))?.executionLocation.title ?? "Invalid server address")
                     .font(.caption).foregroundStyle(.secondary)
                 TextField("Loaded model name", text: $configuration.llamaCppModel)
-                Text("Connects to llama.cpp's OpenAI-compatible /v1/chat/completions endpoint. Start llama-server separately and load a model before use. AudioNotes does not install or launch it. Chat responses arrive when generation completes.")
+                Text("Connects to llama.cpp's OpenAI-compatible /v1/chat/completions endpoint. Start llama-server separately and load a model before use. Soniquill does not install or launch it. Chat responses arrive when generation completes.")
                     .font(.caption).foregroundStyle(.secondary)
                 Link("llama.cpp server documentation", destination: URL(string: "https://github.com/ggml-org/llama.cpp/tree/master/examples/server")!)
             }
             Section("Local Whisper · Runs on this Mac") {
                 if LocalAISettingsViewModel.supportsWhisper {
-                    Text("Core ML models are stored in AudioNotes Application Support. Smaller files use less disk space. Download size is shown before installation.")
+                    Text("Core ML models are stored in Soniquill Application Support. Smaller files use less disk space. Download size is shown before installation.")
                         .font(.caption).foregroundStyle(.secondary)
                     ForEach(model.models) { item in
                         HStack {
@@ -56,14 +56,13 @@ struct LocalAISettingsView: View {
                         }
                     }
                     if let progress = model.progress {
-                        ProgressView(value: progress.fraction)
-                        HStack {
-                            Text("Downloading · \(ByteCountFormatter.string(fromByteCount: progress.completedBytes, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: progress.totalBytes, countStyle: .file))")
-                            Spacer()
-                            Button("Cancel", action: model.cancelDownload)
-                        }.font(.caption)
+                        OperationProgressView(title: "Downloading Whisper model…",
+                            status: "\(ByteCountFormatter.string(fromByteCount: progress.completedBytes, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: progress.totalBytes, countStyle: .file))",
+                            progress: OperationProgressValue(fraction: progress.totalBytes > 0 ? progress.fraction : nil),
+                            startedAt: model.downloadStartedAt, cancel: model.cancelDownload)
+
                     }
-                    if let error = model.error { Text("Download or model operation failed: " + error).foregroundStyle(.red).textSelection(.enabled) }
+                    if let error = model.error { InlineErrorLabel("Download or model operation failed: " + error, font: .body) }
                 } else { Text("Local Whisper requires Apple Silicon.") }
             }
         }
@@ -94,7 +93,7 @@ struct OllamaModelPicker: View {
                 ForEach(configuration.models) { Text($0.id + ($0.vision ? " · Vision" : " · Text / OCR")).tag($0.id) }
             }
             if !selection.isEmpty && !configuration.models.contains(where: { $0.id == selection }) {
-                Text("Model not installed or not verified. Refresh models; AudioNotes will not switch models automatically.")
+                Text("Model not installed or not verified. Refresh models; Soniquill will not switch models automatically.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

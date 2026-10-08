@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import SwiftData
 import Testing
 @testable import AudioNotes
@@ -25,7 +26,7 @@ struct ChatViewModelTests {
         }
     }
 
-    private final class DelayedChatLLMProvider: LLMProvider {
+    private final class CancellationChatLLMProvider: LLMProvider {
         let id: LLMProviderID = .mock
         var displayName: String { "Delayed Mock" }
 
@@ -38,9 +39,10 @@ struct ChatViewModelTests {
                 let task = Task {
                     continuation.yield(.textDelta("Thinking about your query..."))
                     do {
-                        try await Task.sleep(nanoseconds: 500_000_000)
-                        continuation.yield(.completed(LLMChatResponse(content: "Thinking about your query...", references: [])))
-                        continuation.finish()
+                        let gate = AsyncStream<Void>.makeStream()
+                        defer { gate.continuation.finish() }
+                        for await _ in gate.stream { }
+                        try Task.checkCancellation()
                     } catch {
                         continuation.finish(throwing: CancellationError())
                     }
@@ -131,7 +133,7 @@ struct ChatViewModelTests {
         #expect(assistantMsg.references[0].speaker == "Alice" || assistantMsg.references[0].speaker == "Bob")
     }
 
-    @Test func stoppingGenerationRecordsInterruptedMessage() async throws {
+    @Test(.timeLimit(.minutes(1))) func stoppingGenerationRecordsInterruptedMessage() async throws {
         let workspace = try TestWorkspace()
         defer { workspace.cleanUp() }
 
@@ -150,7 +152,7 @@ struct ChatViewModelTests {
 
         let viewModel = ChatViewModel(
             recording: recording,
-            resolver: TestResolver(provider: DelayedChatLLMProvider())
+            resolver: TestResolver(provider: CancellationChatLLMProvider())
         )
         viewModel.attachStorage(repository)
 
@@ -158,11 +160,16 @@ struct ChatViewModelTests {
         viewModel.sendMessage()
 
         // Wait for first delta to arrive
-        var attempts = 0
-        while viewModel.streamingDraft == nil && attempts < 50 {
-            try? await Task.sleep(nanoseconds: 20_000_000)
-            attempts += 1
+        while viewModel.streamingDraft == nil && viewModel.isGenerating {
+            await withCheckedContinuation { continuation in
+                withObservationTracking {
+                    _ = viewModel.streamingDraft
+                    _ = viewModel.generationState
+                } onChange: { continuation.resume() }
+            }
         }
+        #expect(viewModel.streamingDraft == "Thinking about your query...")
+        let assistantID = viewModel.assistantMessageID
 
         #expect(viewModel.isGenerating == true)
         viewModel.stopGeneration()
@@ -172,6 +179,7 @@ struct ChatViewModelTests {
         #expect(messages.count == 2)
         if messages.count >= 2 {
             #expect(messages[1].status == .interrupted)
+            #expect(messages[1].id == assistantID)
             #expect(messages[1].text == "Thinking about your query...")
         }
     }

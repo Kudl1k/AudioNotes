@@ -1,21 +1,21 @@
-AudioNotes Privacy
+Soniquill Privacy
 
-AudioNotes stores your library on this Mac. Imported recordings and documents are copied into managed Application Support storage. Transcripts, summaries, chats, citations, projects and usage history are stored in the local SwiftData database. Preferences are local; API keys and OAuth access/refresh tokens are stored in macOS Keychain.
+Soniquill stores your library on this Mac. Imported recordings and documents are copied into managed Application Support storage. Transcripts, summaries, chats, citations, projects and usage history are stored in the local SwiftData database. Preferences are local; API keys and OAuth access/refresh tokens are stored in macOS Keychain.
 
 AI processing
 Local Whisper processes imported audio on this Mac using downloaded models. Local extraction, PDF text, OCR and lexical search do not upload source content. Semantic search is not enabled in this version.
 
 Ollama receives content at the server address you configure. A remote server is external processing. Even a local Ollama server can offer cloud-backed models. Local Only checks model metadata and blocks external/cloud-backed or unverified execution. The server itself must be trusted. Local Only cannot recall content already sent; cancel active external requests before enabling it.
 
-llama.cpp receives content at the configured `llama-server` address. Local Only permits only exact loopback hosts; a LAN or other remote server is blocked while that setting is enabled. AudioNotes does not verify the server binary or model provenance, so use a server you trust.
+llama.cpp receives content at the configured `llama-server` address. Local Only permits only exact loopback hosts; a LAN or other remote server is blocked while that setting is enabled. Soniquill does not verify the server binary or model provenance, so use a server you trust.
 
-Cloud providers receive the audio or transcript/source excerpts and conversation history needed for the operation you request. Selected recording sources and project membership constrain context. Summaries may send multiple requests for long material. Optional provider-supported image input requires separate permission. Provider policies and billing apply. AudioNotes has no Gemini generation implementation in this version; Anthropic uses your separately installed Claude Code tool. Consumer subscriptions do not automatically include API access.
+Cloud providers receive the audio or transcript/source excerpts and conversation history needed for the operation you request. Selected recording sources and project membership constrain context. Summaries may send multiple requests for long material. Optional provider-supported image input requires separate permission. Provider policies and billing apply. Soniquill has no Gemini generation implementation in this version; Anthropic uses your separately installed Claude Code tool. Consumer subscriptions do not automatically include API access.
 
 Network activity outside AI
 Explicit model downloads contact Hugging Face and its content delivery hosts. OAuth setup contacts the relevant account provider. Sparkle, when configured, fetches the public update feed from GitHub Pages and update packages from GitHub Releases. Update checks disclose ordinary network information such as your IP address to hosting services. System profiling is disabled. You can change automatic update checks in Settings. Local Only governs AI content execution, not updates, model downloads or account setup.
 
 Diagnostics and telemetry
-AudioNotes adds no behavioral analytics or remote crash reporting. Help → Export Diagnostics writes a local JSON file containing only version/build, macOS version, architecture, schema version and library/update availability. It excludes source content, names, paths, credentials, environment variables and logs. You decide whether and with whom to share that file. macOS may separately collect crash reports under your system settings. Development-only logs are not included in production diagnostics.
+Soniquill adds no behavioral analytics or remote crash reporting. Help → Export Diagnostics writes a local JSON file containing only version/build, macOS version, architecture, schema version and library/update availability. It excludes source content, names, paths, credentials, environment variables and logs. You decide whether and with whom to share that file. macOS may separately collect crash reports under your system settings. Development-only logs are not included in production diagnostics.
 
 Deletion and backups
 Deleting an item removes its owned data according to the confirmation shown. Keeping recordings when deleting a project preserves their histories. Automatic pre-v1 metadata backups can retain deleted metadata; they contain private content and should be protected. Those backups omit original audio, source files, preferences and credentials. See Help for a complete backup procedure. Updates replace the application bundle and preserve external library/model storage. Removing the application alone does not remove your library or Keychain entries.

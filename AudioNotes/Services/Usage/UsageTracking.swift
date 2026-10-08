@@ -101,6 +101,7 @@ final class UsageTrackingLLMProvider: LLMProvider {
     var id: LLMProviderID { base.id }
     var displayName: String { base.displayName }
     var modelID: String? { base.modelID }
+    var modelDisplayName: String? { base.modelDisplayName }
     var authenticationMethod: ProviderAuthenticationMethod? { base.authenticationMethod }
     var supportsSourceSummaries: Bool { base.supportsSourceSummaries }
     var inputCapabilities: LLMInputCapabilities { base.inputCapabilities }
@@ -116,7 +117,7 @@ final class UsageTrackingLLMProvider: LLMProvider {
         let id = tracker.beginRequest()
         do {
             let result = try await base.generateSummary(transcript: transcript, configuration: configuration)
-            tracker.finishRequest(id, usage: result.reportedUsage, model: result.modelName, succeeded: true)
+            tracker.finishRequest(id, usage: result.reportedUsage, model: base.id == .onDevice ? base.modelID : result.modelName, succeeded: true)
             return result
         } catch {
             if ProviderRequestFailure.isKnownPreflight(error) { tracker.discardUnsentRequest(id) }
@@ -130,7 +131,7 @@ final class UsageTrackingLLMProvider: LLMProvider {
         tracker.generation.imageInputCount += context.images.count
         do {
             let result = try await base.generateSourceSummary(context: context, configuration: configuration)
-            tracker.finishRequest(id, usage: result.reportedUsage, model: result.modelName, succeeded: true)
+            tracker.finishRequest(id, usage: result.reportedUsage, model: base.id == .onDevice ? base.modelID : result.modelName, succeeded: true)
             return result
         } catch {
             if ProviderRequestFailure.isKnownPreflight(error) { tracker.discardUnsentRequest(id) }

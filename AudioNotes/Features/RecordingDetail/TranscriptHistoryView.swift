@@ -1,3 +1,4 @@
+#if os(macOS)
 import Observation
 import SwiftData
 import SwiftUI
@@ -22,7 +23,7 @@ final class TranscriptHistoryViewModel {
 
     func restore(_ version: Transcript, repository: SwiftDataTranscriptRepository) {
         do { try repository.makeCurrent(version, for: recording); errorMessage = nil }
-        catch { errorMessage = error.localizedDescription }
+        catch { errorMessage = "The transcript version could not be made current. Try again." }
     }
 
     func delete(_ version: Transcript, repository: SwiftDataTranscriptRepository) {
@@ -30,7 +31,7 @@ final class TranscriptHistoryViewModel {
             try repository.delete(version, for: recording)
             if selectedID == version.id { selectedID = recording.transcript?.id }
             errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
+        } catch { errorMessage = "The transcript version could not be deleted. Try again." }
     }
 }
 
@@ -97,3 +98,5 @@ struct TranscriptHistoryView: View {
         } message: { Text("This cannot be undone. Generation usage and cost history are retained.") }
     }
 }
+
+#endif

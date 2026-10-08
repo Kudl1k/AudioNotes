@@ -13,6 +13,13 @@ struct PresetsManagementView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+#if os(iOS)
+            Picker("Feature", selection: $selectedTab) {
+                Text("Summary").tag(AIPresetFeature.summary)
+                Text("Chat").tag(AIPresetFeature.chat)
+            }.pickerStyle(.menu).padding(.horizontal)
+            Button("New Preset", systemImage: "plus") { showCreateSheet = true }.padding(.bottom, 8)
+#else
             HStack(spacing: 16) {
                 Picker("Feature", selection: $selectedTab) {
                     Text("Summary Presets").tag(AIPresetFeature.summary)
@@ -37,6 +44,7 @@ struct PresetsManagementView: View {
             .padding(.vertical, 12)
             .fixedSize(horizontal: false, vertical: true)
 
+#endif
             Form {
                 Section("My Custom Presets") {
                     let filtered = userPresets.filter { $0.feature == selectedTab }
@@ -68,6 +76,13 @@ struct PresetsManagementView: View {
                                     }
                                 }
 
+#if os(iOS)
+                                Menu {
+                                    Button("Duplicate") { duplicate(preset) }
+                                    Button("Edit") { presetToEdit = preset }
+                                    Button("Delete", role: .destructive) { presetToDelete = preset; showDeleteConfirmation = true }
+                                } label: { Label("Preset actions", systemImage: "ellipsis.circle") }
+#else
                                 Spacer()
 
                                 Button("Duplicate") {
@@ -86,6 +101,7 @@ struct PresetsManagementView: View {
                                 }
                                 .buttonStyle(.borderless)
                                 .foregroundStyle(.red)
+#endif
                             }
                             .padding(.vertical, 4)
                         }

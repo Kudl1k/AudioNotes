@@ -63,7 +63,7 @@ struct SummaryPromptBuilder: Sendable {
         configuration: SummaryConfiguration
     ) -> SummaryPrompt {
         var systemLines = [
-            "You are an expert executive assistant and summarizer for AudioNotes.",
+            "You are an expert executive assistant and summarizer for Soniquill.",
             "Your task is to analyze the provided timestamped audio transcript and generate a structured summary.",
             Self.titleInstruction,
             "",

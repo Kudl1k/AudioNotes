@@ -44,7 +44,7 @@ The client uses an ephemeral URLSession, disables cookies/cache, and refuses red
 
 ## Manual acceptance checklist
 
-Use a signed run with the same bundle identifier/signing identity across relaunches. Open **AudioNotes → Settings…** (⌘,).
+Use a signed run with the same bundle identifier/signing identity across relaunches. Open **Soniquill → Settings…** (⌘,).
 
 - [ ] Launch, select OpenAI, enter a real key in SecureField, and Save Key. Verify the input clears and “API key configured” appears.
 - [ ] Choose automatic detection or a language, import a supported file under the limit, and play it.

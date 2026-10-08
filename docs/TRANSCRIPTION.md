@@ -12,7 +12,7 @@
 
 ## State, progress, and cancellation
 
-`TranscriptionState` is a typed enum: idle, preparing, transcribing, saving, completed, failed (with a message), and cancelled. `TranscriptionProgressSnapshot` carries phase, part counts, processed/total audio duration, overall progress, and ETA. `TranscriptionProgressTracker` calculates ETA from completed part durations and smoothed measured throughput. Elapsed UI time uses a monotonic clock; it is not persisted every second. Progress lives in the main-actor view model, not the persistence model. Reopening AudioNotes does not resume an in-flight job.
+`TranscriptionState` is a typed enum: idle, preparing, transcribing, saving, completed, failed (with a message), and cancelled. `TranscriptionProgressSnapshot` carries phase, part counts, processed/total audio duration, overall progress, and ETA. `TranscriptionProgressTracker` calculates ETA from completed part durations and smoothed measured throughput. Elapsed UI time uses a monotonic clock; it is not persisted every second. Progress lives in the main-actor view model, not the persistence model. Reopening Soniquill does not resume an in-flight job.
 
 The provider receives an async operation's cooperative Task cancellation and a main-actor, Sendable progress callback. Progress is a fraction from 0 to 1, or nil for indeterminate work. Worker actors can await the callback. Providers should check cancellation before/after expensive stages, and cancel underlying network or inference work where supported.
 

@@ -10,6 +10,9 @@ protocol ChatGPTCredentialStoring: Sendable {
 }
 
 actor ChatGPTCredentialStore: ChatGPTCredentialStoring {
+    // Stable lookup identity across the Soniquill product rename.
+    static let defaultService = "cz.kudladev.AudioNotes.chatgpt-credentials"
+
     private let service: String
 
     private enum TokenKey: String {
@@ -18,7 +21,7 @@ actor ChatGPTCredentialStore: ChatGPTCredentialStoring {
         case idToken = "chatgpt.oauth.id_token"
     }
 
-    init(service: String = "cz.kudladev.AudioNotes.chatgpt-credentials") {
+    init(service: String = ChatGPTCredentialStore.defaultService) {
         self.service = service
     }
 

@@ -1,0 +1,39 @@
+#include "Version.xcconfig"
+
+PRODUCT_NAME = Soniquill
+INFOPLIST_KEY_CFBundleDisplayName = Soniquill
+PRODUCT_BUNDLE_IDENTIFIER = cz.kudladev.soniquill
+IPHONEOS_DEPLOYMENT_TARGET = 18.0
+SDKROOT = iphoneos
+SUPPORTED_PLATFORMS = iphoneos iphonesimulator
+TARGETED_DEVICE_FAMILY = 1,2
+
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_FILE = Configuration/iOS-Info.plist
+INFOPLIST_KEY_UILaunchScreen_Generation = YES
+INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+INFOPLIST_KEY_NSLocalNetworkUsageDescription = Soniquill connects to Ollama and local AI servers on your local network.
+INFOPLIST_KEY_GoogleOAuthClientID = 576974561449-mrqi6hj029poen9emjp0658p09gkd4kt.apps.googleusercontent.com
+INFOPLIST_KEY_GoogleOAuthURLScheme = com.googleusercontent.apps.576974561449-mrqi6hj029poen9emjp0658p09gkd4kt
+INFOPLIST_KEY_GoogleCloudProjectID = sublime-elixir-474816-b4
+
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
+ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
+
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM = 8HTA4B98F5
+CODE_SIGN_IDENTITY = Apple Development
+CODE_SIGN_IDENTITY[sdk=iphonesimulator*] = -
+
+SWIFT_VERSION = 6.0
+SWIFT_APPROACHABLE_CONCURRENCY = YES
+SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES
+ENABLE_PREVIEWS = YES
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks
+
+#include? "iOS.local.xcconfig"
+
+// Keep the persistence/test module identity independent of visible branding.
+PRODUCT_MODULE_NAME = AudioNotes
+INFOPLIST_KEY_CFBundleName = Soniquill

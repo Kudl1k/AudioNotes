@@ -42,6 +42,12 @@ final class LLMConfiguration {
     var chatGeminiAuthenticationMethod: ProviderAuthenticationMethod {
         didSet { defaults.set(chatGeminiAuthenticationMethod.rawValue, forKey: "llm.chat.gemini.auth_method") }
     }
+    var summaryGeminiModel: String {
+        didSet { defaults.set(summaryGeminiModel, forKey: "llm.summary.gemini.model") }
+    }
+    var chatGeminiModel: String {
+        didSet { defaults.set(chatGeminiModel, forKey: "llm.chat.gemini.model") }
+    }
 
     var claudeExecutablePath: String {
         didSet {
@@ -170,6 +176,10 @@ final class LLMConfiguration {
             }
         }
     }
+    var cachedChatGPTModelsAccountIdentifier: String? {
+        get { defaults.string(forKey: "llm.chatgpt.cached_models_account") }
+        set { defaults.set(newValue, forKey: "llm.chatgpt.cached_models_account") }
+    }
 
     // MARK: - Capabilities Resolution
     var summaryCapabilities: LLMModelCapabilities {
@@ -183,6 +193,8 @@ final class LLMConfiguration {
         // The ChatGPT-plan Responses endpoint currently rejects max_output_tokens.
         // Keep the saved value intact so switching back to API-key auth restores it.
         if summaryProvider == .openAI && summaryAuthMethod == .chatGPT {
+            capabilities.supportsTemperature = false
+            capabilities.supportsTopP = false
             capabilities.supportsMaxOutputTokens = false
         }
         return capabilities
@@ -197,6 +209,8 @@ final class LLMConfiguration {
             : LLMProviderID.defaultProvider.rawValue
         var capabilities = LLMModelCapabilities.capabilities(for: model, provider: chatProvider)
         if chatProvider == .openAI && chatAuthMethod == .chatGPT {
+            capabilities.supportsTemperature = false
+            capabilities.supportsTopP = false
             capabilities.supportsMaxOutputTokens = false
         }
         return capabilities
@@ -220,6 +234,8 @@ final class LLMConfiguration {
         localAI = LocalAIConfiguration(defaults: defaults)
         summaryGeminiAuthenticationMethod = ProviderAuthenticationMethod(rawValue: defaults.string(forKey: "llm.summary.gemini.auth_method") ?? "") ?? .apiKey
         chatGeminiAuthenticationMethod = ProviderAuthenticationMethod(rawValue: defaults.string(forKey: "llm.chat.gemini.auth_method") ?? "") ?? .apiKey
+        summaryGeminiModel = defaults.string(forKey: "llm.summary.gemini.model") ?? "gemini-3.8-flash"
+        chatGeminiModel = defaults.string(forKey: "llm.chat.gemini.model") ?? "gemini-3.8-flash"
 
         // Summary Provider
         let sumProviderRaw = defaults.string(forKey: "llm.summary.provider") ?? defaults.string(forKey: "llm.provider") ?? ""

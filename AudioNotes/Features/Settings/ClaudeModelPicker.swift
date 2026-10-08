@@ -28,7 +28,7 @@ struct ClaudeModelPicker: View {
             }
         }
         if let error = settings.claudeModelsError {
-            Text(error).font(.caption).foregroundStyle(.red)
+            InlineErrorLabel(error)
         }
         Text("Uses your Claude Code account. Manage the connection in Providers → Anthropic.")
             .font(.caption).foregroundStyle(.secondary)

@@ -17,11 +17,13 @@ import Testing
     }
 
     private func waitUntil(_ condition: @MainActor () -> Bool) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(15))
+        // A busy hosted runner can delay MainActor progress publication beyond
+        // 15 seconds. Keep a bounded wait without requiring desktop throughput.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(60))
         while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }
-        #expect(condition())
+        try #require(condition(), "Timed out waiting for Whisper settings state after 60 seconds")
     }
 
     @Test func settingsRefreshPreservesActiveDownloadAndPreventsDuplicateOperations() async throws {
@@ -29,6 +31,7 @@ import Testing
         let downloader = PausedModelDownloader()
         let store = WhisperModelStore(root: root, downloader: downloader)
         let model = settings(store: store, model: descriptor)
+        defer { model.cancelDownload() }
         model.download(descriptor)
         try await waitUntil { model.progress?.completedBytes == 1 }
 
@@ -53,6 +56,7 @@ import Testing
         let downloader = PausedModelDownloader()
         let store = WhisperModelStore(root: root, downloader: downloader)
         let model = settings(store: store, model: descriptor)
+        defer { model.cancelDownload() }
         model.download(descriptor)
         try await waitUntil { model.progress?.completedBytes == 1 }
         await model.refreshInstalled()
