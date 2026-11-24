@@ -34,6 +34,17 @@ private actor TestCredentialStore: CredentialStoring {
     }
 }
 
+private actor TestGoogleOAuthStore: GoogleOAuthCredentialStoring, GoogleOAuthClientSecretStoring {
+    private var credential: GoogleOAuthCredential?
+
+    func load() -> GoogleOAuthCredential? { credential }
+    func save(_ credential: GoogleOAuthCredential) { self.credential = credential }
+    func delete() { credential = nil }
+    func loadClientSecret() -> String? { nil }
+    func saveClientSecret(_ secret: String) {}
+    func deleteClientSecret() {}
+}
+
 @MainActor
 struct IOSCloudAITests {
     @Test func iOSProviderCapabilitiesReflectSupportedCloudProviders() {
@@ -68,6 +79,43 @@ struct IOSCloudAITests {
 
         let denied = try #require(URL(string: "com.googleusercontent.apps.576974561449-mrqi6hj029poen9emjp0658p09gkd4kt:/oauth2redirect?error=access_denied&state=random-state"))
         #expect(GoogleGeminiOAuthService.callbackResult(from: denied).error == "access_denied")
+    }
+
+    @Test func googleNativeExchangePersistsGrantEvenWhenUserInfoIsOffline() async throws {
+        let config = try GoogleOAuthConfiguration.load()
+        let callbackScheme = try #require(config.redirectScheme)
+        let store = TestGoogleOAuthStore()
+        let response = Data(#"{"access_token":"access","refresh_token":"refresh","expires_in":3600}"#.utf8)
+        let fixture = OpenAINetworkFixture(data: response, responsesByPath: [
+            "/v1/userinfo": .init(status: 200, data: Data(), errorsBeforeSuccess: [.networkConnectionLost])
+        ])
+        defer { fixture.cleanUp() }
+        let service = GoogleGeminiOAuthService(configuration: { config }, store: store, session: fixture.session,
+            nativeAuthenticate: { url, scheme in
+                let query = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+                let state = try #require(query.first { $0.name == "state" }?.value)
+                let redirect = try #require(query.first { $0.name == "redirect_uri" }?.value)
+                #expect(scheme == callbackScheme)
+                #expect(redirect == callbackScheme + ":/oauth2redirect")
+                #expect(query.contains(URLQueryItem(name: "code_challenge_method", value: "S256")))
+                return try #require(URL(string: redirect + "?code=fixture-code&state=" + state))
+            })
+
+        let connected = try await service.connect()
+        #expect(connected.state == .connected)
+        #expect(await service.account()?.state == .connected)
+        #expect(await store.load()?.refreshToken == "refresh")
+        let requestBodies = fixture.probe.requestBodies.withLock { $0 }
+        let form = String(decoding: try #require(requestBodies.first), as: UTF8.self)
+        let decodedForm = try #require(form.removingPercentEncoding)
+        #expect(decodedForm.contains("redirect_uri=" + callbackScheme + ":/oauth2redirect"))
+        #expect(decodedForm.contains("code_verifier="))
+        #expect(!decodedForm.contains("client_secret="))
+        let headers = try await service.requestHeaders()
+        #expect(headers["Authorization"] == "Bearer access")
+        #expect(headers["x-goog-user-project"] == config.projectID)
+        try await service.disconnect()
+        #expect(await service.account() == nil)
     }
 
     @Test func iOSSettingsManagesOpenAIKeychainCredential() async throws {

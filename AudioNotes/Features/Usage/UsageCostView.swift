@@ -5,93 +5,15 @@ struct UsageCostView: View {
     var recordingID: UUID? = nil
     var projectID: UUID? = nil
     var feature: GenerationFeature? = nil
+    var isEmbedded: Bool = false
     @Environment(\.dismiss) private var dismiss
-#if os(iOS)
-    @Environment(\.dynamicTypeSize) private var typeSize
-#endif
     @Query(sort: \GenerationRecord.startedAt, order: .reverse) private var records: [GenerationRecord]
     @State private var range: UsageTimeRange = .month
     @State private var snapshot = UsageDashboardSnapshot()
     @State private var visibleRecords: [GenerationRecord] = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-#if os(iOS)
-            ViewThatFits(in: .horizontal) {
-                HStack { Text("Usage & Cost").font(.title2.bold()); Spacer(); Button("Done") { dismiss() } }
-                VStack(alignment: .leading) { Text("Usage & Cost").font(.title2.bold()); Button("Done") { dismiss() } }
-            }
-            if typeSize.isAccessibilitySize {
-                Picker("Time range", selection: $range) {
-                    ForEach(UsageTimeRange.allCases) { Text($0.rawValue).tag($0) }
-                }.pickerStyle(.menu)
-            } else {
-                Picker("Time range", selection: $range) {
-                    ForEach(UsageTimeRange.allCases) { Text($0.rawValue).tag($0) }
-                }.pickerStyle(.segmented)
-            }
-#else
-            HStack {
-                Text("Usage & Cost").font(.title2.bold())
-                Spacer()
-                Button("Done") { dismiss() }
-            }
-            Picker("Time range", selection: $range) {
-                ForEach(UsageTimeRange.allCases) { Text($0.rawValue).tag($0) }
-            }.pickerStyle(.segmented)
-#endif
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    GroupBox("Metered API usage · USD") {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(snapshot.total.displayText).font(.title2)
-                            if let chat = snapshot.byFeature["chat"], chat.completedResponses > 0 {
-                                Text("\(chat.completedResponses) AI responses").font(.caption).foregroundStyle(.secondary)
-                            }
-                            ForEach(snapshot.byFeature.keys.sorted(), id: \.self) { feature in
-                                LabeledContent(feature.capitalized, value: snapshot.byFeature[feature]?.displayText ?? "Cost unavailable")
-                            }
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
-                    }
-                    GroupBox("By provider") {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(snapshot.byProvider.keys.sorted(), id: \.self) { provider in
-                                LabeledContent(LLMProviderID(rawValue: provider)?.title ?? TranscriptionProviderID(rawValue: provider)?.title ?? "Unknown provider",
-                                               value: snapshot.byProvider[provider]?.displayText ?? "Cost unavailable")
-                            }
-                        }.padding(6)
-                    }
-                    if snapshot.total.planRequests > 0 {
-                        GroupBox("Account/plan usage") {
-                            Text("ChatGPT · \(snapshot.total.planRequests) requests · Included with plan")
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(6)
-                        }
-                    }
-                    Text("Calculated costs use bundled standard API rates. Provider invoices may differ due to account tiers, discounts, taxes or billing precision.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    DisclosureGroup("Operation history") {
-                        ForEach(visibleRecords) { record in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(record.featureRaw.capitalized) · \(record.startedAt.formatted(date: .abbreviated, time: .shortened))")
-                                Text(record.usageDetails).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                            }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
-                        }
-                    }
-                    Text("Pricing verified September 30, 2026 · Display currency USD")
-                        .font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        Link("OpenAI pricing", destination: URL(string: "https://developers.openai.com/api/docs/pricing")!)
-                        Link("Claude pricing", destination: URL(string: "https://platform.claude.com/docs/en/about-claude/pricing")!)
-                        Link("Gemini pricing", destination: URL(string: "https://ai.google.dev/gemini-api/docs/pricing")!)
-                    }.font(.caption)
-                }
-            }
-        }
-#if os(macOS)
-        .padding(24).frame(minWidth: 600, idealWidth: 680, minHeight: 500)
-#else
-        .padding(16).frame(maxWidth: 760).frame(maxWidth: .infinity)
-#endif
+        presentation
         .task(id: records.map { "\($0.id)-\($0.requestUsageData?.hashValue ?? 0)-\($0.statusRaw)" }.joined() + range.rawValue) {
             let scoped = records.filter { (recordingID == nil || $0.recordingID == recordingID) && (projectID == nil || $0.projectID == projectID) && (feature == nil || $0.featureRaw == feature?.rawValue) }
             let interval = range.interval()
@@ -104,6 +26,199 @@ struct UsageCostView: View {
             }
         }
         .onAppear { if recordingID != nil || projectID != nil { range = .all } }
+    }
+
+    private var periodPicker: some View {
+        Picker("Time range", selection: $range) {
+            ForEach(UsageTimeRange.allCases) { Text($0.rawValue).tag($0) }
+        }
+    }
+
+#if os(iOS)
+    private var iosForm: some View {
+        Form {
+            Section {
+                periodPicker
+            }
+            Section("API costs") {
+                LabeledContent("Total in USD", value: snapshot.total.displayText)
+                if !snapshot.byFeature.isEmpty {
+                    Text("Activities").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                        .accessibilityAddTraits(.isHeader)
+                    featureRows
+                }
+                if !snapshot.byProvider.isEmpty {
+                    Text("Providers").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                        .accessibilityAddTraits(.isHeader)
+                    providerRows
+                }
+            }
+            Section {
+                ForEach(AccountUsageProvider.allCases, id: \.self) { provider in
+                    let usage = snapshot.byAccountProvider[provider, default: AccountRequestUsage()]
+                    VStack(alignment: .leading, spacing: 4) {
+                        LabeledContent(provider.title, value: "\(usage.requestCount) requests")
+                        if usage.requestsWithTokenCount > 0 {
+                            Text("\(usage.reportedTokens.formatted()) reported tokens")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        if usage.requestsWithTokenCount < usage.requestCount {
+                            let missing = usage.requestCount - usage.requestsWithTokenCount
+                            Text("Token count unavailable for \(missing) requests")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            } header: {
+                Text("Account usage")
+            } footer: {
+                Text("Requests recorded by Soniquill in the selected period.")
+            }
+            Section("History") {
+                if visibleRecords.isEmpty {
+                    Text("No operations in this period").foregroundStyle(.secondary)
+                } else {
+                    history(title: "Operations")
+                }
+            }
+            Section {
+                DisclosureGroup("Provider limits & pricing") {
+                    ForEach(AccountUsageProvider.allCases, id: \.self) { provider in
+                        Link(provider.dashboardTitle, destination: provider.dashboardURL)
+                    }
+                    pricingLinks
+                    pricingDate
+                    pricingExplanation
+                }
+            }
+        }
+        .navigationTitle("Usage & Costs")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+#endif
+
+    @ViewBuilder
+    private var presentation: some View {
+#if os(iOS)
+        if isEmbedded {
+            iosForm
+        } else {
+            NavigationStack {
+                iosForm
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { dismiss() }
+                        }
+                    }
+            }
+        }
+#else
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Usage & Cost").font(.title2.bold())
+                Spacer()
+                Button("Done") { dismiss() }
+            }
+            periodPicker.pickerStyle(.segmented)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    GroupBox("ChatGPT & Gemini") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Requests recorded by Soniquill in the selected period.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            ForEach(AccountUsageProvider.allCases, id: \.self) { provider in
+                                let usage = snapshot.byAccountProvider[provider, default: AccountRequestUsage()]
+                                VStack(alignment: .leading, spacing: 5) {
+                                    LabeledContent(provider.title, value: usage.requestCount == 0
+                                        ? "No tracked requests" : usage.requestCount.formatted() + " requests")
+                                    tokenRows(usage)
+                                    Link(provider.dashboardTitle, destination: provider.dashboardURL).font(.callout)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(6)
+                    }
+                    GroupBox("Metered API usage · USD") {
+                        VStack(alignment: .leading, spacing: 8) { costRows }
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(6)
+                    }
+                    GroupBox("By provider") {
+                        VStack(alignment: .leading, spacing: 8) { providerRows }.padding(6)
+                    }
+                    pricingExplanation
+                    history(title: "Operation history")
+                    pricingDate
+                    HStack { pricingLinks }.font(.caption)
+                }
+            }
+        }
+        .padding(24).frame(minWidth: 600, idealWidth: 680, minHeight: 500)
+#endif
+    }
+
+    @ViewBuilder
+    private func tokenRows(_ usage: AccountRequestUsage) -> some View {
+        if usage.requestsWithTokenCount > 0 {
+            LabeledContent("Reported tokens", value: usage.reportedTokens.formatted())
+        }
+        if usage.requestsWithTokenCount < usage.requestCount {
+            let unreported = usage.requestCount - usage.requestsWithTokenCount
+            Text("Token usage unavailable for \(unreported) requests")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var costRows: some View {
+        Group {
+            Text(snapshot.total.displayText).font(.title2)
+            if let chat = snapshot.byFeature["chat"], chat.completedResponses > 0 {
+                Text("\(chat.completedResponses) AI responses").font(.caption).foregroundStyle(.secondary)
+            }
+            featureRows
+        }
+    }
+
+    private var featureRows: some View {
+        ForEach(snapshot.byFeature.keys.sorted(), id: \.self) { feature in
+            LabeledContent(feature.capitalized, value: snapshot.byFeature[feature]?.displayText ?? "Cost unavailable")
+        }
+    }
+
+    private var providerRows: some View {
+        ForEach(snapshot.byProvider.keys.sorted(), id: \.self) { provider in
+            LabeledContent(LLMProviderID(rawValue: provider)?.title ?? TranscriptionProviderID(rawValue: provider)?.title ?? "Unknown provider",
+                           value: snapshot.byProvider[provider]?.displayText ?? "Cost unavailable")
+        }
+    }
+
+    private func history(title: LocalizedStringKey) -> some View {
+        DisclosureGroup(title) {
+            ForEach(visibleRecords) { record in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(record.featureRaw.capitalized) · \(record.startedAt.formatted(date: .abbreviated, time: .shortened))")
+                    Text(record.usageDetails).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
+            }
+        }
+    }
+
+    private var pricingExplanation: some View {
+        Text("Calculated costs use bundled standard API rates. Provider invoices may differ due to account tiers, discounts, taxes or billing precision.")
+            .font(.caption).foregroundStyle(.secondary)
+    }
+
+    private var pricingDate: some View {
+        Text("Pricing verified September 30, 2026 · Display currency USD")
+            .font(.caption).foregroundStyle(.secondary)
+    }
+
+    private var pricingLinks: some View {
+        Group {
+            Link("OpenAI pricing", destination: URL(string: "https://developers.openai.com/api/docs/pricing")!)
+            Link("Claude pricing", destination: URL(string: "https://platform.claude.com/docs/en/about-claude/pricing")!)
+            Link("Gemini pricing", destination: URL(string: "https://ai.google.dev/gemini-api/docs/pricing")!)
+        }
     }
 }
 

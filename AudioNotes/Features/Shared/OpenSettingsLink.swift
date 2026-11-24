@@ -1,17 +1,32 @@
 import SwiftUI
 
+enum SettingsSection: Hashable, Sendable {
+    case transcription
+    case summary
+    case chat
+    case presets
+    case openAI
+    case gemini
+    case localAI
+    case usage
+}
+
 /// An action to open settings, customizable via the environment for platforms or contexts
 /// where standard SwiftUI `SettingsLink` is not available or custom navigation is needed.
 struct OpenSettingsAction: Sendable {
-    private let action: @MainActor () -> Void
+    private let action: @MainActor (SettingsSection?) -> Void
 
     init(action: @escaping @MainActor () -> Void) {
+        self.action = { _ in action() }
+    }
+
+    init(action: @escaping @MainActor (SettingsSection?) -> Void) {
         self.action = action
     }
 
     @MainActor
-    func callAsFunction() {
-        action()
+    func callAsFunction(_ section: SettingsSection? = nil) {
+        action(section)
     }
 }
 
@@ -31,21 +46,23 @@ extension EnvironmentValues {
 /// and falls back to a Button triggering `openSettingsAction` on other platforms.
 struct OpenSettingsLink<Label: View>: View {
     @Environment(\.openSettingsAction) private var openSettingsAction
+    let section: SettingsSection?
     @ViewBuilder let label: () -> Label
 
-    init(@ViewBuilder label: @escaping () -> Label) {
+    init(section: SettingsSection? = nil, @ViewBuilder label: @escaping () -> Label) {
+        self.section = section
         self.label = label
     }
 
     var body: some View {
 #if os(macOS)
         if let openSettingsAction {
-            Button(action: { openSettingsAction() }, label: label)
+            Button(action: { openSettingsAction(section) }, label: label)
         } else {
             SettingsLink(label: label)
         }
 #else
-        Button(action: { openSettingsAction?() }, label: label)
+        Button(action: { openSettingsAction?(section) }, label: label)
 #endif
     }
 }

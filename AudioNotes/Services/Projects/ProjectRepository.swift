@@ -97,10 +97,16 @@ struct SwiftDataProjectRepository: ProjectEditing {
         var owned = Set(project.sources.map { storage.sourceDirectory(id: $0.id) })
         if deletingRecordings {
             for recording in recordings {
-                if !recording.audioFileName.isEmpty { owned.insert(storage.recordingURL(fileName: recording.audioFileName)) }
+                if !recording.audioFileName.isEmpty {
+                    let audio = storage.recordingURL(fileName: recording.audioFileName)
+                    owned.formUnion([audio, TranscriptionCheckpoint.directory(for: audio)])
+                }
                 for source in recording.sources {
                     if source.isPrimaryAudio {
-                        if !source.localFileReference.isEmpty { owned.insert(storage.sourceURL(source)) }
+                        if !source.localFileReference.isEmpty {
+                            let audio = storage.sourceURL(source)
+                            owned.formUnion([audio, TranscriptionCheckpoint.directory(for: audio)])
+                        }
                     } else { owned.insert(storage.sourceDirectory(id: source.id)) }
                 }
             }

@@ -8,6 +8,16 @@ struct IOSTranscriptionSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var providers: [TranscriptionProviderID] = []
     @State private var loading = true
+    @StateObject private var keySettings: ProviderSettingsViewModel
+
+    init(model: RecordingViewModel, services: AppServices) {
+        self.model = model
+        self.services = services
+        _keySettings = StateObject(wrappedValue: ProviderSettingsViewModel(
+            credentials: services.credentials,
+            modelsClient: services.modelsClient,
+            transcriptionConfig: services.configuration))
+    }
 
     var body: some View {
         NavigationStack {
@@ -28,6 +38,16 @@ struct IOSTranscriptionSettingsSheet: View {
                     if !loading && providers.isEmpty {
                         Text("Connect a transcription account in Settings.").foregroundStyle(.secondary)
                         OpenSettingsLink { Text("Open Settings") }
+                    }
+                    if !loading && !providers.contains(.openAI) && !model.isMockProvider {
+                        NavigationLink {
+                            IOSOpenAIAPIKeyView(settings: keySettings) {
+                                if !providers.contains(.openAI) { providers.append(.openAI) }
+                                model.selectedProvider = .openAI
+                            }
+                        } label: {
+                            Label("Add OpenAI API Key", systemImage: "key")
+                        }.accessibilityIdentifier("transcription.addOpenAIKey")
                     }
                 }
                 if !model.availableModels.isEmpty {
@@ -73,8 +93,7 @@ struct IOSTranscriptionSettingsSheet: View {
                 }
 #endif
                 let key = (try? await services.credentials.containsKey(for: .openAI)) == true
-                let google = await services.googleGeminiOAuth.account() != nil
-                providers = IOSProviderAvailability.transcription(openAIKey: key, geminiConnected: google,
+                providers = IOSProviderAvailability.transcription(openAIKey: key,
                     includeMock: model.isMockProvider, localWhisperSupported: LocalAISettingsViewModel.supportsWhisper)
                 await services.localAISettings.refreshInstalled()
                 loading = false
@@ -85,7 +104,7 @@ struct IOSTranscriptionSettingsSheet: View {
     }
     private var defaultModel: String {
         if (model.selectedProvider ?? services.configuration.selectedProvider) == .localWhisper { return services.llmConfiguration.localAI.whisperModel }
-        return (model.selectedProvider ?? services.configuration.selectedProvider) == .gemini ? services.configuration.geminiModel : services.configuration.openAIModel.rawValue
+        return services.configuration.openAIModel.rawValue
     }
 }
 #endif

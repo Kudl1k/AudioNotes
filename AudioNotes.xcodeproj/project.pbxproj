@@ -100,7 +100,6 @@
 				OpenAIAudioUploadTests.swift,
 				OpenAIHTTPErrorTests.swift,
 				OpenAILLMProviderTests.swift,
-				OpenAINetworkStub.swift,
 				OpenAIResponseTests.swift,
 				OpenAISummaryDTOTests.swift,
 				OpenAITranscriptionProviderTests.swift,

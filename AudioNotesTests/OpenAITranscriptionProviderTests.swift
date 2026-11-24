@@ -56,6 +56,75 @@ struct OpenAITranscriptionProviderTests {
         #expect(statuses.last?.phase == .merging)
     }
 
+    @Test func retryReusesCompletedPartWithoutAnotherRequest() async throws {
+        let workspace = try TestWorkspace()
+        defer { workspace.cleanUp() }
+        let audio = try workspace.makeAudio()
+        let fixture = OpenAINetworkFixture(data: OpenAIResponseTests.validJSON)
+        defer { fixture.cleanUp() }
+        let splitter = FixedAudioPreparing(parts: [
+            OpenAIAudioPart(url: audio, startTime: 0, duration: 10),
+            OpenAIAudioPart(url: audio, startTime: 10, duration: 20)
+        ], totalDuration: 30)
+
+        func makeProvider(language: TranscriptionLanguage = .automatic) -> OpenAITranscriptionProvider {
+            OpenAITranscriptionProvider(configuration: .init(language: language),
+                credentials: MockCredentialStore(key: "offline-placeholder"),
+                client: OpenAITranscriptionClient(session: fixture.session), splitter: splitter)
+        }
+
+        let interrupted = Task {
+            _ = try await makeProvider().transcribe(audioURL: audio, progress: { _ in }, status: { status in
+                if status.completedParts == 1 {
+                    withUnsafeCurrentTask { $0?.cancel() }
+                }
+            })
+        }
+        await #expect(throws: CancellationError.self) { _ = try await interrupted.value }
+        #expect(fixture.probe.requests.withLock { $0.count } == 1)
+
+        var reused: [Int] = []
+        var newRequests = 0
+        let transcript = try await makeProvider().transcribe(audioURL: audio, progress: { _ in }, status: { status in
+            if status.reusedPart { reused.append(status.completedParts) }
+        }, usage: { event in
+            if case .began = event { newRequests += 1 }
+        })
+        #expect(reused == [1])
+        #expect(newRequests == 1)
+        #expect(fixture.probe.requests.withLock { $0.count } == 2)
+        #expect(transcript.orderedSegments.map(\.startTime) == [0, 0.5, 10, 10.5])
+
+        _ = try await makeProvider(language: .czech).transcribe(audioURL: audio) { _ in }
+        #expect(fixture.probe.requests.withLock { $0.count } == 4)
+    }
+
+    @Test func savesFullyCachedTranscriptAndRemovesCheckpointWithoutCharging() async throws {
+        let workspace = try TestWorkspace()
+        defer { workspace.cleanUp() }
+        let fixture = OpenAINetworkFixture(data: OpenAIResponseTests.validJSON)
+        defer { fixture.cleanUp() }
+        let container = try workspace.storage.makeContainer(inMemory: true)
+        let context = container.mainContext
+        let recording = try await workspace.makeRecording(in: context)
+        let audio = workspace.storage.recordingURL(fileName: recording.audioFileName)
+        let provider = OpenAITranscriptionProvider(configuration: .init(),
+            credentials: MockCredentialStore(key: "offline-placeholder"),
+            client: OpenAITranscriptionClient(session: fixture.session))
+        _ = try await provider.transcribe(audioURL: audio) { _ in }
+
+        let model = RecordingViewModel(recording: recording, provider: provider, storage: workspace.storage)
+        await model.startTranscription(using: SwiftDataTranscriptRepository(context: context))?.value
+
+        #expect(recording.transcript != nil)
+        #expect(fixture.probe.requests.withLock { $0.count } == 1)
+        #expect(!FileManager.default.fileExists(atPath: TranscriptionCheckpoint.directory(for: audio).path))
+        let generation = try #require(recording.generationRecords.first)
+        #expect(generation.requests.isEmpty)
+        #expect(generation.usageCost.status == .free)
+        #expect(UsageRepository().snapshot(records: [generation]).total.meteredRequests == 0)
+    }
+
     @Test func missingKeyDoesNotStartNetworkRequest() async throws {
         let fixture = OpenAINetworkFixture(data: Data())
         defer { fixture.cleanUp() }

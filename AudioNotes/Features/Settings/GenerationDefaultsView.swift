@@ -47,12 +47,6 @@ struct GenerationDefaultsView: View {
                 }
                 Text("Download and manage Whisper models in Providers → Local AI.")
                     .font(.caption).foregroundStyle(.secondary)
-            } else if transcriptionConfig.selectedProvider == .gemini {
-                Picker("Model", selection: $transcriptionConfig.geminiModel) {
-                    Text("Gemini 3.5 Transcribe").tag("gemini-3.5-transcribe")
-                }
-                Text("Word timestamps and speaker labels · up to 30 minutes · billed to the configured Google Cloud project.")
-                    .font(.caption).foregroundStyle(.secondary)
             } else {
                 Picker("Model", selection: $transcriptionConfig.openAIModel) {
                     ForEach(model.availableTranscriptionModels) { item in

@@ -1,8 +1,8 @@
 import Foundation
 
-struct LocalWhisperSegment: Sendable { let start: TimeInterval; let end: TimeInterval; let text: String }
-struct LocalWhisperResult: Sendable { let language: String?; let segments: [LocalWhisperSegment] }
-typealias LocalWhisperStatusReporter = @Sendable (TimeInterval, TimeInterval) async -> Void
+struct LocalWhisperSegment: Codable, Sendable { let start: TimeInterval; let end: TimeInterval; let text: String }
+struct LocalWhisperResult: Codable, Sendable { let language: String?; let segments: [LocalWhisperSegment] }
+typealias LocalWhisperStatusReporter = @Sendable (TimeInterval, TimeInterval, Bool) async -> Void
 
 protocol LocalWhisperRunning: Sendable {
     func transcribe(audioURL: URL, modelFolder: URL, language: String?,
@@ -26,8 +26,12 @@ protocol LocalWhisperRunning: Sendable {
     let store: WhisperModelStore
     let coordinator: LocalInferenceCoordinator
 
-    init(model: WhisperModelDescriptor, language: String?, runtime: any LocalWhisperRunning = WhisperKitRuntime(), store: WhisperModelStore, coordinator: LocalInferenceCoordinator? = nil) {
-        self.model = model; self.language = language; self.runtime = runtime; self.store = store; self.coordinator = coordinator ?? LocalInferenceCoordinator()
+    init(model: WhisperModelDescriptor, language: String?, runtime: (any LocalWhisperRunning)? = nil, store: WhisperModelStore, coordinator: LocalInferenceCoordinator? = nil) {
+        self.model = model
+        self.language = language
+        self.runtime = runtime ?? WhisperKitRuntime(modelRevision: model.files.map { $0.sha256 ?? $0.url.absoluteString })
+        self.store = store
+        self.coordinator = coordinator ?? LocalInferenceCoordinator()
     }
     var capabilities: TranscriptionProviderCapabilities {
         .init(maxDirectUploadSize: nil, maxProviderFileUploadSize: nil, supportsProviderFileUpload: false,
@@ -45,9 +49,9 @@ protocol LocalWhisperRunning: Sendable {
         do {
             guard await store.isReady(model) else { throw LocalAIError.missingModel(model.title) }
             let folder = await store.folder(model)
-            let result = try await runtime.transcribe(audioURL: audioURL, modelFolder: folder, language: language) { processed, total in
+            let result = try await runtime.transcribe(audioURL: audioURL, modelFolder: folder, language: language) { processed, total, reused in
                 await status(.init(phase: .transcribing, currentPart: nil, totalParts: nil, completedParts: 0,
-                    processedAudioDuration: processed, totalAudioDuration: total))
+                    processedAudioDuration: processed, totalAudioDuration: total, reusedPart: reused))
                 await progress(total > 0 ? min(1, processed / total) : nil)
             }
             try Task.checkCancellation()
@@ -63,10 +67,18 @@ protocol LocalWhisperRunning: Sendable {
         }
     }
     static func makeTranscript(_ result: LocalWhisperResult, model: String) throws -> Transcript {
-        let segments = result.segments.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        guard !segments.isEmpty, segments.allSatisfy({ $0.start.isFinite && $0.end.isFinite && $0.start >= 0 && $0.end >= $0.start }) else { throw TranscriptionError.invalidTranscript }
+        let validSegments = result.segments.compactMap { seg -> LocalWhisperSegment? in
+            let text = seg.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return nil }
+            guard seg.start.isFinite, seg.end.isFinite else { return nil }
+            let start = max(0, seg.start)
+            let end = max(start, seg.end)
+            guard start.isFinite, end.isFinite else { return nil }
+            return LocalWhisperSegment(start: start, end: end, text: seg.text)
+        }
+        guard !validSegments.isEmpty else { throw TranscriptionError.invalidTranscript }
         let transcript = Transcript(languageCode: result.language, sourceName: "Local Whisper · " + model)
-        transcript.segments = segments.sorted { $0.start < $1.start }.enumerated().map {
+        transcript.segments = validSegments.sorted { $0.start < $1.start }.enumerated().map {
             TranscriptSegment(position: $0.offset, startTime: $0.element.start, endTime: $0.element.end, text: $0.element.text)
         }
         return transcript

@@ -17,8 +17,10 @@ struct PresetsManagementView: View {
             Picker("Feature", selection: $selectedTab) {
                 Text("Summary").tag(AIPresetFeature.summary)
                 Text("Chat").tag(AIPresetFeature.chat)
-            }.pickerStyle(.menu).padding(.horizontal)
-            Button("New Preset", systemImage: "plus") { showCreateSheet = true }.padding(.bottom, 8)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
 #else
             HStack(spacing: 16) {
                 Picker("Feature", selection: $selectedTab) {
@@ -57,6 +59,13 @@ struct PresetsManagementView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 8)
+#if os(iOS)
+                        Button {
+                            showCreateSheet = true
+                        } label: {
+                            Label("New Preset", systemImage: "plus")
+                        }
+#endif
                     } else {
                         ForEach(filtered) { preset in
                             HStack {
@@ -77,11 +86,12 @@ struct PresetsManagementView: View {
                                 }
 
 #if os(iOS)
+                                Spacer()
                                 Menu {
-                                    Button("Duplicate") { duplicate(preset) }
-                                    Button("Edit") { presetToEdit = preset }
-                                    Button("Delete", role: .destructive) { presetToDelete = preset; showDeleteConfirmation = true }
-                                } label: { Label("Preset actions", systemImage: "ellipsis.circle") }
+                                    Button("Edit", systemImage: "pencil") { presetToEdit = preset }
+                                    Button("Duplicate", systemImage: "plus.square.on.square") { duplicate(preset) }
+                                    Button("Delete", systemImage: "trash", role: .destructive) { presetToDelete = preset; showDeleteConfirmation = true }
+                                } label: { Label("Preset actions", systemImage: "ellipsis.circle").labelStyle(.iconOnly) }
 #else
                                 Spacer()
 
@@ -104,6 +114,18 @@ struct PresetsManagementView: View {
 #endif
                             }
                             .padding(.vertical, 4)
+#if os(iOS)
+                            .swipeActions(edge: .trailing) {
+                                Button("Delete", role: .destructive) {
+                                    presetToDelete = preset
+                                    showDeleteConfirmation = true
+                                }
+                                Button("Edit") {
+                                    presetToEdit = preset
+                                }
+                                .tint(.blue)
+                            }
+#endif
                         }
                     }
                 }
@@ -128,9 +150,22 @@ struct PresetsManagementView: View {
                 }
             }
             .formStyle(.grouped)
+#if os(macOS)
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
+#endif
         }
+#if os(iOS)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showCreateSheet = true
+                } label: {
+                    Label("New Preset", systemImage: "plus")
+                }
+            }
+        }
+#endif
         .sheet(item: $presetToEdit) { preset in
             PresetEditorView(existingPreset: preset, defaultFeature: selectedTab)
         }

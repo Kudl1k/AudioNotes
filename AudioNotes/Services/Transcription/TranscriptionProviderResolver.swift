@@ -24,19 +24,17 @@ struct TranscriptionProviderResolver: TranscriptionProviderResolving {
     let localConfiguration: LocalAIConfiguration
     let whisperStore: WhisperModelStore
     let coordinator: LocalInferenceCoordinator?
-    let geminiOAuth: GoogleGeminiOAuthService
 
     init(configuration: TranscriptionConfiguration, credentials: any CredentialStoring,
          client: OpenAITranscriptionClient = OpenAITranscriptionClient(),
          localConfiguration: LocalAIConfiguration? = nil, whisperStore: WhisperModelStore = WhisperModelStore(),
-         geminiOAuth: GoogleGeminiOAuthService = GoogleGeminiOAuthService(), coordinator: LocalInferenceCoordinator? = nil) {
+         coordinator: LocalInferenceCoordinator? = nil) {
         self.configuration = configuration
         self.credentials = credentials
         self.client = client
         self.localConfiguration = localConfiguration ?? LocalAIConfiguration()
         self.whisperStore = whisperStore
         self.coordinator = coordinator
-        self.geminiOAuth = geminiOAuth
     }
 
     func resolve() -> any TranscriptionProvider {
@@ -53,7 +51,6 @@ struct TranscriptionProviderResolver: TranscriptionProviderResolving {
         switch provider {
         case .mock: []
         case .openAI: configuration.availableVoiceModels.map { .init(id: $0.rawValue, title: $0.title) }
-        case .gemini: [.init(id: "gemini-3.5-transcribe", title: "Gemini 3.5 Transcribe (timestamps and speakers)")]
         case .localWhisper: WhisperModelDescriptor.selectable.map { .init(id: $0.id, title: $0.title) }
         }
     }
@@ -75,8 +72,6 @@ struct TranscriptionProviderResolver: TranscriptionProviderResolving {
             if let language { settings.language = language }
             if let model { settings.model = OpenAITranscriptionModel(rawValue: model) }
             return OpenAITranscriptionProvider(configuration: settings, credentials: credentials, client: client)
-        case .gemini:
-            return GeminiTranscriptionProvider(model: model ?? configuration.geminiModel, oauth: geminiOAuth)
         }
     }
 }

@@ -95,9 +95,7 @@ struct ProviderConnectionsView: View {
                 .padding(.vertical, 4)
 
                 HStack {
-                    if let usageURL = URL(string: "https://chatgpt.com/settings/usage") {
-                        Link("Check Usage", destination: usageURL)
-                    }
+                    Link(AccountUsageProvider.chatGPT.dashboardTitle, destination: AccountUsageProvider.chatGPT.dashboardURL)
                     Spacer()
                     Button("Disconnect", role: .destructive) {
                         Task { await model.disconnectChatGPT() }
@@ -175,6 +173,7 @@ struct ProviderConnectionsView: View {
             }
             if let account = model.googleAccount {
                 Label(account.email.map { "Connected with Google · \($0)" } ?? "Connected with Google", systemImage: "person.crop.circle.fill")
+                Link(AccountUsageProvider.gemini.dashboardTitle, destination: AccountUsageProvider.gemini.dashboardURL)
                 Button("Disconnect Google", role: .destructive) { Task { await model.disconnectGoogle() } }
                     .disabled(model.googleOAuthIsBusy)
             } else {

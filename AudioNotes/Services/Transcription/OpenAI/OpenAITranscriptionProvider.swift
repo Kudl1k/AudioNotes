@@ -66,6 +66,9 @@ struct OpenAITranscriptionProvider: TranscriptionProvider {
                                        completedParts: 0, processedAudioDuration: 0, totalAudioDuration: split.totalDuration))
         }
 
+        let checkpoint = TranscriptionCheckpoint(audioURL: audioURL, configuration: [
+            "openai-m4a-v1", configuration.model.rawValue, configuration.language.rawValue
+        ])
         let merged = Transcript(sourceName: displayName)
         var completedAudio: TimeInterval = 0
         for (index, part) in split.parts.enumerated() {
@@ -73,21 +76,30 @@ struct OpenAITranscriptionProvider: TranscriptionProvider {
             status(TranscriptionStatus(phase: .transcribing, currentPart: index + 1, totalParts: split.parts.count,
                                        completedParts: index, processedAudioDuration: completedAudio,
                                        totalAudioDuration: split.totalDuration))
-            let requestID = UUID()
-            usage(.began(requestID))
-            let response: OpenAITranscriptionResponse
-            do {
-                response = try await client.transcribe(fileURL: part.url, apiKey: key, configuration: configuration)
-                let reported = response.duration.flatMap { $0.isFinite && $0 >= 0 ? Decimal(string: String($0)) : nil }
-                usage(.finished(requestID, TranscriptionUsage(recordingDuration: Decimal(string: String(split.totalDuration)),
-                    processedDuration: Decimal(string: String(part.duration)), providerReportedDuration: reported), true))
-            } catch {
-                usage(.finished(requestID, nil, false))
-                throw error
+            let partTranscript: Transcript
+            let cached: Bool
+            if let response = checkpoint?.read(OpenAITranscriptionResponse.self, start: part.startTime, duration: part.duration),
+               let transcript = try? response.makeTranscript(modelName: configuration.model.rawValue, audioDuration: part.duration) {
+                partTranscript = transcript
+                cached = true
+            } else {
+                let requestID = UUID()
+                usage(.began(requestID))
+                let response: OpenAITranscriptionResponse
+                do {
+                    response = try await client.transcribe(fileURL: part.url, apiKey: key, configuration: configuration)
+                    let reported = response.duration.flatMap { $0.isFinite && $0 >= 0 ? Decimal(string: String($0)) : nil }
+                    usage(.finished(requestID, TranscriptionUsage(recordingDuration: Decimal(string: String(split.totalDuration)),
+                        processedDuration: Decimal(string: String(part.duration)), providerReportedDuration: reported), true))
+                } catch {
+                    usage(.finished(requestID, nil, false))
+                    throw error
+                }
+                partTranscript = try response.makeTranscript(modelName: configuration.model.rawValue, audioDuration: part.duration)
+                checkpoint?.save(response, start: part.startTime, duration: part.duration)
+                cached = false
             }
             try Task.checkCancellation()
-            let partTranscript = try response.makeTranscript(modelName: configuration.model.rawValue,
-                                                             audioDuration: part.duration)
             if index == 0 { merged.languageCode = partTranscript.languageCode }
             for segment in partTranscript.orderedSegments {
                 guard segment.startTime < part.duration else { continue }
@@ -104,7 +116,7 @@ struct OpenAITranscriptionProvider: TranscriptionProvider {
             }
             status(TranscriptionStatus(phase: .transcribing, currentPart: index + 1, totalParts: split.parts.count,
                                       completedParts: index + 1, processedAudioDuration: completedAudio,
-                                      totalAudioDuration: split.totalDuration))
+                                      totalAudioDuration: split.totalDuration, reusedPart: cached))
         }
         try Task.checkCancellation()
         status(TranscriptionStatus(phase: .merging, currentPart: nil, totalParts: split.parts.count,

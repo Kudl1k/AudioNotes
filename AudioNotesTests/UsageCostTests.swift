@@ -266,6 +266,36 @@ struct UsageTrackingTests {
         #expect(snapshot.byFeature["chat"] == snapshot.total)
     }
 
+    @Test func accountDashboardCountsRecordedRequestsAndReportedTokensWithinRange() {
+        let recording = recording()
+        let plan = generation(recording, feature: .chat, auth: .chatGPTAccount)
+        let api = generation(recording, feature: .chat)
+        let gemini = GenerationRecord(recording: recording, feature: .summary, provider: .gemini, model: "gemini",
+            presetName: nil, outputLength: .detailed, settings: nil, authenticationMethod: .oauth, status: .inProgress)
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let interval = DateInterval(start: start, duration: 60)
+
+        let planTracker = OperationUsageTracker(generation: plan)
+        planTracker.finishRequest(planTracker.beginRequest(at: start),
+            usage: GenerationUsage(inputTokens: 20, outputTokens: 10, totalTokens: 40), succeeded: true)
+        planTracker.finishRequest(planTracker.beginRequest(at: start), succeeded: false)
+        planTracker.finishRequest(planTracker.beginRequest(at: interval.end),
+            usage: GenerationUsage(totalTokens: 100), succeeded: true)
+        let geminiTracker = OperationUsageTracker(generation: gemini)
+        geminiTracker.finishRequest(geminiTracker.beginRequest(at: start),
+            usage: GenerationUsage(inputTokens: 15, outputTokens: 5), succeeded: true)
+        let apiTracker = OperationUsageTracker(generation: api)
+        apiTracker.finishRequest(apiTracker.beginRequest(at: start),
+            usage: GenerationUsage(totalTokens: 200), succeeded: true)
+
+        let usage = UsageRepository().snapshot(records: [plan, gemini, api], interval: interval).byAccountProvider
+        #expect(usage[.chatGPT]?.requestCount == 2)
+        #expect(usage[.chatGPT]?.requestsWithTokenCount == 1)
+        #expect(usage[.chatGPT]?.reportedTokens == 40)
+        #expect(usage[.gemini]?.requestCount == 1)
+        #expect(usage[.gemini]?.reportedTokens == 20)
+    }
+
     @Test func exportCostIsOptIn() {
         let recording = recording()
         let generation = generation(recording)

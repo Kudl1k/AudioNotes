@@ -53,7 +53,7 @@ struct PlatformCapabilities: Sendable, Equatable {
 
     func isSupported(transcriptionProvider: TranscriptionProviderID) -> Bool {
         switch transcriptionProvider {
-        case .openAI, .gemini:
+        case .openAI:
             return true
         case .mock:
 #if DEBUG

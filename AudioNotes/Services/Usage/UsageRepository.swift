@@ -19,10 +19,54 @@ struct UsageTotals: Equatable, Sendable {
     }
 }
 
+enum AccountUsageProvider: CaseIterable, Sendable {
+    case chatGPT, gemini
+
+    var title: String {
+        switch self {
+        case .chatGPT: "ChatGPT plan"
+        case .gemini: "Gemini API"
+        }
+    }
+
+    var dashboardTitle: String {
+        switch self {
+        case .chatGPT: "ChatGPT usage and limits"
+        case .gemini: "Gemini usage and quotas in AI Studio"
+        }
+    }
+
+    var dashboardURL: URL {
+        switch self {
+        case .chatGPT: URL(string: "https://chatgpt.com/settings/usage")!
+        case .gemini: URL(string: "https://aistudio.google.com/usage")!
+        }
+    }
+}
+
+struct AccountRequestUsage: Equatable, Sendable {
+    private(set) var requestCount = 0
+    private(set) var requestsWithTokenCount = 0
+    private(set) var reportedTokens: Decimal = 0
+
+    mutating func record(_ usage: GenerationUsage?) {
+        requestCount += 1
+        if let total = usage?.totalTokens, total >= 0 {
+            reportedTokens += Decimal(total)
+        } else if let input = usage?.inputTokens, let output = usage?.outputTokens, input >= 0, output >= 0 {
+            reportedTokens += Decimal(input) + Decimal(output)
+        } else {
+            return
+        }
+        requestsWithTokenCount += 1
+    }
+}
+
 struct UsageDashboardSnapshot: Sendable {
     var total = UsageTotals()
     var byFeature: [String: UsageTotals] = [:]
     var byProvider: [String: UsageTotals] = [:]
+    var byAccountProvider: [AccountUsageProvider: AccountRequestUsage] = [:]
     var byProject: [UUID: UsageTotals] = [:]
     var byRecording: [UUID: UsageTotals] = [:]
 }
@@ -62,6 +106,14 @@ struct UsageRepository {
                 if !record.requests.isEmpty { continue }
                 if let interval, !(record.startedAt >= interval.start && record.startedAt < interval.end) { continue }
             }
+            for request in requests {
+                if request.cost.billingKind == .subscription {
+                    result.byAccountProvider[.chatGPT, default: AccountRequestUsage()].record(request.usage)
+                } else if record.providerIDRaw == LLMProviderID.gemini.rawValue,
+                          request.cost.billingKind == .meteredAPI {
+                    result.byAccountProvider[.gemini, default: AccountRequestUsage()].record(request.usage)
+                }
+            }
             let totals = Self.totals(record, requests: requests)
             Self.add(totals, to: &result.total)
             Self.add(totals, to: &result.byFeature[record.featureRaw, default: UsageTotals()])
@@ -78,6 +130,9 @@ struct UsageRepository {
         result.completedResponses = record.featureRaw == "chat" && record.statusRaw == "succeeded" ? 1 : 0
         // Include known successful requests even when another request in the job is unknown.
         let costs = requests.map(\.cost)
+        if costs.isEmpty, record.usageCost.billingKind == .meteredAPI, record.usageCost.status == .free {
+            return result
+        }
         let entries = costs.isEmpty ? [record.usageCost] : costs
         for cost in entries {
             switch cost.billingKind {

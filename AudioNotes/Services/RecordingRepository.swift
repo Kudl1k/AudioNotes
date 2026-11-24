@@ -44,10 +44,12 @@ struct SwiftDataRecordingRepository: RecordingStoring, WorkspaceEditing {
     func delete(_ recording: Recording) throws {
         var ownedURLs = Set(recording.sources.filter { !$0.isPrimaryAudio }.map { storage.sourceDirectory(id: $0.id) })
         if !recording.audioFileName.isEmpty {
-            ownedURLs.insert(storage.recordingURL(fileName: recording.audioFileName))
+            let audio = storage.recordingURL(fileName: recording.audioFileName)
+            ownedURLs.formUnion([audio, TranscriptionCheckpoint.directory(for: audio)])
         }
         for source in recording.sources where source.isPrimaryAudio && !source.localFileReference.isEmpty {
-            ownedURLs.insert(storage.sourceURL(source))
+            let audio = storage.sourceURL(source)
+            ownedURLs.formUnion([audio, TranscriptionCheckpoint.directory(for: audio)])
         }
         try ManagedFileDeletion(root: storage.rootURL).stageAndCommit(Array(ownedURLs)) {
             recording.project?.updatedAt = .now

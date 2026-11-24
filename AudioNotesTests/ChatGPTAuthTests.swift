@@ -332,6 +332,89 @@ struct ChatGPTAuthTests {
         #expect(try await store.refreshToken() == "rotated_once")
     }
 
+    @Test @MainActor func restoreRetainsSessionWhenKeychainIsTemporarilyLocked() async throws {
+        let account = ChatGPTAccount(id: "account", email: nil, issuedClientID: "issued-client",
+            grantedScopes: [], planUsageEnabled: false, expiresAt: .distantPast)
+        let tokens = MockChatGPTCredentialStore()
+        try await tokens.saveTokens(accessToken: "access", refreshToken: "refresh", idToken: nil)
+        await tokens.setAccessReadError(.locked)
+        let sessions = MockChatGPTSessionStore(account: account)
+        let service = ChatGPTAuthService(credentialStore: tokens, sessionStore: sessions)
+
+        await service.restoreSession()
+        #expect(service.currentAccount == account)
+        #expect(sessions.loadAccount() == account)
+
+        await tokens.setAccessReadError(nil)
+        await service.restoreSession()
+        #expect(service.currentAccount == account)
+        #expect(try await tokens.refreshToken() == "refresh")
+    }
+
+    @Test(arguments: [false, true])
+    @MainActor func refreshOnlyClearsTokensForExactTerminalCode(terminal: Bool) async throws {
+        let account = ChatGPTAccount(id: "account", email: nil, issuedClientID: "issued-client",
+            grantedScopes: [], planUsageEnabled: false, expiresAt: .distantPast)
+        let tokens = MockChatGPTCredentialStore()
+        try await tokens.saveTokens(accessToken: "access", refreshToken: "refresh", idToken: nil)
+        let sessions = MockChatGPTSessionStore(account: account)
+        let body = terminal ? #"{"error":"invalid_grant"}"# :
+            #"{"error":"temporarily_unavailable","error_description":"Could not check invalid_grant"}"#
+        let fixture = OpenAINetworkFixture(status: 400, data: Data(body.utf8))
+        defer { fixture.cleanUp() }
+        let service = ChatGPTAuthService(credentialStore: tokens, urlSession: fixture.session, sessionStore: sessions)
+        await service.restoreSession()
+
+        await #expect(throws: ChatGPTAuthError.self) {
+            try await service.tokenRefresher.validAccessToken()
+        }
+        #expect(try await tokens.refreshToken() == (terminal ? nil : "refresh"))
+        #expect(service.currentAccount == (terminal ? nil : account))
+        #expect(sessions.loadAccount() == account)
+    }
+
+    @Test @MainActor func networkLossDuringRefreshPreservesSessionAndAllowsRetry() async throws {
+        let account = ChatGPTAccount(id: "account", email: nil, issuedClientID: "issued-client",
+            grantedScopes: [], planUsageEnabled: false, expiresAt: .distantPast)
+        let tokens = MockChatGPTCredentialStore()
+        try await tokens.saveTokens(accessToken: "expired", refreshToken: "refresh", idToken: nil)
+        let sessions = MockChatGPTSessionStore(account: account)
+        let response = Data(#"{"access_token":"renewed","token_type":"Bearer","expires_in":3600}"#.utf8)
+        let fixture = OpenAINetworkFixture(data: response, responsesByPath: [
+            "/api/accounts/oauth/token": .init(status: 200, data: response, errorsBeforeSuccess: [.networkConnectionLost])
+        ])
+        defer { fixture.cleanUp() }
+        let service = ChatGPTAuthService(credentialStore: tokens, urlSession: fixture.session, sessionStore: sessions)
+        await service.restoreSession()
+
+        await #expect(throws: ChatGPTAuthError.self) {
+            try await service.tokenRefresher.validAccessToken()
+        }
+        #expect(service.currentAccount == account)
+        #expect(sessions.loadAccount() == account)
+        #expect(try await tokens.refreshToken() == "refresh")
+        #expect(try await service.tokenRefresher.validAccessToken() == "renewed")
+    }
+
+    @Test func retryPersistsRotatedTokenAfterKeychainWriteWasLocked() async throws {
+        let account = ChatGPTAccount(id: "account", email: nil, issuedClientID: "issued-client",
+            grantedScopes: [], planUsageEnabled: false, expiresAt: .distantPast)
+        let tokens = MockChatGPTCredentialStore()
+        try await tokens.saveTokens(accessToken: "expired", refreshToken: "old", idToken: nil)
+        await tokens.setSaveError(.locked)
+        let response = Data(#"{"access_token":"renewed","refresh_token":"rotated","token_type":"Bearer","expires_in":3600}"#.utf8)
+        let fixture = OpenAINetworkFixture(data: response)
+        defer { fixture.cleanUp() }
+        let refresher = ChatGPTTokenRefresher(credentialStore: tokens, urlSession: fixture.session,
+            sessionStore: MockChatGPTSessionStore(account: account))
+
+        await #expect(throws: KeychainError.locked) { try await refresher.validAccessToken() }
+        await tokens.setSaveError(nil)
+        #expect(try await refresher.validAccessToken() == "renewed")
+        #expect(try await tokens.refreshToken() == "rotated")
+        #expect(fixture.probe.requests.withLock { $0.count } == 1)
+    }
+
     // MARK: - LLM Provider Resolver Tests
 
     @Test func chatProviderDefaultsIndependentlyFromSummaryProvider() {
@@ -555,11 +638,26 @@ actor MockChatGPTCredentialStore: ChatGPTCredentialStoring {
     private var refresh: String?
     private var id: String?
 
-    func accessToken() async throws -> String? { access }
+    private var accessReadError: KeychainError?
+    private var saveError: KeychainError?
+
+    func setSaveError(_ error: KeychainError?) {
+        saveError = error
+    }
+
+    func setAccessReadError(_ error: KeychainError?) {
+        accessReadError = error
+    }
+
+    func accessToken() async throws -> String? {
+        if let accessReadError { throw accessReadError }
+        return access
+    }
     func refreshToken() async throws -> String? { refresh }
     func idToken() async throws -> String? { id }
 
     func saveTokens(accessToken: String, refreshToken: String?, idToken: String?) async throws {
+        if let saveError { throw saveError }
         access = accessToken
         refresh = refreshToken
         id = idToken

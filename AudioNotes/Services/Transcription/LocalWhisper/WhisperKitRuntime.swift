@@ -5,6 +5,17 @@ import ArgmaxCore
 
 /// Worker isolation keeps PCM conversion and inference away from UI state.
 actor WhisperKitRuntime: LocalWhisperRunning {
+    private struct CompletedWindow: Codable {
+        let inputLanguage: String?
+        let result: LocalWhisperResult
+    }
+
+    private let modelRevision: [String]
+
+    init(modelRevision: [String]) {
+        self.modelRevision = modelRevision
+    }
+
     func transcribe(audioURL: URL, modelFolder: URL, language: String?,
                     status: @escaping LocalWhisperStatusReporter) async throws -> LocalWhisperResult {
         #if !arch(arm64)
@@ -14,8 +25,10 @@ actor WhisperKitRuntime: LocalWhisperRunning {
         let audio = try AVAudioFile(forReading: audioURL)
         let total = Double(audio.length) / audio.processingFormat.sampleRate
         guard total.isFinite, total > 0 else { throw TranscriptionError.invalidAudio }
-        let engine = try await OfflineWhisperKit(WhisperKitConfig(modelFolder: modelFolder.path,
-            tokenizerFolder: modelFolder, verbose: false, prewarm: false, load: true, download: false))
+        let checkpoint = TranscriptionCheckpoint(audioURL: audioURL, configuration: [
+            "whisperkit-pcm-120-v1", modelFolder.lastPathComponent, language ?? ""
+        ] + modelRevision)
+        var engine: OfflineWhisperKit?
         var output: [LocalWhisperSegment] = []
         var detected = language
         do {
@@ -24,26 +37,61 @@ actor WhisperKitRuntime: LocalWhisperRunning {
             while offset < total {
                 try Task.checkCancellation()
                 let end = min(total, offset + 120)
+                let chunkDuration = end - offset
+                if let saved = checkpoint?.read(CompletedWindow.self, start: offset, duration: chunkDuration),
+                   saved.inputLanguage == detected {
+                    detected = saved.result.language
+                    output.append(contentsOf: saved.result.segments)
+                    offset = end
+                    await status(offset, total, true)
+                    continue
+                }
+                let loaded: OfflineWhisperKit
+                if let engine {
+                    loaded = engine
+                } else {
+                    loaded = try await OfflineWhisperKit(WhisperKitConfig(modelFolder: modelFolder.path,
+                        tokenizerFolder: modelFolder, verbose: false, prewarm: false, load: true, download: false))
+                    engine = loaded
+                }
+                try Task.checkCancellation()
                 let samples = try AudioProcessor.loadAudioAsFloatArray(fromPath: audioURL.path, startTime: offset, endTime: end)
                 let options = DecodingOptions(language: detected, detectLanguage: detected == nil,
                     skipSpecialTokens: true, wordTimestamps: false, concurrentWorkerCount: 1)
-                let results = try await engine.transcribe(audioArray: samples, decodeOptions: options, callback: { _ in
+                let results = try await loaded.transcribe(audioArray: samples, decodeOptions: options, callback: { _ in
                     Task.isCancelled ? false : nil
                 })
                 try Task.checkCancellation()
+                let inputLanguage = detected
                 if detected == nil { detected = results.first?.language }
+                var segments: [LocalWhisperSegment] = []
                 for result in results {
-                    output.append(contentsOf: result.segments.map {
-                        LocalWhisperSegment(start: offset + Double($0.start), end: min(total, offset + Double($0.end)), text: $0.text)
-                    })
+                    for segment in result.segments {
+                        let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !text.isEmpty else { continue }
+                        let rawStart = Double(segment.start)
+                        let rawEnd = Double(segment.end)
+                        guard rawStart.isFinite, rawEnd.isFinite else { continue }
+                        // Drop any segment hallucinated or predicted in the zero-padded region beyond the actual audio duration
+                        guard rawStart < chunkDuration else { continue }
+                        let clampedStart = max(0, rawStart)
+                        let clampedEnd = min(chunkDuration, max(clampedStart, rawEnd))
+                        let absStart = min(total, max(0, offset + clampedStart))
+                        let absEnd = min(total, max(absStart, offset + clampedEnd))
+                        segments.append(LocalWhisperSegment(start: absStart, end: absEnd, text: segment.text))
+                    }
                 }
+                checkpoint?.save(CompletedWindow(inputLanguage: inputLanguage,
+                    result: LocalWhisperResult(language: detected, segments: segments)),
+                                 start: offset, duration: chunkDuration)
+                output.append(contentsOf: segments)
                 offset = end
-                await status(offset, total)
+                await status(offset, total, false)
             }
-            await engine.unloadModels()
+            await engine?.unloadModels()
             return LocalWhisperResult(language: detected, segments: output)
         } catch {
-            await engine.unloadModels()
+            await engine?.unloadModels()
             if Task.isCancelled { throw CancellationError() }
             throw error
         }

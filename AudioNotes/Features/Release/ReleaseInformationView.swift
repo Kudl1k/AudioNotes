@@ -16,10 +16,22 @@ struct ReleaseInformationView: View {
     }
 
     var body: some View {
+#if os(iOS)
+        ScrollView {
+            Text(content)
+                .font(.footnote)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+        }
+        .navigationTitle(page.rawValue)
+        .navigationBarTitleDisplayMode(.inline)
+#else
         VStack(alignment: .leading, spacing: 16) {
             Text(page.rawValue).font(.title2)
             ScrollView { Text(content).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(.trailing, 8) }
             HStack { Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
         }.padding(24).frame(width: 600, height: 520).navigationTitle(page.rawValue)
+#endif
     }
 }

@@ -5,24 +5,18 @@ struct TranscriptView: View {
     var revealedSegmentID: UUID? = nil
     let seek: (TimeInterval) -> Void
     @State private var searchText = ""
-#if os(iOS)
-    @FocusState private var searchFocused: Bool
-#endif
     @State private var model = TranscriptViewModel()
 
     var body: some View {
         if let transcript, !transcript.segments.isEmpty {
             VStack(spacing: 0) {
+#if !os(iOS)
                 TextField("Search transcript", text: $searchText)
-#if os(iOS)
-                    .focused($searchFocused)
-                    .submitLabel(.search)
-                    .onSubmit { searchFocused = false }
-#endif
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal, contentHorizontalPadding)
-                    .padding(.top, searchTopPadding)
+                    .padding(.top, WorkspaceSpacing.standard)
                     .accessibilityLabel("Search transcript").accessibilityIdentifier("transcript.search")
+#endif
                 if model.isLoading {
                     ProgressView("Loading transcript…").controlSize(.small).padding(8)
                 }
@@ -87,20 +81,16 @@ struct TranscriptView: View {
                     }
                 }
             }
+#if os(iOS)
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "Search transcript")
+#endif
             .task(id: transcript.id) { await model.load(transcript) }
             .task(id: searchText) { await model.search(searchText) }
         } else {
             ContentUnavailableView("No transcript yet", systemImage: "text.alignleft",
                 description: Text("Choose Transcribe to create a transcript. Your audio stays in your library."))
         }
-    }
-
-    private var searchTopPadding: CGFloat {
-#if os(iOS)
-        WorkspaceSpacing.compact
-#else
-        WorkspaceSpacing.standard
-#endif
     }
 
     private var contentHorizontalPadding: CGFloat {
@@ -157,13 +147,16 @@ struct TranscriptView: View {
     @ViewBuilder private func segmentHeading(_ segment: TranscriptDisplaySegment, time: String, horizontal: Bool = true) -> some View {
         if let speaker = segment.speaker { Text(speaker).font(.subheadline.weight(.semibold)) }
         if horizontal { Spacer(minLength: 8) }
-        Button(time) { seek(segment.startTime) }
-            .font(.subheadline.monospacedDigit()).buttonStyle(.plain).foregroundStyle(.tint)
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(.background.secondary, in: Capsule())
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .accessibilityLabel("Play from " + time)
+        Button {
+            seek(segment.startTime)
+        } label: {
+            Text(time)
+                .font(.subheadline.monospacedDigit())
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Play from " + time)
     }
 #endif
 

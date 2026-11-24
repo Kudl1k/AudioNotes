@@ -25,7 +25,6 @@ struct PlatformBoundaryTests {
         #expect(capabilities.isSupported(llmProvider: .ollama) == false)
         #expect(capabilities.isSupported(llmProvider: .llamaCpp) == false)
         #expect(capabilities.isSupported(llmProvider: .gemini) == true)
-        #expect(capabilities.isSupported(transcriptionProvider: .gemini) == true)
         #expect(capabilities.isSupported(transcriptionProvider: .localWhisper) == false)
         #expect(capabilities.isSupported(transcriptionProvider: .openAI) == true)
 #endif
@@ -41,7 +40,6 @@ struct PlatformBoundaryTests {
         #expect(LLMProviderID.gemini.isSupportedOnCurrentPlatform == true)
 
         #expect(TranscriptionProviderID.openAI.isSupportedOnCurrentPlatform == true)
-        #expect(TranscriptionProviderID.gemini.isSupportedOnCurrentPlatform == true)
         #expect(TranscriptionProviderID.localWhisper.isSupportedOnCurrentPlatform == true)
         #expect(TranscriptionProviderID.mock.isSupportedOnCurrentPlatform == true)
 #elseif os(iOS)
@@ -53,7 +51,6 @@ struct PlatformBoundaryTests {
         #expect(LLMProviderID.gemini.isSupportedOnCurrentPlatform == true)
 
         #expect(TranscriptionProviderID.openAI.isSupportedOnCurrentPlatform == true)
-        #expect(TranscriptionProviderID.gemini.isSupportedOnCurrentPlatform == true)
         #expect(TranscriptionProviderID.localWhisper.isSupportedOnCurrentPlatform == false)
         #expect(TranscriptionProviderID.mock.isSupportedOnCurrentPlatform == true)
 

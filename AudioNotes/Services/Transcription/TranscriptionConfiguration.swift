@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 enum TranscriptionProviderID: String, CaseIterable, Identifiable, Sendable {
-    case mock, openAI, gemini, localWhisper
+    case mock, openAI, localWhisper
     static var selectable: [Self] {
 #if DEBUG
         allCases
@@ -18,7 +18,7 @@ enum TranscriptionProviderID: String, CaseIterable, Identifiable, Sendable {
 #endif
     }
     var id: Self { self }
-    var title: String { switch self { case .mock: "Mock (development)"; case .openAI: "OpenAI API"; case .gemini: "Gemini"; case .localWhisper: Self.localTitle } }
+    var title: String { switch self { case .mock: "Mock (development)"; case .openAI: "OpenAI API"; case .localWhisper: Self.localTitle } }
     private static var localTitle: String {
 #if os(iOS)
         "On Device"
@@ -97,9 +97,6 @@ final class TranscriptionConfiguration {
     var openAIModel: OpenAITranscriptionModel {
         didSet { defaults.set(openAIModel.rawValue, forKey: "transcription.openai.model") }
     }
-    var geminiModel: String {
-        didSet { defaults.set(geminiModel, forKey: "transcription.gemini.model") }
-    }
     var language: TranscriptionLanguage {
         didSet { defaults.set(language.rawValue, forKey: "transcription.language") }
     }
@@ -126,7 +123,8 @@ final class TranscriptionConfiguration {
             openAIModel = .whisper1
         }
         language = TranscriptionLanguage(rawValue: defaults.string(forKey: "transcription.language") ?? "") ?? .automatic
-        geminiModel = defaults.string(forKey: "transcription.gemini.model") ?? "gemini-3.5-transcribe"
+        // Gemini transcription was removed; drop its stale model preference.
+        defaults.removeObject(forKey: "transcription.gemini.model")
     }
 
     var openAI: OpenAITranscriptionConfiguration { .init(model: openAIModel, language: language) }

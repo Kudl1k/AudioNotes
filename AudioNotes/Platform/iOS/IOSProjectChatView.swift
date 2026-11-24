@@ -139,7 +139,7 @@ struct IOSProjectChatView: View {
                     ShareLink(item: exportedMarkdown) { Label("Export Chat as Markdown", systemImage: "square.and.arrow.up") }
                     Button("Clear Conversation…", systemImage: "trash", role: .destructive) { model.confirmingClear = true }
                         .disabled(model.isGenerating || (model.session?.messages.isEmpty ?? true))
-                    OpenSettingsLink { Label("Chat Provider Settings", systemImage: "slider.horizontal.3") }
+                    OpenSettingsLink(section: .chat) { Label("Chat Provider Settings", systemImage: "slider.horizontal.3") }
                     }
                 } label: { Image(systemName: "ellipsis.circle") }
                     .accessibilityLabel("Project Chat options")

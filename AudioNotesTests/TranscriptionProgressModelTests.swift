@@ -17,6 +17,19 @@ struct TranscriptionProgressModelTests {
         #expect(tracker.snapshot.processedAudioDuration == 120)
     }
 
+    @Test func cachedAudioAdvancesProgressWithoutInflatingThroughput() {
+        var tracker = TranscriptionProgressTracker(startedAt: .now, totalAudioDuration: 300)
+        tracker.apply(.init(phase: .transcribing, currentPart: 1, totalParts: 3, completedParts: 1,
+                            processedAudioDuration: 100, totalAudioDuration: 300, reusedPart: true), elapsed: 2)
+        #expect(tracker.snapshot.overallProgress == 1.0 / 3.0)
+        #expect(tracker.snapshot.estimatedRemainingTime == nil)
+        #expect(tracker.smoothedAudioSecondsPerWallSecond == nil)
+
+        tracker.apply(.init(phase: .transcribing, currentPart: 2, totalParts: 3, completedParts: 2,
+                            processedAudioDuration: 200, totalAudioDuration: 300), elapsed: 22)
+        #expect(tracker.snapshot.estimatedRemainingTime == 20)
+    }
+
     @Test func etaUsesUnevenPartDurationsAndSmoothsMeasuredRates() {
         let start = Date(timeIntervalSince1970: 2_000)
         var tracker = TranscriptionProgressTracker(startedAt: start, totalAudioDuration: 3_000, smoothingAlpha: 0.5)

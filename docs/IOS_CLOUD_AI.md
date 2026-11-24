@@ -4,11 +4,11 @@ Current production identity is **Soniquill**, bundle ID `cz.kudladev.soniquill` 
 
 ## 1. Executive Summary
 
-M16.4 implementation and automated acceptance are complete under the acceptance amendment. It reuses the existing transcription pipeline, summary generator, chat engine, context retriever, prompt builder, and usage/cost tracking rather than creating a separate mobile AI stack. Gemini transcription is integrated in the shared provider architecture. Live-provider acceptance was not performed because no authorized real account session was available. Physical-device/signing acceptance is intentionally deferred until the company Developer Team and production bundle identity are selected; neither is an M16.4 completion gate.
+M16.4 implementation and automated acceptance are complete under the acceptance amendment. It reuses the existing transcription pipeline, summary generator, chat engine, context retriever, prompt builder, and usage/cost tracking rather than creating a separate mobile AI stack. Gemini transcription was later removed; Gemini OAuth remains for summary and chat. Live-provider acceptance was not performed because no authorized real account session was available. Physical-device/signing acceptance is intentionally deferred until the company Developer Team and production bundle identity are selected; neither is an M16.4 completion gate.
 
 Key achievements:
 - **Zero Architecture Duplication**: `RecordingViewModel`, `SummaryViewModel`, `ChatViewModel`, `OpenAITranscriptionProvider`, `OpenAILLMProvider`, and `ContextRetriever` execute identically on iOS and macOS.
-- **Platform Capability Alignment**: iOS supports OpenAI API-key transcription, ChatGPT-plan Responses inference for eligible summary/chat requests, and Gemini OAuth for Developer API summary/chat/transcription. Gemini Advanced subscription access is not an API entitlement.
+- **Platform Capability Alignment**: iOS supports OpenAI API-key transcription, ChatGPT-plan Responses inference for eligible summary/chat requests, and Gemini OAuth for Developer API summary/chat. Gemini Advanced subscription access is not an API entitlement.
 - **Native iOS Presentation & Interactions**:
   - Transcription progress, ETA, and cancellation integrated into [`IOSRecordingDetailShell`](file:///Users/stepankudlacek/XcodeProjects/AudioTranscript/AudioNotes/Platform/iOS/IOSRecordingDetailShell.swift).
   - Transcript segment-to-audio seek synchronization with active playback.
@@ -65,7 +65,7 @@ Key achievements:
 1. **[`ChatComposer`](file:///Users/stepankudlacek/XcodeProjects/AudioTranscript/AudioNotes/Features/Chat/Shared/ChatComposer.swift)**: Cross-platform interface. On macOS, uses the existing custom AppKit `NSTextView` wrapper; on iOS, uses a native SwiftUI `TextField(axis: .vertical)` with Dynamic Type sizing, clear buttons, send action, and keyboard avoidance.
 2. **[`ChatMessageBubble`](file:///Users/stepankudlacek/XcodeProjects/AudioTranscript/AudioNotes/Features/Chat/Shared/ChatMessageBubble.swift)**: Platform-adaptive bubble with custom background styling, message status indicators, copy actions, and citation chips.
 3. **[`IOSRecordingDetailShell`](file:///Users/stepankudlacek/XcodeProjects/AudioTranscript/AudioNotes/Platform/iOS/IOSRecordingDetailShell.swift)**: Hosts segmented views (Transcript, Summary, Sources) with audio playback seeking, operation progress overlays, and dedicated sheets for Chat, Usage & Cost, and Regeneration alerts.
-4. **[`IOSSettingsView`](file:///Users/stepankudlacek/XcodeProjects/AudioTranscript/AudioNotes/Platform/iOS/IOSSettingsView.swift)**: Configures OpenAI API keys and connects ChatGPT/Google accounts; OAuth credentials are stored in Keychain.
+4. **[`IOSSettingsView`](file:///Users/stepankudlacek/XcodeProjects/AudioTranscript/AudioNotes/Platform/iOS/IOSSettingsView.swift)**: Connects ChatGPT/Google accounts; OAuth credentials are stored in Keychain. The OpenAI API key is a first-class Settings → Accounts row ([`IOSOpenAIAPIKeyView`](file:///Users/stepankudlacek/XcodeProjects/AudioTranscript/AudioNotes/Platform/iOS/IOSOpenAIAPIKeyView.swift): save, replace, remove) and is also reachable from ChatGPT → API Access, Transcription Defaults and the per-recording Transcription Settings sheet. Saving a key makes OpenAI the transcription default only when the current default cannot run (the sheet selects it for that recording), then refreshes the account voice-model list. `ProviderSettingsViewModel` is an `ObservableObject` and must be held with `@StateObject`/`@ObservedObject`, never `@State`.
 
 ---
 
@@ -74,7 +74,7 @@ Key achievements:
 Per the platform boundary matrix:
 - **OpenAI**: ChatGPT plan Responses API supports eligible summaries/chat after explicit plan-use consent. Its account token is never sent to `/audio/transcriptions`. ChatGPT-plan requests omit `temperature`, `top_p`, and `max_output_tokens`; saved values remain available when switching to API-key auth.
 - **Anthropic**: Disabled on iOS. The current implementation relies on the macOS `claude` CLI binary (`Process`).
-- **Google Gemini**: iOS uses its platform-specific OAuth client through `ASWebAuthenticationSession`; macOS continues using the Desktop loopback client. Gemini transcription uses the official Files API and Interactions API, requests word timestamps and speaker labels, enforces the documented 30-minute limit, and deletes uploaded files after use. Billing belongs to the configured Cloud project.
+- **Google Gemini**: iOS uses its platform-specific OAuth client through `ASWebAuthenticationSession`; macOS continues using the Desktop loopback client. Gemini is used for summary and chat only. Billing belongs to the configured Cloud project.
 - **Ollama / llama.cpp**: Disabled on iOS for M16.4. Deferred to M16.7 (LAN Ollama integration with `NSLocalNetworkUsageDescription`).
 - **Local Whisper**: Disabled on iOS for M16.4. Deferred to future evaluation due to memory footprint and background execution constraints.
 
@@ -88,7 +88,7 @@ See [iOS account authentication](IOS_ACCOUNT_AUTH.md) for official sources, capa
 |---|---|---|---|---|
 | OpenAI API key | Supported (`/audio/transcriptions`) | Supported | Supported | API model catalog; metered API usage |
 | ChatGPT plan | Unsupported in AudioNotes | Supported through eligible Responses API | Supported through eligible Responses API | Authenticated account model catalog; eligible usage may be covered by the authorized plan |
-| Gemini OAuth | Supported via Gemini 3.5 Transcribe | Supported via Gemini Developer API | Supported via Gemini Developer API | Google Cloud project quota/billing; transcription cost unavailable when exact usage is not reported |
+| Gemini OAuth | Not offered | Supported via Gemini Developer API | Supported via Gemini Developer API | Google Cloud project quota/billing; transcription cost unavailable when exact usage is not reported |
 
 Implementation, Simulator testing, live-provider testing, and physical-device testing are distinct states. Implementation and automated Simulator acceptance are complete; no live ChatGPT/Google sign-in or inference was performed because no authorized real account session was available. Physical-device acceptance is deferred to release signing and does not block M16.4.
 
@@ -99,9 +99,9 @@ Implementation, Simulator testing, live-provider testing, and physical-device te
 ### 4.1. Cloud Audio Transcription
 1. User chooses a transcription provider and taps Transcribe.
 2. `RecordingViewModel` prepares managed audio and invokes the selected shared `TranscriptionProvider`.
-3. OpenAI API-key transcription retains its existing 25 MB chunking path. Gemini uses the Files API and timestamped/diarized transcription, with a documented 30-minute limit; it does not reuse OpenAI's chunk threshold.
+3. OpenAI API-key transcription retains its existing 25 MB chunking path.
 4. Progress shows factual phases, elapsed time, and measured ETA when available. Gemini reports upload/processing without invented percentages.
-5. On success, the provider-independent `Transcript` and `GenerationRecord` are persisted. Gemini duration usage is recorded; cost stays unknown when exact price cannot be calculated from returned usage.
+5. On success, the provider-independent `Transcript` and `GenerationRecord` are persisted.
 6. Cancellation or failure does not replace a valid transcript with a partial result; Retry uses the existing shared workflow.
 
 ### 4.2. Playback Synchronization & Seeking

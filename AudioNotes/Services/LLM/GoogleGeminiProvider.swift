@@ -76,12 +76,12 @@ final class GoogleGeminiProvider: LLMProvider {
                         guard line.hasPrefix("data:") else { continue }
                         let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
                         guard let data = payload.data(using: .utf8), let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+                        usage = Self.usage(data) ?? usage
                         guard let candidates = json["candidates"] as? [[String: Any]], let candidate = candidates.first,
                               let content = candidate["content"] as? [String: Any], let parts = content["parts"] as? [[String: Any]] else { continue }
                         let chunk = parts.compactMap { $0["text"] as? String }.joined()
                         raw += chunk
                         if let delta = parser.append(chunk: chunk), !delta.isEmpty { continuation.yield(.textDelta(delta)) }
-                        usage = Self.usage(data) ?? usage
                     }
                     guard let json = raw.data(using: .utf8), let answer = try? JSONDecoder().decode(StructuredChatResponse.self, from: json) else { throw LLMError.invalidResponse }
                     let references = transcript.segments.compactMap { segment in answer.referenceSegmentIDs.contains(segment.id.uuidString) ? TranscriptReference(segmentID: segment.id, startTime: segment.startTime) : nil }
@@ -121,8 +121,12 @@ final class GoogleGeminiProvider: LLMProvider {
     }
 
     private static func usage(_ data: Data) -> GenerationUsage? {
-        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let usage = root["usageMetadata"] as? [String: Any],
-              let input = usage["promptTokenCount"] as? Int, let output = usage["candidatesTokenCount"] as? Int else { return nil }
-        return GenerationUsage(inputTokens: input, outputTokens: output)
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let usage = root["usageMetadata"] as? [String: Any] else { return nil }
+        let input = usage["promptTokenCount"] as? Int
+        let output = usage["candidatesTokenCount"] as? Int
+        let total = usage["totalTokenCount"] as? Int
+        guard total != nil || (input != nil && output != nil) else { return nil }
+        return GenerationUsage(inputTokens: input, outputTokens: output, totalTokens: total)
     }
 }

@@ -86,11 +86,14 @@ final class OperationUsageTracker {
         persist()
     }
 
-    func finish(status: GenerationStatus) {
+    func finish(status: GenerationStatus, reusedTranscriptionPart: Bool = false) {
         for id in Array(pending.keys) { finishRequest(id, succeeded: false) }
         generation.statusRaw = status.rawValue
         generation.durationSeconds = max(0, Date.now.timeIntervalSince(generation.startedAt))
         generation.updateCost()
+        if status == .succeeded, reusedTranscriptionPart, billing == .meteredAPI, generation.requests.isEmpty {
+            generation.usageCost = UsageCost(amount: Money(amount: 0), billingKind: billing, status: .free)
+        }
     }
 }
 

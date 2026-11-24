@@ -262,6 +262,7 @@ final class ProviderSettingsViewModel: ObservableObject {
                 }
             }
         } catch {
+            if let chatGPTAuth { chatGPTAuthState = chatGPTAuth.authState }
             chatGPTModelsError = error.localizedDescription
             DebugLogService.shared.error(
                 subsystem: "ProviderSettingsViewModel",

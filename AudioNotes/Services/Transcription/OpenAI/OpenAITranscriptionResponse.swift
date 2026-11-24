@@ -1,13 +1,13 @@
 import Foundation
 
 /// Provider DTOs stay in the service layer; only mapped domain models reach the UI.
-struct OpenAITranscriptionResponse: Decodable, Sendable {
+struct OpenAITranscriptionResponse: Codable, Sendable {
     let text: String
     let language: String?
     let duration: Double?
     let segments: [Segment]?
 
-    struct Segment: Decodable, Sendable {
+    struct Segment: Codable, Sendable {
         let start: Double
         let end: Double
         let text: String

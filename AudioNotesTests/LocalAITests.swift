@@ -131,6 +131,20 @@ import Synchronization
         #expect(throws: TranscriptionError.self) {
             try LocalWhisperTranscriptionProvider.makeTranscript(.init(language: nil, segments: [.init(start: -.infinity, end: 3, text: "bad")]), model: "Small")
         }
+        #expect(throws: TranscriptionError.self) {
+            try LocalWhisperTranscriptionProvider.makeTranscript(.init(language: nil, segments: [.init(start: 0, end: 1, text: "   ")]), model: "Small")
+        }
+        // Inverted timestamps and negative offsets are clamped safely while preserving valid speech
+        let sanitized = try LocalWhisperTranscriptionProvider.makeTranscript(.init(language: "cs", segments: [
+            .init(start: -2, end: 5, text: "Intro"),
+            .init(start: 10, end: 8, text: "Inverted duration"),
+            .init(start: .nan, end: 20, text: "Corrupt segment"),
+            .init(start: 25, end: 30, text: "Valid ending")
+        ]), model: "Turbo")
+        #expect(sanitized.segments.count == 3)
+        #expect(sanitized.segments.map(\.startTime) == [0, 10, 25])
+        #expect(sanitized.segments.map(\.endTime) == [5, 10, 30])
+        #expect(sanitized.segments.map(\.text) == ["Intro", "Inverted duration", "Valid ending"])
     }
     @Test func missingWhisperModelDoesNotCallRuntime() async throws {
         let model = WhisperModelDescriptor(id: "missing", title: "Missing", files: [])
@@ -193,7 +207,7 @@ private actor WhisperRuntimeSpy: LocalWhisperRunning {
     func transcribe(audioURL: URL, modelFolder: URL, language: String?, status: @escaping LocalWhisperStatusReporter) async throws -> LocalWhisperResult {
         calls += 1
         if fails { throw LocalAIError.invalidResponse }
-        await status(120, 120)
+        await status(120, 120, false)
         return .init(language: language, segments: [.init(start: 0, end: 120, text: "Local result")])
     }
 }

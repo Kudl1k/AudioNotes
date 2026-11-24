@@ -130,6 +130,7 @@ final class SourcesViewModel {
         context.insert(generation)
         let tracker = OperationUsageTracker(generation: generation) { try? context.save() }
         var requestIDs: [UUID: UUID] = [:]
+        var reusedTranscriptionPart = false
         let fileURL = url(for: source)
         let started = startedAt[source.id] ?? .now
         let duration: TimeInterval
@@ -152,6 +153,7 @@ final class SourcesViewModel {
                     self.transcriptionProgress[source.id] = snapshot
                 }, status: { [weak self] status in
                     guard let self, !Task.isCancelled else { return }
+                    if status.reusedPart { reusedTranscriptionPart = true }
                     audioProgress.apply(status, elapsed: OperationDurationFormatter.elapsed(since: started, now: .now))
                     self.transcriptionProgress[source.id] = audioProgress.snapshot
                 }, usage: { event in
@@ -168,8 +170,9 @@ final class SourcesViewModel {
                 source.transcript = transcript
                 source.status = .ready
                 source.processingError = nil
-                tracker.finish(status: .succeeded)
+                tracker.finish(status: .succeeded, reusedTranscriptionPart: reusedTranscriptionPart)
                 try context.save()
+                TranscriptionCheckpoint.clear(for: fileURL)
             } catch {
                 source.status = .failed
                 source.processingError = error.localizedDescription
@@ -194,9 +197,11 @@ final class SourcesViewModel {
         guard !isProcessing(source) else { return }
         let file = url(for: source)
         // Stage the owned file for rollback if the database cannot save.
-        let owned = source.isPrimaryAudio ? file : storage.sourceDirectory(id: source.id)
+        let owned = source.isPrimaryAudio
+            ? [file, TranscriptionCheckpoint.directory(for: file)]
+            : [storage.sourceDirectory(id: source.id)]
         do {
-            try ManagedFileDeletion(root: storage.rootURL).stageAndCommit([owned]) {
+            try ManagedFileDeletion(root: storage.rootURL).stageAndCommit(owned) {
                 do {
                 let segmentIDs = Set(source.authoritativeTranscript?.segments.map(\.id) ?? [])
                 for session in recording.chatSessions {

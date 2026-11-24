@@ -58,7 +58,8 @@ struct IOSRecordingDetailShell: View {
         VStack(spacing: 8) {
             Text("\(AudioTime.format(recording.duration)) · \(recording.importedAt.formatted(date: .abbreviated, time: .shortened))")
                 .font(.subheadline).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
             if dynamicTypeSize.isAccessibilitySize {
                 Picker("Recording content", selection: $tab) {
                     ForEach(DetailTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
@@ -67,6 +68,10 @@ struct IOSRecordingDetailShell: View {
                 Picker("Recording content", selection: $tab) {
                     ForEach(DetailTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }.pickerStyle(.segmented).accessibilityIdentifier("recording.content")
+            }
+
+            if tab != .transcript || hasTranscriptSegments {
+                transcriptionStatus
             }
 
             Group {
@@ -109,6 +114,7 @@ struct IOSRecordingDetailShell: View {
                         Button(action: { showRegenerateTranscriptConfirm = true }) {
                             Label("Regenerate Transcript…", systemImage: "arrow.clockwise")
                         }
+                        .disabled(!transcriptionModel.canRegenerate)
                     }
                     Button("Transcription Settings", systemImage: "slider.horizontal.3") { showTranscriptionSettings = true }
                     Button("Move to Project…", systemImage: "folder") { showMove = true }
@@ -129,7 +135,7 @@ struct IOSRecordingDetailShell: View {
                 }.accessibilityIdentifier("recording.actions")
             }
         }
-        .sheet(isPresented: $showChatSettings) { IOSSettingsView(services: services) }
+        .sheet(isPresented: $showChatSettings) { IOSSettingsView(services: services, initialSection: .chat) }
         .sheet(isPresented: $showMove) { IOSMoveRecordingSheet(recording: recording, library: imports.library) }
         .sheet(isPresented: $showTranscriptionSettings) { IOSTranscriptionSettingsSheet(model: transcriptionModel, services: services) }
         .sheet(isPresented: $showsUsage) {
@@ -199,24 +205,141 @@ struct IOSRecordingDetailShell: View {
 
     @ViewBuilder
     private var transcriptTabContent: some View {
-        if transcriptionModel.state.isProcessing {
-            ScrollView {
-                OperationProgressView(
-                    title: transcriptionModel.progressSnapshot.map(activityTitle) ?? "Transcribing audio…",
-                    status: transcriptionModel.progressSnapshot.flatMap(partStatus),
-                    progress: OperationProgressValue(fraction: transcriptionModel.progressSnapshot?.overallProgress ?? transcriptionModel.progress),
-                    startedAt: transcriptionModel.progressSnapshot?.startedAt,
-                    estimatedRemaining: transcriptionModel.progressSnapshot?.estimatedRemainingTime,
-                    cancel: transcriptionModel.cancelTranscription,
-                    canCancel: transcriptionModel.state.canCancel
-                )
-                .padding(.vertical, 16)
-            }
-        } else if let transcript = recording.transcript, !transcript.segments.isEmpty {
+        if let transcript = recording.transcript, !transcript.segments.isEmpty {
             TranscriptView(transcript: transcript, revealedSegmentID: citedSegmentID, seek: player.seek)
         } else {
-            transcriptionPromptContent
+            GeometryReader { geometry in
+                ScrollView {
+                    Group {
+                        switch transcriptionModel.state {
+                        case .idle, .completed:
+                            transcriptionPromptContent
+                        case .preparing, .transcribing, .saving, .failed, .cancelled:
+                            transcriptionStatus
+                        }
+                    }
+                    .frame(maxWidth: 420)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+                }
+            }
         }
+    }
+
+    private var hasTranscriptSegments: Bool {
+        recording.transcript?.segments.isEmpty == false
+    }
+
+    @ViewBuilder
+    private var transcriptionStatus: some View {
+        switch transcriptionModel.state {
+        case .preparing, .transcribing, .saving:
+            if tab == .transcript {
+                transcriptionProgressPanel
+            } else {
+                transcriptionStatusLink(transcriptionModel.iosTranscriptionActivityTitle, systemImage: "waveform")
+            }
+        case .failed(let message):
+            if tab == .transcript {
+                VStack(spacing: 6) {
+                    Text("Transcription failed").font(.callout.weight(.semibold))
+                    InlineErrorLabel(message)
+                    transcriptionRecoveryAction
+                    OpenSettingsLink { Text("Open Settings") }
+                }
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            } else {
+                transcriptionStatusLink("Transcription failed", systemImage: "exclamationmark.circle")
+            }
+        case .cancelled:
+            if tab == .transcript {
+                VStack(spacing: 6) {
+                    Label("Transcription cancelled", systemImage: "xmark.circle").font(.callout)
+                    transcriptionRecoveryAction
+                }
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+        case .idle, .completed:
+            EmptyView()
+        }
+    }
+
+    private var transcriptionProgressPanel: some View {
+        let snapshot = transcriptionModel.progressSnapshot
+        let phase = snapshot?.phase
+        let showsAudioProgress = phase == .transcribing || phase == .uploading || phase == .processing
+        let fraction = showsAudioProgress ? snapshot?.overallProgress : nil
+
+        return VStack(spacing: 8) {
+            if let fraction {
+                Text(transcriptionModel.iosTranscriptionActivityTitle).font(.headline)
+                ProgressView(value: fraction)
+                    .accessibilityLabel(transcriptionModel.iosTranscriptionActivityTitle)
+                    .frame(maxWidth: 240)
+            } else {
+                ProgressView(transcriptionModel.iosTranscriptionActivityTitle)
+            }
+            if showsAudioProgress, let status = processedAudioStatus(snapshot) {
+                Text(status).font(.footnote).foregroundStyle(.secondary)
+            }
+            if let snapshot {
+                OperationElapsedTimeView(startedAt: snapshot.startedAt,
+                                         estimatedRemaining: showsAudioProgress ? snapshot.estimatedRemainingTime : nil)
+            }
+            if transcriptionModel.state.canCancel {
+                Button(role: .cancel, action: transcriptionModel.cancelTranscription) {
+                    Text("Cancel")
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Cancel transcription")
+                .accessibilityIdentifier("progress.cancel")
+            }
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .accessibilityIdentifier("transcription.activity")
+    }
+
+    private func transcriptionStatusLink(_ title: String, systemImage: String) -> some View {
+        Button {
+            tab = .transcript
+        } label: {
+            HStack {
+                Label(title, systemImage: systemImage)
+                Spacer()
+                Image(systemName: "chevron.right").accessibilityHidden(true)
+            }
+            .font(.footnote)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityHint("Opens Transcript")
+    }
+
+    @ViewBuilder
+    private var transcriptionRecoveryAction: some View {
+        if transcriptionModel.canTranscribe || transcriptionModel.canRegenerate {
+            Button("Retry Transcription") {
+                transcriptionModel.startTranscription(
+                    using: SwiftDataTranscriptRepository(context: context),
+                    replacingExisting: recording.transcript != nil
+                )
+            }
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("transcription.retry")
+        }
+    }
+
+    private func processedAudioStatus(_ snapshot: TranscriptionProgressSnapshot?) -> String? {
+        guard let snapshot, let processed = snapshot.processedAudioDuration, processed > 0,
+              let total = snapshot.totalAudioDuration, total > 0 else { return snapshot?.partDescription }
+        return "\(AudioTime.format(processed)) of \(AudioTime.format(total)) audio processed"
     }
 
     private var citedSegmentID: UUID? {
@@ -225,54 +348,36 @@ struct IOSRecordingDetailShell: View {
         return ids.first
     }
 
-    private func activityTitle(_ snapshot: TranscriptionProgressSnapshot) -> String {
-        switch snapshot.phase {
-        case .preparing: "Preparing audio…"
-        case .splitting: "Optimizing audio…"
-        case .uploading: "Uploading audio…"
-        case .processing: "Processing audio…"
-        case .transcribing: "Transcribing audio…"
-        case .merging: "Combining transcript…"
-        case .saving: "Saving transcript…"
-        case .completed: "Transcription complete"
-        }
-    }
-
-    private func partStatus(_ snapshot: TranscriptionProgressSnapshot) -> String? {
-        snapshot.partDescription.map { "\($0) · \(snapshot.completedParts) completed" }
-    }
-
     private var transcriptionPromptContent: some View {
-        ScrollView {
-            IOSCreationPrompt(title: "Create Transcript", symbol: "waveform.badge.magnifyingglass",
-                description: "Convert this recording into searchable text. Timestamps and speaker labels depend on the selected provider.") {
-                Button { showTranscriptionSettings = true } label: {
-                    VStack(spacing: 4) {
-                        Text(transcriptionModel.providerName + (transcriptionModel.selectedModelName.map { " · " + $0 } ?? ""))
-                            .foregroundStyle(.primary)
-                        Text("Change").foregroundStyle(.tint)
-                    }
-                    .font(.subheadline)
-                    .padding(.horizontal, 16).padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
-                .modifier(IOSControlSurface(cornerRadius: 18))
-                .accessibilityIdentifier("transcription.configure")
-                if (transcriptionModel.selectedProvider ?? services.configuration.selectedProvider) == .localWhisper,
-                   let descriptor = services.localAISettings.models.first(where: { $0.id == (transcriptionModel.selectedModel ?? services.llmConfiguration.localAI.whisperModel) }) {
-                    IOSWhisperModelRow(model: descriptor, settings: services.localAISettings).padding(.horizontal)
-                }
-                Button(transcriptionModel.state == .idle ? "Transcribe" : "Retry Transcription") {
-                    transcriptionModel.startTranscription(using: SwiftDataTranscriptRepository(context: context))
-                }
-                .modifier(IOSPrimaryAction())
-                .accessibilityIdentifier(transcriptionModel.state == .idle ? "transcription.start" : "transcription.retry")
-                if case .failed(let message) = transcriptionModel.state {
-                    InlineErrorLabel(message)
-                    OpenSettingsLink { Text("Open Settings") }
-                }
-                Text(transcriptionModel.transcriptionEstimate.displayText).font(.footnote).foregroundStyle(.secondary)
+        ContentUnavailableView {
+            Label("Create Transcript", systemImage: "waveform.badge.magnifyingglass")
+        } description: {
+            Text("Convert this recording into searchable text.")
+        } actions: {
+            Button("Transcribe Recording") {
+                transcriptionModel.startTranscription(using: SwiftDataTranscriptRepository(context: context))
             }
+            .buttonStyle(.borderedProminent)
+            .disabled(!transcriptionModel.canTranscribe)
+            .accessibilityIdentifier("transcription.start")
+
+            Button {
+                showTranscriptionSettings = true
+            } label: {
+                Label(transcriptionModel.providerName + (transcriptionModel.selectedModelName.map { " · " + $0 } ?? ""),
+                      systemImage: "slider.horizontal.3")
+                    .font(.subheadline)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .accessibilityHint("Change transcription settings")
+            .accessibilityIdentifier("transcription.configure")
+            if (transcriptionModel.selectedProvider ?? services.configuration.selectedProvider) == .localWhisper,
+               let descriptor = services.localAISettings.models.first(where: { $0.id == (transcriptionModel.selectedModel ?? services.llmConfiguration.localAI.whisperModel) }) {
+                IOSWhisperModelRow(model: descriptor, settings: services.localAISettings).padding(.horizontal)
+            }
+            Text(transcriptionModel.transcriptionEstimate.displayText).font(.footnote).foregroundStyle(.secondary)
         }
     }
 

@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import OSLog
 
 struct GoogleOAuthCredential: Codable, Sendable {
     var accessToken: String
@@ -124,10 +125,10 @@ enum GoogleGeminiOAuthError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .cancelled: "Google sign-in was canceled."
-        case .missingClientID: "The app’s Google OAuth configuration is missing its Desktop client ID."
+        case .missingClientID: "The app’s Google OAuth configuration is missing its client ID."
         case .invalidState: "Google sign-in could not be verified. Please try again."
         case .authorization(let message): "Google authorization failed: \(message)"
-        case .tokenExchange(let reason): "Google OAuth token exchange failed (\(reason)). Check that the OAuth client is a Desktop app and that the sign-in flow uses its matching redirect and PKCE verifier."
+        case .tokenExchange(let reason): "Google OAuth token exchange failed (\(reason)). Check the configured OAuth client and its redirect."
         case .missingRefreshToken: "Connect a Google account in Settings → AI Accounts before using Gemini."
         case .reauthenticationRequired: "Google authorization expired or was revoked. Sign in with Google again."
         }
@@ -148,8 +149,26 @@ actor GoogleGeminiOAuthService {
     // API scope. Google account identity alone does not grant Gemini API use.
     private let scopes = ["openid", "email", "https://www.googleapis.com/auth/cloud-platform", "https://www.googleapis.com/auth/generative-language.retriever"]
     private var refreshTask: Task<String, Error>?
-#if os(iOS)
-#endif
+    private var isDisconnecting = false
+    private static let logger = Logger(subsystem: "cz.kudladev.soniquill", category: "GoogleOAuth")
+
+    private enum ConnectPhase: String {
+        case configuration, browser, callback, tokenExchange, userInfo, keychainSave
+    }
+
+    private static func diagnosticCategory(for error: Error) -> String {
+        switch error {
+        case is GoogleOAuthConfigurationError: "configuration"
+        case is URLError: "network"
+        case is KeychainError: "keychain"
+        case GoogleGeminiOAuthError.cancelled, is CancellationError: "cancelled"
+        case GoogleGeminiOAuthError.invalidState: "invalid_state"
+        case GoogleGeminiOAuthError.missingRefreshToken: "missing_refresh_token"
+        case GoogleGeminiOAuthError.authorization: "authorization"
+        case GoogleGeminiOAuthError.tokenExchange: "token_response"
+        default: "unexpected"
+        }
+    }
 
     init(configuration: @escaping @Sendable () throws -> GoogleOAuthConfiguration = { try GoogleOAuthConfiguration.load() }, store: any GoogleOAuthCredentialStoring = GoogleOAuthKeychainStore(), clientSecretStore: (any GoogleOAuthClientSecretStoring)? = nil, listener: any ChatGPTLoopbackListening = ChatGPTLoopbackListener(), session: URLSession = .shared, openURL: @escaping @Sendable (URL) async -> Bool = { url in SystemBrowserOpener().open(url) }, now: @escaping @Sendable () -> Date = Date.init, nativeAuthenticate: @escaping @Sendable (URL, String) async throws -> URL = GoogleGeminiOAuthService.defaultNativeAuthenticate) {
         self.configuration = configuration
@@ -164,14 +183,21 @@ actor GoogleGeminiOAuthService {
 
     private static func defaultNativeAuthenticate(url: URL, scheme: String) async throws -> URL {
 #if os(iOS)
-        try await GoogleOAuthAuthenticationSession().authenticate(url: url, callbackScheme: scheme)
+        try await GoogleOAuthAuthenticationSession.authenticate(url: url, callbackScheme: scheme)
 #else
         throw GoogleGeminiOAuthError.authorization("Native Google authentication sessions are only available on iOS.")
 #endif
     }
 
     func account() async -> ProviderAccount? {
-        guard let credential = try? await store.load() else { return nil }
+        let credential: GoogleOAuthCredential
+        do {
+            guard let stored = try await store.load() else { return nil }
+            credential = stored
+        } catch {
+            Self.logger.error("Google OAuth account_load: keychain_read_failed")
+            return nil
+        }
         return ProviderAccount(provider: .gemini, accountIdentifier: credential.email, displayName: nil, email: credential.email, authenticationMethod: .oauth, state: .connected, capabilities: [.textGeneration, .tokenRefresh])
     }
 
@@ -192,57 +218,86 @@ actor GoogleGeminiOAuthService {
     }
 
     func connect() async throws -> ProviderAccount {
-        let client = try await configuredClient()
-        let clientID = client.clientID
+        var phase = ConnectPhase.configuration
+        do {
+            let client = try await configuredClient()
+            let clientID = client.clientID
 #if os(iOS)
-        guard let callbackScheme = client.redirectScheme else { throw GoogleOAuthConfigurationError.missingIOSClient }
-        let redirectURI = callbackScheme + ":/oauth2redirect"
+            guard let callbackScheme = client.redirectScheme else { throw GoogleOAuthConfigurationError.missingIOSClient }
+            let redirectURI = callbackScheme + ":/oauth2redirect"
 #else
-        let (listenerRedirectURI, _) = try await listener.start()
-        defer { listener.cancel() }
-        // Google desktop clients use the loopback IP and dynamic port with no callback path.
-        let redirectURI = listenerRedirectURI.replacingOccurrences(of: "/auth/callback", with: "")
+            let (listenerRedirectURI, _) = try await listener.start()
+            defer { listener.cancel() }
+            // Google desktop clients use the loopback IP and dynamic port with no callback path.
+            let redirectURI = listenerRedirectURI.replacingOccurrences(of: "/auth/callback", with: "")
 #endif
-        let state = try PKCEHelper.generateRandomToken()
-        let verifier = try PKCEHelper.generateCodeVerifier()
-        let challenge = PKCEHelper.generateCodeChallenge(from: verifier)
-        let authURL = try Self.authorizationURL(clientID: clientID, redirectURI: redirectURI, state: state, challenge: challenge, scopes: scopes)
-        let callback: ChatGPTCallbackResult
+            let state = try PKCEHelper.generateRandomToken()
+            let verifier = try PKCEHelper.generateCodeVerifier()
+            let challenge = PKCEHelper.generateCodeChallenge(from: verifier)
+            let authURL = try Self.authorizationURL(clientID: clientID, redirectURI: redirectURI, state: state, challenge: challenge, scopes: scopes)
+            phase = .browser
+            Self.logger.notice("Google OAuth browser: starting")
+            let callback: ChatGPTCallbackResult
 #if os(iOS)
-        let callbackURL = try await nativeAuthenticate(authURL, callbackScheme)
-        callback = Self.callbackResult(from: callbackURL)
+            let callbackURL = try await nativeAuthenticate(authURL, callbackScheme)
+            phase = .callback
+            guard let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
+                  components.scheme == callbackScheme, components.host == nil,
+                  components.path == "/oauth2redirect" else {
+                throw GoogleGeminiOAuthError.authorization("Unexpected Google callback address.")
+            }
+            callback = Self.callbackResult(from: callbackURL)
 #else
-        guard await openURL(authURL) else { throw GoogleGeminiOAuthError.authorization("Could not open the system browser.") }
-        callback = try await listener.waitForCallback(timeout: 300)
+            guard await openURL(authURL) else { throw GoogleGeminiOAuthError.authorization("Could not open the system browser.") }
+            callback = try await listener.waitForCallback(timeout: 300)
 #endif
-        guard Self.callbackMatchesState(callback.state, expected: state) else { throw GoogleGeminiOAuthError.invalidState }
-        if let error = callback.error { throw GoogleGeminiOAuthError.authorization(callback.errorDescription ?? error) }
-        guard let code = callback.code else { throw GoogleGeminiOAuthError.authorization("Google returned no authorization code.") }
-        let clientSecret = try await clientSecretStore.loadClientSecret()
-        let tokens = try await exchange(code: code, verifier: verifier, clientID: clientID, clientSecret: clientSecret, redirectURI: redirectURI)
-        guard let refresh = tokens.refreshToken else { throw GoogleGeminiOAuthError.missingRefreshToken }
-        let email = try await fetchEmail(accessToken: tokens.accessToken)
-        let credential = GoogleOAuthCredential(accessToken: tokens.accessToken, refreshToken: refresh, expiresAt: now().addingTimeInterval(TimeInterval(tokens.expiresIn)), email: email)
-        try await store.save(credential)
-        return ProviderAccount(provider: .gemini, accountIdentifier: email, displayName: nil, email: email, authenticationMethod: .oauth, state: .connected, capabilities: [.textGeneration, .tokenRefresh])
+            phase = .callback
+            guard Self.callbackMatchesState(callback.state, expected: state) else { throw GoogleGeminiOAuthError.invalidState }
+            if let error = callback.error { throw GoogleGeminiOAuthError.authorization(Self.knownOAuthCode(error)) }
+            guard let code = callback.code else { throw GoogleGeminiOAuthError.authorization("Google returned no authorization code.") }
+            phase = .tokenExchange
+            Self.logger.notice("Google OAuth callback: verified")
+            let clientSecret = client.clientSecret
+            let tokens = try await exchange(code: code, verifier: verifier, clientID: clientID, clientSecret: clientSecret, redirectURI: redirectURI)
+            guard let refresh = tokens.refreshToken, !refresh.isEmpty else { throw GoogleGeminiOAuthError.missingRefreshToken }
+            phase = .userInfo
+            let email: String?
+            do {
+                email = try await fetchEmail(accessToken: tokens.accessToken)
+            } catch {
+                try Task.checkCancellation()
+                Self.logger.notice("Google OAuth userInfo: unavailable")
+                email = nil
+            }
+            try Task.checkCancellation()
+            phase = .keychainSave
+            let credential = GoogleOAuthCredential(accessToken: tokens.accessToken, refreshToken: refresh, expiresAt: now().addingTimeInterval(TimeInterval(tokens.expiresIn)), email: email)
+            try await store.save(credential)
+            Self.logger.notice("Google OAuth keychainSave: connected")
+            return ProviderAccount(provider: .gemini, accountIdentifier: email, displayName: nil, email: email, authenticationMethod: .oauth, state: .connected, capabilities: [.textGeneration, .tokenRefresh])
+        } catch {
+            Self.logger.error("Google OAuth \(phase.rawValue, privacy: .public): \(Self.diagnosticCategory(for: error), privacy: .public)")
+            if error is URLError {
+                throw GoogleGeminiOAuthError.authorization("Network request failed during \(phase.rawValue).")
+            }
+            throw error
+        }
     }
 
     func validAccessToken() async throws -> String {
+        guard !isDisconnecting else { throw GoogleGeminiOAuthError.reauthenticationRequired }
+        if let refreshTask { return try await refreshTask.value }
+        let task = Task { try await self.loadOrRefreshToken() }
+        refreshTask = task
+        defer { refreshTask = nil }
+        return try await task.value
+    }
+
+    private func loadOrRefreshToken() async throws -> String {
         let client = try await configuredClient()
         guard let credential = try await store.load() else { throw GoogleGeminiOAuthError.missingRefreshToken }
         if credential.expiresAt.timeIntervalSince(now()) > 60 { return credential.accessToken }
-        if let refreshTask { return try await refreshTask.value }
-        let clientSecret = try await clientSecretStore.loadClientSecret()
-        let task = Task { try await self.performRefresh(credential: credential, clientID: client.clientID, clientSecret: clientSecret) }
-        refreshTask = task
-        do {
-            let token = try await task.value
-            refreshTask = nil
-            return token
-        } catch {
-            refreshTask = nil
-            throw error
-        }
+        return try await performRefresh(credential: credential, clientID: client.clientID, clientSecret: client.clientSecret)
     }
 
     func requestHeaders() async throws -> [String: String] {
@@ -251,8 +306,10 @@ actor GoogleGeminiOAuthService {
     }
 
     func disconnect() async throws {
-        refreshTask?.cancel()
-        refreshTask = nil
+        guard !isDisconnecting else { return }
+        isDisconnecting = true
+        defer { isDisconnecting = false }
+        if let refreshTask { _ = await refreshTask.result }
         if let credential = try? await store.load() {
             var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/revoke")!)
             request.httpMethod = "POST"
@@ -265,11 +322,13 @@ actor GoogleGeminiOAuthService {
     }
 
     private func performRefresh(credential: GoogleOAuthCredential, clientID: String, clientSecret: String?) async throws -> String {
+        Self.logger.notice("Google OAuth refresh: starting")
         let refreshed = try await refresh(refreshToken: credential.refreshToken, clientID: clientID, clientSecret: clientSecret)
         try Task.checkCancellation()
         let updated = GoogleOAuthCredential(accessToken: refreshed.accessToken, refreshToken: refreshed.refreshToken ?? credential.refreshToken,
                                             expiresAt: now().addingTimeInterval(TimeInterval(refreshed.expiresIn)), email: credential.email)
         try await store.save(updated)
+        Self.logger.notice("Google OAuth refresh: saved")
         return updated.accessToken
     }
 
@@ -303,8 +362,8 @@ actor GoogleGeminiOAuthService {
         let parameters = Self.tokenParameters(["code": code, "client_id": clientID, "redirect_uri": redirectURI, "grant_type": "authorization_code", "code_verifier": verifier], clientSecret: clientSecret)
         request.httpBody = Self.form(parameters)
         let (data, response) = try await session.data(for: request)
-        guard let response = try tokenResponse(data: data, response: response) else { throw GoogleGeminiOAuthError.tokenExchange("invalid response") }
-        return (response.access_token, response.refresh_token, response.expires_in)
+        let token = try tokenResponse(data: data, response: response)
+        return (token.access_token, token.refresh_token, token.expires_in)
     }
 
     private func refresh(refreshToken: String, clientID: String, clientSecret: String?) async throws -> (accessToken: String, refreshToken: String?, expiresIn: Int) {
@@ -314,44 +373,47 @@ actor GoogleGeminiOAuthService {
         let parameters = Self.tokenParameters(["refresh_token": refreshToken, "client_id": clientID, "grant_type": "refresh_token"], clientSecret: clientSecret)
         request.httpBody = Self.form(parameters)
         let (data, response) = try await session.data(for: request)
-        guard let response = try tokenResponse(data: data, response: response, isRefresh: true) else {
-            if safeOAuthError(data: data, status: (response as? HTTPURLResponse)?.statusCode).hasSuffix("invalid_grant") {
-                try? await store.delete()
-                throw GoogleGeminiOAuthError.reauthenticationRequired
-            }
-            throw GoogleGeminiOAuthError.tokenExchange(safeOAuthError(data: data, status: (response as? HTTPURLResponse)?.statusCode))
+        if (response as? HTTPURLResponse)?.statusCode == 400,
+           (try? JSONDecoder().decode(TokenErrorResponse.self, from: data))?.error == "invalid_grant" {
+            try await store.delete()
+            throw GoogleGeminiOAuthError.reauthenticationRequired
         }
-        return (response.access_token, response.refresh_token, response.expires_in)
+        let token = try tokenResponse(data: data, response: response)
+        return (token.access_token, token.refresh_token, token.expires_in)
     }
 
-    private func tokenResponse(data: Data, response: URLResponse, isRefresh: Bool = false) throws -> TokenResponse? {
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            if isRefresh, safeOAuthError(data: data, status: (response as? HTTPURLResponse)?.statusCode).hasSuffix("invalid_grant") { return nil }
-            throw GoogleGeminiOAuthError.tokenExchange(safeOAuthError(data: data, status: (response as? HTTPURLResponse)?.statusCode))
+    private func tokenResponse(data: Data, response: URLResponse) throws -> TokenResponse {
+        guard let http = response as? HTTPURLResponse else {
+            throw GoogleGeminiOAuthError.tokenExchange("invalid response")
         }
-        guard let token = try? JSONDecoder().decode(TokenResponse.self, from: data), !token.access_token.isEmpty else {
+        guard http.statusCode == 200 else {
+            let code = (try? JSONDecoder().decode(TokenErrorResponse.self, from: data))?.error
+            let category = Self.knownOAuthCode(code)
+            Self.logger.error("Google OAuth token endpoint: HTTP \(http.statusCode, privacy: .public), \(category, privacy: .public)")
+            throw GoogleGeminiOAuthError.tokenExchange("HTTP \(http.statusCode), \(category)")
+        }
+        guard let token = try? JSONDecoder().decode(TokenResponse.self, from: data),
+              !token.access_token.isEmpty, token.expires_in > 0 else {
             throw GoogleGeminiOAuthError.tokenExchange("malformed success response")
         }
         return token
     }
 
-    /// Exposes only Google's stable error code and HTTP status; response bodies and credentials are never logged or shown.
-    private func safeOAuthError(data: Data, status: Int?) -> String {
-        let serverError = try? JSONDecoder().decode(TokenErrorResponse.self, from: data)
-        let code = serverError?.error
-            .flatMap { value -> String? in
-                let safe = value.filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }
-                return safe.isEmpty ? nil : safe
-            }
-        let details = code ?? ""
-        if let status { return details.isEmpty ? "HTTP \(status)" : "HTTP \(status), \(details)" }
-        return details.isEmpty ? "unrecognized response" : details
+    private static func knownOAuthCode(_ code: String?) -> String {
+        switch code {
+        case "access_denied", "admin_policy_enforced", "invalid_client", "invalid_grant",
+             "invalid_request", "invalid_scope", "org_internal", "redirect_uri_mismatch",
+             "server_error", "temporarily_unavailable", "unauthorized_client", "unsupported_response_type":
+            code ?? "provider_error"
+        default: "provider_error"
+        }
     }
 
     private func fetchEmail(accessToken: String) async throws -> String? {
         var request = URLRequest(url: URL(string: "https://openidconnect.googleapis.com/v1/userinfo")!)
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        let (data, _) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         struct UserInfo: Decodable { let email: String? }
         return try? JSONDecoder().decode(UserInfo.self, from: data).email
     }

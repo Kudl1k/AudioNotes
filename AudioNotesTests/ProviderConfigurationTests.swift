@@ -4,6 +4,17 @@ import Testing
 
 @MainActor
 struct ProviderConfigurationTests {
+    @Test func removedGeminiTranscriptionSelectionFallsBackToDefaultAndDropsStaleModel() throws {
+        let name = "AudioNotesTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set("gemini", forKey: "transcription.provider")
+        defaults.set("gemini-3.5-transcribe", forKey: "transcription.gemini.model")
+        let config = TranscriptionConfiguration(defaults: defaults)
+        #expect(config.selectedProvider == TranscriptionProviderID.defaultProvider)
+        #expect(defaults.object(forKey: "transcription.gemini.model") == nil)
+    }
+
     @Test func persistsOnlyNonSecretConfigurationAndFallsBackForUnknownValues() throws {
         let name = "AudioNotesTests.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: name))

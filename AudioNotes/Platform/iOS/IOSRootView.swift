@@ -19,6 +19,7 @@ struct IOSRootView: View {
     @State private var navigationPath: [LibraryDestination] = []
     @State private var destination: LibraryDestination? = .allRecordings
     @State private var isShowingSettings = false
+    @State private var settingsSection: SettingsSection? = nil
 
     private var libraryPresentation: some View {
         Group {
@@ -90,8 +91,8 @@ struct IOSRootView: View {
             if case .recording(let id) = destination, !ids.contains(id) { destination = .allRecordings; navigationPath = [] }
         }
         .sheet(isPresented: $showingNewProject) { IOSProjectNameSheet(library: imports.library) }
-        .sheet(isPresented: $isShowingSettings) {
-            IOSSettingsView(services: services)
+        .sheet(isPresented: $isShowingSettings, onDismiss: { settingsSection = nil }) {
+            IOSSettingsView(services: services, initialSection: settingsSection)
         }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: SourceImportService.supportedTypes.filter { $0.conforms(to: .audio) }, allowsMultipleSelection: true) { result in
             switch result {
@@ -99,7 +100,8 @@ struct IOSRootView: View {
             case .failure: imports.pickerFailed()
             }
         }
-        .environment(\.openSettingsAction, OpenSettingsAction {
+        .environment(\.openSettingsAction, OpenSettingsAction { section in
+            settingsSection = section
             isShowingSettings = true
         })
     }

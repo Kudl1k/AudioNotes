@@ -44,7 +44,7 @@ final class AppServices {
 #endif
         let authService = ChatGPTAuthService(credentialStore: chatGPTCredentials)
         self.chatGPTAuthService = authService
-        self.chatGPTTokenRefresher = ChatGPTTokenRefresher(credentialStore: chatGPTCredentials)
+        self.chatGPTTokenRefresher = authService.tokenRefresher
     }
 
     var transcriptionResolver: TranscriptionProviderResolver {
@@ -53,7 +53,7 @@ final class AppServices {
             credentials: credentials,
             client: transcriptionClient,
             localConfiguration: llmConfiguration.localAI, whisperStore: whisperStore,
-            geminiOAuth: googleGeminiOAuth, coordinator: localInference
+            coordinator: localInference
         )
     }
 

@@ -4,14 +4,34 @@ import SwiftData
 
 struct IOSRecordingRow: View {
     let recording: Recording
+    @Environment(IOSAudioImportModel.self) private var imports
+
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(recording.title).font(.body.weight(.medium)).lineLimit(2)
             Text("\(AudioTime.format(recording.duration)) · \(recording.importedAt.formatted(date: .abbreviated, time: .shortened))")
                 .font(.subheadline).foregroundStyle(.secondary)
+            if let model = imports.library.existingTranscriptionModel(for: recording) {
+                if model.state.isProcessing {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small).accessibilityHidden(true)
+                        Text(model.iosTranscriptionActivityTitle)
+                    }
+                    .font(.footnote).foregroundStyle(.secondary)
+                } else if case .failed = model.state {
+                    Label("Transcription failed", systemImage: "exclamationmark.circle")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
         }
         .padding(.vertical, 3)
         .accessibilityElement(children: .combine)
+    }
+}
+
+extension RecordingViewModel {
+    var iosTranscriptionActivityTitle: String {
+        state == .saving ? state.title : progressSnapshot?.phase.message ?? state.title
     }
 }
 

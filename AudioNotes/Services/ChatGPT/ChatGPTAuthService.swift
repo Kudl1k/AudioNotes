@@ -74,6 +74,14 @@ final class ChatGPTAuthService: ObservableObject, ChatGPTAuthenticating {
     private let urlSession: URLSession
     private let sessionStore: any ChatGPTSessionStoring
 
+    private(set) lazy var tokenRefresher = ChatGPTTokenRefresher(
+        credentialStore: credentialStore, urlSession: urlSession, sessionStore: sessionStore
+    ) { [weak self] in
+        guard let self, self.authState != .authorizing else { return }
+        self.authState = .signedOut
+    }
+    private var isDisconnecting = false
+
     private static let appName = "Soniquill"
     private static let authorizeBaseURL = "https://auth.openai.com/api/accounts/authorize"
     private static let tokenURL = "https://auth.openai.com/api/accounts/oauth/token"
@@ -104,19 +112,31 @@ final class ChatGPTAuthService: ObservableObject, ChatGPTAuthenticating {
     }
 
     func restoreSession() async {
+        guard !isDisconnecting, authState != .authorizing else { return }
         guard let savedAccount = sessionStore.loadAccount() else {
             authState = .signedOut
             return
         }
 
-        // Verify tokens exist in Keychain
-        guard let accessToken = try? await credentialStore.accessToken(), !accessToken.isEmpty else {
-            sessionStore.clearAccount()
-            authState = .signedOut
+        let hasCredentials: Bool
+        do {
+            if let access = try await credentialStore.accessToken(), !access.isEmpty {
+                hasCredentials = true
+            } else {
+                hasCredentials = try await credentialStore.refreshToken()?.isEmpty == false
+            }
+        } catch {
+            // Keychain can be temporarily unavailable while protected data is locked.
+            // Keep the metadata needed to refresh once the device is accessible.
+            guard sessionStore.loadAccount() == savedAccount, !isDisconnecting,
+                  authState != .authorizing else { return }
+            authState = .signedIn(account: savedAccount)
             return
         }
 
-        authState = .signedIn(account: savedAccount)
+        guard sessionStore.loadAccount() == savedAccount, !isDisconnecting,
+              authState != .authorizing else { return }
+        authState = hasCredentials ? .signedIn(account: savedAccount) : .signedOut
     }
 
     func signIn() async throws {
@@ -278,16 +298,34 @@ final class ChatGPTAuthService: ObservableObject, ChatGPTAuthenticating {
     }
 
     func disconnect() async throws {
-        // Attempt remote revocation if refresh token is present
-        if let refreshToken = try? await credentialStore.refreshToken(),
-           let account = currentAccount {
+        guard !isDisconnecting else { return }
+        isDisconnecting = true
+        let pendingRefreshToken = await tokenRefresher.beginDisconnect()
+        do {
+            try await disconnectSession(pendingRefreshToken: pendingRefreshToken)
+        } catch {
+            await tokenRefresher.endDisconnect(didClearCredentials: false)
+            isDisconnecting = false
+            throw error
+        }
+        await tokenRefresher.endDisconnect(didClearCredentials: true)
+        isDisconnecting = false
+    }
+
+    private func disconnectSession(pendingRefreshToken: String?) async throws {
+        // A rotated token awaiting a Keychain write supersedes the stored token.
+        let refreshToken: String?
+        if let pendingRefreshToken {
+            refreshToken = pendingRefreshToken
+        } else {
+            refreshToken = try? await credentialStore.refreshToken()
+        }
+        if let refreshToken, let account = sessionStore.loadAccount() {
             _ = try? await revokeToken(refreshToken: refreshToken, clientID: account.issuedClientID)
         }
 
         // Clear Keychain tokens
         try await credentialStore.clearTokens()
-
-        // Clear local session metadata
         sessionStore.clearAccount()
         authState = .signedOut
     }

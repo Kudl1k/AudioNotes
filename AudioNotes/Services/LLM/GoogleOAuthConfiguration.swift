@@ -26,7 +26,12 @@ struct GoogleOAuthConfiguration: Sendable {
               !clientID.isEmpty, !redirectScheme.isEmpty, !projectID.isEmpty else {
             throw GoogleOAuthConfigurationError.missingIOSClient
         }
-        guard redirectScheme == "com.googleusercontent.apps." + String(clientID.split(separator: ".").first ?? "") else {
+        let urlTypes = bundle.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] ?? []
+        let registeredSchemes = urlTypes.flatMap { $0["CFBundleURLSchemes"] as? [String] ?? [] }
+        guard clientID.hasSuffix(".apps.googleusercontent.com"),
+              clientID.split(separator: ".").count == 4,
+              redirectScheme == clientID.split(separator: ".").reversed().joined(separator: "."),
+              registeredSchemes.contains(redirectScheme) else {
             throw GoogleOAuthConfigurationError.invalidIOSClient
         }
         return Self(clientID: clientID, projectID: projectID, clientSecret: nil, redirectScheme: redirectScheme)

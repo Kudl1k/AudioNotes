@@ -94,11 +94,9 @@ struct IOSUXAndProjectsTests {
     }
 
     @Test func transcriptionAvailabilityRequiresConnectedTranscriptionCredentials() {
-        #expect(IOSProviderAvailability.transcription(openAIKey: false, geminiConnected: false).isEmpty)
-        #expect(IOSProviderAvailability.transcription(openAIKey: true, geminiConnected: false) == [.openAI])
-        #expect(IOSProviderAvailability.transcription(openAIKey: false, geminiConnected: true) == [.gemini])
-        #expect(IOSProviderAvailability.transcription(openAIKey: true, geminiConnected: true) == [.openAI, .gemini])
-        #expect(!IOSProviderAvailability.transcription(openAIKey: true, geminiConnected: true).contains(.localWhisper))
+        #expect(IOSProviderAvailability.transcription(openAIKey: false).isEmpty)
+        #expect(IOSProviderAvailability.transcription(openAIKey: true) == [.openAI])
+        #expect(!IOSProviderAvailability.transcription(openAIKey: true).contains(.localWhisper))
     }
 
     @Test func transcriptionDefaultsResolveWithoutExplicitOverrides() {
@@ -118,7 +116,7 @@ struct IOSUXAndProjectsTests {
         _ = model.providerName
         #expect(model.hasTranscriptionOverrides)
         #expect(resolver.lastProvider == .openAI && resolver.lastModel == "whisper-1" && resolver.lastLanguage == .czech)
-        model.selectedProvider = .gemini
+        model.selectedProvider = .localWhisper
         #expect(model.selectedModel == nil)
     }
 

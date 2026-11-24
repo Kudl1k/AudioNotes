@@ -96,6 +96,7 @@ final class RecordingViewModel {
         generation.estimatedCostData = try? JSONEncoder().encode(transcriptionEstimate.cost)
         let tracker = OperationUsageTracker(generation: generation) { try? repository.record(generation) }
         var requestIDs: [UUID: UUID] = [:]
+        var reusedTranscriptionPart = false
         try? repository.record(generation)
         monotonicStart = ContinuousClock.now
         progressTracker = TranscriptionProgressTracker(startedAt: startedAt, totalAudioDuration: recording.duration)
@@ -127,6 +128,7 @@ final class RecordingViewModel {
                 }, status: { [weak self] update in
                     guard let self, self.attemptID == id else { return }
                     if update.phase == .transcribing { self.state = .transcribing }
+                    if update.reusedPart { reusedTranscriptionPart = true }
                     self.progressTracker?.apply(update, elapsed: self.elapsedTime ?? 0)
                     self.progressSnapshot = self.progressTracker?.snapshot
                 }, usage: { event in
@@ -152,11 +154,12 @@ final class RecordingViewModel {
                 transcript.isMock = provider.isMock
                 transcript.generationID = generation.id
                 try repository.save(transcript, for: self.recording)
+                TranscriptionCheckpoint.clear(for: self.audioURL)
                 self.progress = 1
                 self.progressTracker?.setPhase(.completed)
                 self.progressSnapshot = self.progressTracker?.snapshot
                 self.completedDuration = self.elapsedTime
-                tracker.finish(status: .succeeded)
+                tracker.finish(status: .succeeded, reusedTranscriptionPart: reusedTranscriptionPart)
                 self.state = .completed
             } catch {
                 guard self.attemptID == id else { return }

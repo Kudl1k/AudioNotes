@@ -74,8 +74,8 @@ actor ChatGPTCredentialStore: ChatGPTCredentialStoring {
     }
 
     func saveTokens(accessToken: String, refreshToken: String?, idToken: String?) throws {
-        try saveToken(accessToken, for: .accessToken)
         try saveToken(refreshToken, for: .refreshToken)
+        try saveToken(accessToken, for: .accessToken)
         try saveToken(idToken, for: .idToken)
     }
 

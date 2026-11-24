@@ -52,7 +52,7 @@ struct ChatErrorView: View {
             if canRetry {
                 Button("Retry", action: onRetry).accessibilityLabel("Retry answer").accessibilityIdentifier("chat.retry")
             }
-            OpenSettingsLink { Text("Choose Chat Provider…") }
+            OpenSettingsLink(section: .chat) { Text("Choose Chat Provider…") }
                 .accessibilityLabel("Chat provider and model settings").accessibilityIdentifier("chat.settings")
         }.buttonStyle(.bordered).controlSize(.small).padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)

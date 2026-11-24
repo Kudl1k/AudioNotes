@@ -12,6 +12,7 @@ struct TranscriptionStatus: Sendable {
     var completedParts: Int
     var processedAudioDuration: TimeInterval
     var totalAudioDuration: TimeInterval
+    var reusedPart = false
 }
 
 struct TranscriptionProviderCapabilities: Equatable, Sendable {
@@ -27,7 +28,7 @@ struct TranscriptionProviderCapabilities: Equatable, Sendable {
 /// Returns a new, unpersisted model graph. SwiftData objects never cross actors.
 /// This main-actor entry point orchestrates async work; implementations must run
 /// decoding/inference in a worker actor and network requests asynchronously.
-/// Providers must cooperate with Task cancellation and must not persist results.
+/// Providers must cooperate with Task cancellation and must not persist the final model graph.
 @MainActor
 protocol TranscriptionProvider {
     var displayName: String { get }

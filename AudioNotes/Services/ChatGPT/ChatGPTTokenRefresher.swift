@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 public protocol ChatGPTTokenRefreshing: Sendable {
     func validAccessToken(clockTolerance: TimeInterval) async throws -> String
@@ -14,23 +15,59 @@ actor ChatGPTTokenRefresher: ChatGPTTokenRefreshing {
     private let credentialStore: any ChatGPTCredentialStoring
     private let urlSession: URLSession
     private let sessionStore: any ChatGPTSessionStoring
+    private let onSessionExpired: @MainActor @Sendable () -> Void
     private var refreshTask: Task<String, Error>?
+    private var isDisconnecting = false
+    private var pendingRefresh: PendingRefresh?
 
+    private struct PendingRefresh {
+        let account: ChatGPTAccount
+        let accessToken: String
+        let refreshToken: String
+        let idToken: String?
+    }
+
+    private static let logger = Logger(subsystem: "cz.kudladev.soniquill", category: "ChatGPTOAuth")
     private static let tokenURL = "https://auth.openai.com/api/accounts/oauth/token"
     private static let resource = "https://api.openai.com/v1"
 
     init(
         credentialStore: any ChatGPTCredentialStoring = ChatGPTCredentialStore(),
         urlSession: URLSession = .shared,
-        sessionStore: any ChatGPTSessionStoring = ChatGPTUserDefaultsSessionStore()
+        sessionStore: any ChatGPTSessionStoring = ChatGPTUserDefaultsSessionStore(),
+        onSessionExpired: @escaping @MainActor @Sendable () -> Void = {}
     ) {
         self.credentialStore = credentialStore
         self.urlSession = urlSession
         self.sessionStore = sessionStore
+        self.onSessionExpired = onSessionExpired
     }
 
     /// Returns a valid bearer access token, refreshing it automatically if expired or nearing expiry.
     func validAccessToken(clockTolerance: TimeInterval = 60) async throws -> String {
+        guard !isDisconnecting else { throw ChatGPTAuthError.sessionExpired }
+        if let refreshTask { return try await refreshTask.value }
+        let task = Task { try await self.loadOrRefreshToken(clockTolerance: clockTolerance) }
+        refreshTask = task
+        defer { refreshTask = nil }
+        return try await task.value
+    }
+
+    func beginDisconnect() async -> String? {
+        isDisconnecting = true
+        if let refreshTask {
+            _ = await refreshTask.result
+        }
+        return pendingRefresh?.refreshToken
+    }
+
+    func endDisconnect(didClearCredentials: Bool) {
+        if didClearCredentials { pendingRefresh = nil }
+        isDisconnecting = false
+    }
+
+    private func loadOrRefreshToken(clockTolerance: TimeInterval) async throws -> String {
+        if pendingRefresh != nil { try await persistPendingRefresh() }
         guard let account = sessionStore.loadAccount() else {
             throw ChatGPTAuthError.sessionExpired
         }
@@ -55,17 +92,7 @@ actor ChatGPTTokenRefresher: ChatGPTTokenRefreshing {
             throw ChatGPTAuthError.sessionExpired
         }
 
-        if let refreshTask { return try await refreshTask.value }
-        let task = Task { try await self.refreshTokens(refreshToken: refreshToken, account: account) }
-        refreshTask = task
-        do {
-            let token = try await task.value
-            refreshTask = nil
-            return token
-        } catch {
-            refreshTask = nil
-            throw error
-        }
+        return try await refreshTokens(refreshToken: refreshToken, account: account)
     }
 
     private func refreshTokens(refreshToken: String, account: ChatGPTAccount) async throws -> String {
@@ -82,10 +109,12 @@ actor ChatGPTTokenRefresher: ChatGPTTokenRefreshing {
 
         request.httpBody = formURLEncode(params)
 
+        Self.logger.notice("ChatGPT OAuth refresh: starting")
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await urlSession.data(for: request)
         } catch {
+            Self.logger.notice("ChatGPT OAuth refresh: network_failure")
             throw ChatGPTAuthError.network(error.localizedDescription)
         }
 
@@ -95,11 +124,12 @@ actor ChatGPTTokenRefresher: ChatGPTTokenRefreshing {
 
         // Specific handling for HTTP 400 invalid_grant/token expired
         if http.statusCode == 400 || http.statusCode == 401 {
-            let errorText = String(data: data, encoding: .utf8) ?? ""
-            if isTerminalRefreshError(errorText) {
-                sessionStore.clearAccount()
-                // Clear invalid/expired credentials
-                try? await credentialStore.clearTokens()
+            let code = try? JSONDecoder().decode(RefreshErrorResponse.self, from: data).error
+            if let code, isTerminalRefreshError(code) {
+                // Keep the issued client mapping for reauthorization.
+                try await credentialStore.clearTokens()
+                await onSessionExpired()
+                Self.logger.notice("ChatGPT OAuth refresh: reauthentication_required")
                 throw ChatGPTAuthError.sessionExpired
             }
             throw ChatGPTAuthError.tokenExchangeFailed(status: http.statusCode, message: ChatGTPOAuthDiagnostics.safeCode(from: data))
@@ -116,16 +146,14 @@ actor ChatGPTTokenRefresher: ChatGPTTokenRefreshing {
             throw ChatGPTAuthError.invalidTokenResponse
         }
 
+        guard !tokenResponse.accessToken.isEmpty, tokenResponse.expiresIn > 0,
+              tokenResponse.refreshToken?.isEmpty != true else {
+            throw ChatGPTAuthError.invalidTokenResponse
+        }
+
         // Retain original refresh token if server did not rotate it
         let newRefreshToken = tokenResponse.refreshToken ?? refreshToken
         let newExpiresAt = Date().addingTimeInterval(TimeInterval(tokenResponse.expiresIn))
-
-        // Save updated tokens to Keychain
-        try await credentialStore.saveTokens(
-            accessToken: tokenResponse.accessToken,
-            refreshToken: newRefreshToken,
-            idToken: tokenResponse.idToken
-        )
 
         // Update account session metadata
         let updatedAccount = ChatGPTAccount(
@@ -139,12 +167,26 @@ actor ChatGPTTokenRefresher: ChatGPTTokenRefreshing {
             earliestRefreshAt: tokenResponse.earliestRefreshAt
         )
 
-        sessionStore.saveAccount(updatedAccount)
-
+        // If the device locks before the Keychain write, retry this write on the next
+        // request instead of presenting the already-rotated token to the server again.
+        pendingRefresh = PendingRefresh(account: updatedAccount, accessToken: tokenResponse.accessToken,
+                                        refreshToken: newRefreshToken, idToken: tokenResponse.idToken)
+        try await persistPendingRefresh()
         return tokenResponse.accessToken
     }
 
-    private func isTerminalRefreshError(_ errorText: String) -> Bool {
+    private func persistPendingRefresh() async throws {
+        guard let pendingRefresh else { return }
+        try await credentialStore.saveTokens(accessToken: pendingRefresh.accessToken,
+                                             refreshToken: pendingRefresh.refreshToken, idToken: pendingRefresh.idToken)
+        sessionStore.saveAccount(pendingRefresh.account)
+        self.pendingRefresh = nil
+        Self.logger.notice("ChatGPT OAuth refresh: saved")
+    }
+
+    private struct RefreshErrorResponse: Decodable { let error: String }
+
+    private func isTerminalRefreshError(_ code: String) -> Bool {
         let codes = [
             "invalid_grant",
             "invalid_refresh_token",
@@ -153,7 +195,7 @@ actor ChatGPTTokenRefresher: ChatGPTTokenRefreshing {
             "refresh_token_invalidated",
             "refresh_token_reused"
         ]
-        return codes.contains { errorText.contains($0) }
+        return codes.contains(code)
     }
 
     private func formURLEncode(_ parameters: [String: String]) -> Data {

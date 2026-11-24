@@ -51,7 +51,7 @@ private actor LocalTranscriptionRuntimeFixture: LocalWhisperRunning {
         calls += 1
         try Task.checkCancellation()
         if fail { throw LocalAIError.inference("Fixture failure") }
-        await status(120, 240); await status(240, 240)
+        await status(120, 240, false); await status(240, 240, false)
         return .init(language: language ?? "cs", segments: [.init(start: 121, end: 123, text: "Local transcript")])
     }
 }

@@ -230,8 +230,12 @@ final class LibraryViewModel {
         return model
     }
 
+    func existingTranscriptionModel(for recording: Recording) -> RecordingViewModel? {
+        transcriptionModels[recording.id]
+    }
+
     func activeTranscriptionModel(for recording: Recording) -> RecordingViewModel? {
-        guard let model = transcriptionModels[recording.id], model.state.isProcessing else { return nil }
+        guard let model = existingTranscriptionModel(for: recording), model.state.isProcessing else { return nil }
         return model
     }
 

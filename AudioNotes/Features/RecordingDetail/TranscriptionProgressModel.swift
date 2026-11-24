@@ -61,6 +61,16 @@ struct TranscriptionProgressTracker: Sendable {
 
     mutating func apply(_ status: TranscriptionStatus, elapsed: TimeInterval) {
         if status.totalAudioDuration > 0 { snapshot.totalAudioDuration = status.totalAudioDuration }
+        if status.reusedPart {
+            previousCompletedAudio = status.processedAudioDuration
+            previousCompletedElapsed = elapsed
+            snapshot.completedParts = status.completedParts
+            snapshot.processedAudioDuration = status.processedAudioDuration
+            snapshot.overallProgress = snapshot.totalAudioDuration.map { min(1, status.processedAudioDuration / $0) }
+            snapshot.estimatedRemainingTime = nil
+            setPhase(status.phase, currentPart: status.currentPart, totalParts: status.totalParts)
+            return
+        }
         if status.completedParts == 0, status.totalParts == nil, status.processedAudioDuration > (snapshot.processedAudioDuration ?? 0) {
             let delta = status.processedAudioDuration - (snapshot.processedAudioDuration ?? 0)
             completePart(audioDuration: delta, atElapsed: elapsed)
