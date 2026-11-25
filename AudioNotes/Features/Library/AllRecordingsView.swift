@@ -38,23 +38,52 @@ struct AllRecordingsView: View {
                 } else {
                     List(filtered) { recording in
                         Button { open(recording) } label: {
-                            HStack {
-                                Image(systemName: "waveform").foregroundStyle(.secondary)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(recording.title).foregroundStyle(.primary).lineLimit(1).truncationMode(.middle).help(recording.title)
-                                    if showsCost {
-                                        Text(costs.byRecording[recording.id]?.displayText ?? "Cost unavailable").font(.caption).foregroundStyle(.secondary)
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Image(systemName: recording.audioFileName.isEmpty ? "doc.text" : "waveform")
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 16, alignment: .center)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(recording.title)
+                                        .font(.body.weight(.medium))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                        .help(recording.title)
+                                    HStack(spacing: 5) {
+                                        Text(recording.audioFileName.isEmpty ? "Workspace" : AudioTime.string(recording.duration))
+                                        if let project = recording.project {
+                                            Text("·")
+                                            Image(systemName: "folder")
+                                                .imageScale(.small)
+                                            Text(project.name)
+                                                .lineLimit(1)
+                                                .truncationMode(.tail)
+                                        }
+                                        if let transcription = library.existingTranscriptionModel(for: recording),
+                                           transcription.state.isProcessing {
+                                            Text("· " + RecordingRowPresentation.activeTranscriptionText(for: transcription))
+                                        } else if let transcription = library.existingTranscriptionModel(for: recording),
+                                                  case .failed = transcription.state {
+                                            Text("· Transcription failed")
+                                        } else if recording.transcript != nil {
+                                            Text("· Transcribed")
+                                        }
+                                        if showsCost, let costText = costs.byRecording[recording.id]?.compactDisplayText {
+                                            Text("· " + costText)
+                                        }
                                     }
-                                    HStack {
-                                        Text(AudioTime.string(recording.duration))
-                                        if let project = recording.project { Text("· " + project.name).lineLimit(1).truncationMode(.tail) }
-                                        if library.activeTranscriptionModel(for: recording) != nil { Text("· Transcribing") }
-                                    }.font(.caption).foregroundStyle(.secondary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                                 }
-                                Spacer()
-                                Text(recording.importedAt, format: .dateTime.month(.abbreviated).day().year()).font(.caption).foregroundStyle(.secondary)
-                            }.padding(.vertical, 4).contentShape(Rectangle())
-                        }.buttonStyle(.plain)
+                                Spacer(minLength: 12)
+                                Text(RecordingRowPresentation.importedDateText(recording.importedAt))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                         .accessibilityElement(children: .combine)
                         .accessibilityHint("Opens the recording")
                         .accessibilityIdentifier("recordings.row.\(recording.id.uuidString)")

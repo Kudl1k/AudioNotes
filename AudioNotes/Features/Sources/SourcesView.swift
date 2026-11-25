@@ -114,8 +114,12 @@ struct SourcesView: View {
                         set: { if !$0 { transcriptionOptionsSourceID = nil } }
                     )) {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Transcribe " + source.displayName).font(.headline)
-                            TranscriptionProviderControls(model: transcriptionModel)
+                            Text("Transcribe " + source.displayName)
+                                .font(.headline)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .help(source.displayName)
+                            TranscriptionOptionsForm(model: transcriptionModel, showsEstimatedCost: source.isPrimaryAudio)
                             HStack {
                                 Button("Cancel") { transcriptionOptionsSourceID = nil }
                                 Spacer()
@@ -128,7 +132,7 @@ struct SourcesView: View {
                                     }
                                 }.buttonStyle(.borderedProminent)
                             }
-                        }.padding().frame(width: 390)
+                        }.padding(16).frame(width: 420)
                     }
             } else if !model.isProcessing(source), source.status == .failed || source.status == .partial {
                 Button("Retry") { model.reprocess(source, context: context) }

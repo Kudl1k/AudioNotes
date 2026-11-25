@@ -32,6 +32,7 @@ SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES
 ENABLE_PREVIEWS = YES
 LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks
 
+SONIQUILL_DRIVE_IOS_URL_SCHEME = cz.kudladev.soniquill.drive-unconfigured
 #include? "iOS.local.xcconfig"
 
 // Keep the persistence/test module identity independent of visible branding.

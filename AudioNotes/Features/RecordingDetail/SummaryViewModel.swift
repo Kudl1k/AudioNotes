@@ -114,6 +114,7 @@ final class SummaryViewModel {
         let unified = usesUnifiedContext || resolvedProvider.inputCapabilities.contextWindowTokens < 100_000
         let sourceSelection = selectedSourceIDs
         let imagePermission = allowImageUpload
+        let namingSnapshot = SummaryNamingSnapshot(recording)
 
         let presetToUse = presetOverride ?? selectedPreset
         selectedPreset = presetToUse
@@ -194,7 +195,7 @@ final class SummaryViewModel {
 
                 newSummary.outputLength = config.outputLength
                 newSummary.generationID = generation.id
-                try repository.save(newSummary, for: self.recording)
+                try repository.save(newSummary, for: self.recording, naming: namingSnapshot)
                 generation.summaryID = newSummary.id
                 let text = newSummary.overview + newSummary.keyPoints.map(\.text).joined(separator: " ")
                 generation.characterCount = text.count

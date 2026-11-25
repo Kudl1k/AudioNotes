@@ -23,3 +23,6 @@ release-artifacts/
 *.store-wal
 *.log
 .download-*/
+
+# Optional developer-owned native Drive OAuth configuration
+Configuration/iOS.local.xcconfig

@@ -15,7 +15,7 @@ struct ProviderSettingsView: View {
 
     private enum SettingsPage: Hashable, Identifiable {
         case defaults(GenerationDefaultsView.Feature)
-        case presets, privacy, usage, about
+        case presets, privacy, usage, about, driveSharing
         case provider(ProviderConnectionsView.ConnectionProvider)
 
         var id: Self { self }
@@ -33,6 +33,7 @@ struct ProviderSettingsView: View {
             switch self {
             case .defaults(let feature): feature.title
             case .privacy: "Privacy & Data"
+            case .driveSharing: "Google Drive Sharing"
             case .usage: "Usage & Costs"
             case .about: "Help & About"
             case .presets: "Presets"
@@ -46,6 +47,7 @@ struct ProviderSettingsView: View {
             case .defaults(.summary): "doc.text"
             case .defaults(.chat): "bubble.left.and.bubble.right"
             case .privacy: "hand.raised"
+            case .driveSharing: "folder.badge.person.crop"
             case .usage: "dollarsign.circle"
             case .about: "info.circle"
             case .presets: "slider.horizontal.3"
@@ -114,7 +116,7 @@ struct ProviderSettingsView: View {
                 }
 
                 Section("Soniquill") {
-                    ForEach([SettingsPage.privacy, .usage, .about]) { page in
+                    ForEach([SettingsPage.privacy, .driveSharing, .usage, .about]) { page in
                         sidebarLabel(for: page).tag(page)
                     }
                 }
@@ -183,6 +185,8 @@ struct ProviderSettingsView: View {
             .id(feature)
         case .privacy:
             privacyPage
+        case .driveSharing:
+            DriveProjectsSheet(storage: LibraryStorage(), isEmbedded: true)
         case .usage:
             UsageCostView(isEmbedded: true)
         case .about:

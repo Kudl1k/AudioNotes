@@ -11,6 +11,7 @@ struct IOSProjectWorkspaceShell: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var section: Section = .recordings
     @State private var showingImporter = false
+    @State private var showingDriveSharing = false
     @State private var importerTypes = SourceImportService.supportedTypes
 
     private enum Section: String, CaseIterable, Identifiable {
@@ -45,6 +46,10 @@ struct IOSProjectWorkspaceShell: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                Button("Share") { showingDriveSharing = true }
+                    .accessibilityLabel("Share Project via Google Drive")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 if section != .sources {
                 Menu {
                     Button("Add Sources", systemImage: "doc.badge.plus") { openImporter(SourceImportService.supportedTypes) }
@@ -58,6 +63,9 @@ struct IOSProjectWorkspaceShell: View {
                 .modifier(IOSControlSurface())
                 }
             }
+        }
+        .sheet(isPresented: $showingDriveSharing) {
+            DriveProjectsSheet(storage: imports.library.projectImports.storage, initialProject: project.id)
         }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: importerTypes,
                       allowsMultipleSelection: true) { result in

@@ -69,8 +69,9 @@ final class ProviderSettingsViewModel: ObservableObject {
 
         self.chatGPTAuthState = chatGPTAuth?.authState ?? .signedOut
 
-        if let cached = llmConfig?.cachedChatGPTModels, !cached.isEmpty,
-           llmConfig?.cachedChatGPTModelsAccountIdentifier == chatGPTAuth?.currentAccount?.id {
+        if let accountID = chatGPTAuth?.currentAccount?.id,
+           llmConfig?.cachedChatGPTModelsAccountIdentifier == accountID,
+           let cached = llmConfig?.cachedChatGPTModels {
             self.availableChatGPTModels = cached
         } else {
             self.availableChatGPTModels = []
@@ -131,6 +132,7 @@ final class ProviderSettingsViewModel: ObservableObject {
             googleOAuthConfigurationError = await googleOAuth.configurationStatus()
             googleOAuthIsConfigured = googleOAuthConfigurationError == nil
         }
+        await fetchChatGPTModels()
     }
 
     func connectGoogle() async {
@@ -238,9 +240,13 @@ final class ProviderSettingsViewModel: ObservableObject {
     }
 
     func fetchChatGPTModels() async {
-        guard let tokenRefresher else { return }
-        guard isChatGPTSignedIn, isChatGPTPlanUsageEnabled else { return }
-        guard !isFetchingChatGPTModels else { return }
+        guard let tokenRefresher, let chatGPTAuth,
+              let account = chatGPTAuth.currentAccount, account.planUsageEnabled,
+              !isFetchingChatGPTModels, !Task.isCancelled else { return }
+
+        if llmConfig?.cachedChatGPTModelsAccountIdentifier != account.id {
+            availableChatGPTModels = []
+        }
 
         isFetchingChatGPTModels = true
         chatGPTModelsError = nil
@@ -249,23 +255,32 @@ final class ProviderSettingsViewModel: ObservableObject {
         do {
             let token = try await tokenRefresher.validAccessToken()
             let all = try await modelsClient.fetchModels(bearerToken: token)
+            try Task.checkCancellation()
+            guard chatGPTAuth.currentAccount?.id == account.id else { return }
+
             // SIWC's account-specific model catalog is authoritative. Keep
             // provider ordering and don't infer availability from API models.
             let filtered = all.filter { item in
                 item.visibility == "list" && !item.slug.isEmpty
             }
 
-            if !filtered.isEmpty {
-                availableChatGPTModels = filtered
-                llmConfig?.cachedChatGPTModels = filtered
-                llmConfig?.cachedChatGPTModelsAccountIdentifier = chatGPTAuth?.currentAccount?.id
-                if let current = llmConfig?.chatGPTModel,
-                   !filtered.contains(where: { $0.slug == current }) {
-                    llmConfig?.chatGPTModel = filtered.first?.slug ?? "gpt-4o"
+            availableChatGPTModels = filtered
+            llmConfig?.cachedChatGPTModels = filtered
+            llmConfig?.cachedChatGPTModelsAccountIdentifier = account.id
+
+            if let first = filtered.first, let llmConfig {
+                if !filtered.contains(where: { $0.slug == llmConfig.summaryChatGPTModel }) {
+                    llmConfig.summaryChatGPTModel = first.slug
                 }
+                if !filtered.contains(where: { $0.slug == llmConfig.chatChatGPTModel }) {
+                    llmConfig.chatChatGPTModel = first.slug
+                }
+            } else if filtered.isEmpty {
+                chatGPTModelsError = "OpenAI returned no selectable models for this ChatGPT account."
             }
         } catch {
-            if let chatGPTAuth { chatGPTAuthState = chatGPTAuth.authState }
+            guard !Task.isCancelled else { return }
+            chatGPTAuthState = chatGPTAuth.authState
             chatGPTModelsError = error.localizedDescription
             DebugLogService.shared.error(
                 subsystem: "ProviderSettingsViewModel",
@@ -357,6 +372,8 @@ final class ProviderSettingsViewModel: ObservableObject {
             try await chatGPTAuth.disconnect()
             chatGPTAuthState = .signedOut
             availableChatGPTModels = []
+            llmConfig?.cachedChatGPTModels = []
+            llmConfig?.cachedChatGPTModelsAccountIdentifier = nil
         } catch {
             chatGPTErrorMessage = error.localizedDescription
             chatGPTAuthState = chatGPTAuth.authState

@@ -8,7 +8,9 @@ struct RecordingDetailView: View {
     private let projects: [Project]
     private let openProject: (() -> Void)?
     private let moveToProject: (Project?) -> Void
+    private let renameRecording: (() -> Void)?
     private let transcriptionResolver: any TranscriptionProviderResolving
+    @State private var showsSharing = false
     private let storage: LibraryStorage
     @State private var sourcesModel: SourcesViewModel
     @State private var sourcePreview: SourcePreviewTarget?
@@ -45,12 +47,14 @@ struct RecordingDetailView: View {
         projectCitation: ProjectCitation? = nil,
         projects: [Project] = [],
         openProject: (() -> Void)? = nil,
-        moveToProject: @escaping (Project?) -> Void = { _ in }
+        moveToProject: @escaping (Project?) -> Void = { _ in },
+        renameRecording: (() -> Void)? = nil
     ) {
         self.projectCitation = projectCitation
         self.projects = projects
         self.openProject = openProject
         self.moveToProject = moveToProject
+        self.renameRecording = renameRecording
         self.recording = recording
         self.chatModel = chatModel
         self.llmResolver = llmResolver
@@ -79,6 +83,11 @@ struct RecordingDetailView: View {
         self.init(recording: recording, transcriptionResolver: resolver, llmResolver: FixedLLMProviderResolver(provider: MockLLMProvider()), storage: storage)
     }
 
+    private var shareRecordingAction: (() -> Void)? {
+        guard recording.transcript?.segments.isEmpty == false else { return nil }
+        return { showsSharing = true }
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ScrollView {
@@ -88,12 +97,10 @@ struct RecordingDetailView: View {
                     recordingTabs
                         // A usable tab viewport survives short windows; the outer
                         // column scrolls rather than forcing native constraints smaller.
-                        .frame(height: max(240, geometry.size.height - headerHeight - 16))
-                        .padding(.vertical, WorkspaceSpacing.standard)
+                        .frame(height: max(240, geometry.size.height - headerHeight))
                 }
             }
         }
-        .navigationTitle(recording.title)
         // Opening the inspector while the detail pane cannot fit beside it makes AppKit's constraint pass loop
         // until it aborts. The width is observed while the inspector is closed, so the toggle is simply unavailable.
         .onGeometryChange(for: Bool.self) { $0.size.width >= Self.minimumDetailWidthForChat } action: { detailFitsChat = $0 }
@@ -101,34 +108,70 @@ struct RecordingDetailView: View {
             TranscriptHistoryView(recording: recording, isProcessing: model.state.isProcessing) { playback.seek(to: $0) }
         }
         .sheet(isPresented: $showsUsage) { UsageCostView(recordingID: recording.id) }
+        .sheet(isPresented: $showsSharing) { RecordingSharingSheet(recording: recording, storage: storage) }
         .toolbar {
-            ToolbarItem {
-                Button("Usage & Cost", systemImage: "dollarsign.circle") { showsUsage = true }
-                    .accessibilityIdentifier("toolbar.usage")
-            }
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .automatic) {
                 Button {
                     showingExportSheet = true
                 } label: {
-                    Label("Export…", systemImage: "square.and.arrow.up")
+                    HStack(spacing: 5) {
+                        Image(systemName: "square.and.arrow.up")
+                        Text("Export")
+                    }
                 }
-                .help("Export recording summary and transcript (⌘E)")
+                .help("Export as Markdown or PDF (⌘E)")
+                .accessibilityLabel("Export")
                 .accessibilityIdentifier("toolbar.export")
+
+                Menu {
+                    if let renameRecording {
+                        Button("Rename…", systemImage: "pencil", action: renameRecording)
+                        Divider()
+                    }
+                    Section("Project") {
+                        RecordingProjectMenu(recording: recording, projects: projects, move: moveToProject)
+                    }
+                    Section {
+                        if shareRecordingAction != nil {
+                            Button("Share Recording…", systemImage: "person.2") {
+                                showsSharing = true
+                            }
+                        }
+                        if recording.transcript != nil {
+                            Button("Transcript History…", systemImage: "clock.arrow.circlepath") {
+                                showsTranscriptHistory = true
+                            }
+                        }
+                        Button("Usage & Cost…", systemImage: "dollarsign.circle") {
+                            showsUsage = true
+                        }
+                        .accessibilityIdentifier("toolbar.usage")
+                    }
+                } label: {
+                    Label("More Actions", systemImage: "ellipsis.circle")
+                }
+                .help("Rename, project, sharing, history, and usage")
+                .accessibilityIdentifier("toolbar.more")
             }
 
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showsChat.toggle()
                 } label: {
-                    Label("Chat", systemImage: "sidebar.right")
+                    HStack(spacing: 5) {
+                        Image(systemName: showsChat ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right")
+                        Text("Chat")
+                    }
                 }
                 .keyboardShortcut("c", modifiers: [.command, .option])
                 .disabled(!showsChat && !detailFitsChat)
-                .help(showsChat ? "Hide chat (⌥⌘C)" : detailFitsChat ? "Show chat (⌥⌘C)" : "Make the window wider or hide the sidebar to show chat")
+                .help(showsChat ? "Hide AI Chat (⌥⌘C)" : detailFitsChat ? "Show AI Chat (⌥⌘C)" : "Make the window wider or hide the sidebar to show chat")
+                .accessibilityLabel("Chat")
                 .accessibilityValue(showsChat ? "Shown" : "Hidden")
                 .accessibilityIdentifier("toolbar.chat")
             }
         }
+        .focusedSceneValue(\.shareRecording, shareRecordingAction)
         .focusedSceneValue(\.exportAction) {
             showingExportSheet = true
         }
@@ -165,35 +208,32 @@ struct RecordingDetailView: View {
 
     private var recordingHeader: some View {
         VStack(spacing: 0) {
-            if let project = recording.project, let openProject {
-                HStack {
-                    Button(project.name, systemImage: "folder", action: openProject).buttonStyle(.link)
-                        .lineLimit(1).truncationMode(.tail)
-                        .accessibilityLabel("Project \(project.name)").accessibilityHint("Opens the project")
-                        .accessibilityIdentifier("recording.project")
-                    Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
-                    Text(recording.title).lineLimit(1).truncationMode(.middle)
-                    Spacer()
-                    Menu("Organize") {
-                        RecordingProjectMenu(recording: recording, projects: projects, move: moveToProject)
+            VStack(alignment: .leading, spacing: WorkspaceSpacing.section) {
+                VStack(alignment: .leading, spacing: WorkspaceSpacing.standard) {
+                    Text(recording.title)
+                        .font(.title.bold())
+                        .textSelection(.enabled)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                        .help(recording.title)
+                        .accessibilityAddTraits(.isHeader)
+
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) {
+                            projectBadgeMenu
+                            metadataItems
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            projectBadgeMenu
+                            HStack(spacing: 8) {
+                                metadataItems
+                            }
+                        }
                     }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 }
-                .font(.caption)
-                .padding(.horizontal, WorkspaceSpacing.majorSection)
-                .padding(.vertical, WorkspaceSpacing.standard)
-            }
-            VStack(alignment: .leading, spacing: WorkspaceSpacing.standard) {
-                Text(recording.title).font(.title.bold()).textSelection(.enabled)
-                    .lineLimit(2).truncationMode(.middle).help(recording.title)
-                    .accessibilityAddTraits(.isHeader)
-                HStack {
-                    Button("Sources: \(recording.sources.count)") { selectedTab = .sources }.buttonStyle(.link)
-                        .accessibilityHint("Shows the Sources tab")
-                    Text("•").accessibilityHidden(true)
-                    Text(recording.importedAt, format: .dateTime.month().day().year())
-                }
-                .font(.subheadline).foregroundStyle(.secondary)
-                TranscriptionCostLabel(recordingID: recording.id)
+
                 if !recording.audioFileName.isEmpty {
                     PlaybackControls(playback: playback)
                 }
@@ -202,52 +242,187 @@ struct RecordingDetailView: View {
             .padding(WorkspaceSpacing.majorSection)
             .layoutPriority(1)
             Divider()
-            if !recording.audioFileName.isEmpty && (recording.transcript == nil || model.showsCompletion || model.state.isProcessing || model.errorDetails != nil || transcriptionFailed) {
-                TranscriptionControls(model: model, transcribe: startTranscription, regenerate: { selectedTab = .transcript; showsRegenerationOptions = true })
-                    .padding([.horizontal, .top], 16)
+            if !recording.audioFileName.isEmpty && showsTranscriptionStatus {
+                TranscriptionControls(
+                    model: model,
+                    transcribe: startTranscription,
+                    regenerate: { selectedTab = .transcript; showsRegenerationOptions = true }
+                )
+                .padding(WorkspaceSpacing.majorSection)
+                Divider()
             }
         }
     }
 
-    private var recordingTabs: some View {
-        TabView(selection: $selectedTab) {
-            Tab("Sources", systemImage: "doc.on.doc", value: DetailTab.sources) {
-                SourcesView(model: sourcesModel, transcriptionResolver: transcriptionResolver, transcriptionModel: model,
-                    primaryTranscriptionBusy: model.state.isProcessing, onPrimaryTranscribe: startTranscription, onReference: openReference)
-            }
-            Tab("Summary", systemImage: "doc.text", value: DetailTab.summary) {
-                SummaryView(recording: recording, model: summaryModel, onSeek: { playback.seek(to: $0) }, onOpenSource: openReference)
-            }
-            Tab("Transcript", systemImage: "text.alignleft", value: DetailTab.transcript) {
-                VStack(spacing: 8) {
-                    if recording.transcript != nil {
-                        HStack {
-                            Button("History", systemImage: "clock.arrow.circlepath") { showsTranscriptHistory = true }
-                            Text(recording.transcriptHistory.isEmpty ? "1 version" : "\(recording.transcriptHistory.count + 1) versions").font(.caption).foregroundStyle(.secondary)
-                            Spacer()
-                            Button("Regenerate…", systemImage: "arrow.clockwise") { showsRegenerationOptions = true }
-                                .disabled(!model.canRegenerate)
-                                .popover(isPresented: $showsRegenerationOptions) {
-                                    VStack(alignment: .leading, spacing: 12) {
-                                        Text("Regenerate Transcript").font(.headline)
-                                        TranscriptionProviderControls(model: model)
-                                        Text(model.transcriptionEstimate.displayText).font(.caption).foregroundStyle(.secondary)
-                                        Text("The current transcript will be kept in history when the new version is ready.")
-                                            .font(.callout).foregroundStyle(.secondary)
-                                        HStack {
-                                            OpenSettingsLink(section: .transcription) { Text("Transcription Settings…") }
-                                            Spacer()
-                                            Button("Regenerate") {
-                                                showsRegenerationOptions = false
-                                                model.startTranscription(using: SwiftDataTranscriptRepository(context: modelContext), replacingExisting: true)
-                                            }.buttonStyle(.borderedProminent).disabled(!model.canRegenerate)
-                                        }
-                                    }.padding().frame(width: 390)
-                                }
-                        }.padding(.horizontal, 16)
-                    }
-                    TranscriptView(transcript: recording.transcript, revealedSegmentID: revealedSegmentID) { playback.seek(to: $0) }
+    @ViewBuilder
+    private var projectBadgeMenu: some View {
+        if let project = recording.project {
+            Menu {
+                if let openProject {
+                    Button("Open Project “\(project.name)”", systemImage: "arrow.up.forward.square", action: openProject)
+                    Divider()
                 }
+                if !projects.isEmpty {
+                    Section("Move to Project") {
+                        ForEach(projects) { candidate in
+                            Button {
+                                moveToProject(candidate)
+                            } label: {
+                                if candidate.id == project.id {
+                                    Label(candidate.name, systemImage: "checkmark")
+                                } else {
+                                    Text(candidate.name)
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                }
+                Button("Remove from Project", systemImage: "folder.badge.minus", role: .destructive) {
+                    moveToProject(nil)
+                }
+            } label: {
+                Label(project.name, systemImage: "folder.fill")
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .menuStyle(.button)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .accessibilityLabel("Project \(project.name)")
+            .accessibilityIdentifier("recording.project")
+        } else if !projects.isEmpty {
+            Menu {
+                Section("Add to Project") {
+                    ForEach(projects) { candidate in
+                        Button(candidate.name, systemImage: "folder") {
+                            moveToProject(candidate)
+                        }
+                    }
+                }
+            } label: {
+                Label("Add to Project", systemImage: "folder.badge.plus")
+            }
+            .menuStyle(.button)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .accessibilityIdentifier("recording.project")
+        }
+    }
+
+    @ViewBuilder
+    private var metadataItems: some View {
+        Text(recording.importedAt.formatted(date: .abbreviated, time: .shortened))
+        Text("·").accessibilityHidden(true)
+        Button("^[\(recording.sources.count) source](inflect: true)") {
+            selectedTab = .sources
+        }
+        .buttonStyle(.link)
+        .accessibilityHint("Shows the Sources tab")
+        TranscriptionCostInlineLabel(recordingID: recording.id)
+    }
+
+    private var sectionPicker: some View {
+        Picker("Section", selection: $selectedTab) {
+            Text("Sources").tag(DetailTab.sources)
+            Text("Summary").tag(DetailTab.summary)
+            Text("Transcript").tag(DetailTab.transcript)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize(horizontal: true, vertical: true)
+        .accessibilityIdentifier("recording.tabs")
+    }
+
+    private var recordingTabs: some View {
+        VStack(spacing: 0) {
+            sectionPicker
+                .padding(.horizontal, WorkspaceSpacing.majorSection)
+                .padding(.top, WorkspaceSpacing.section)
+                .padding(.bottom, WorkspaceSpacing.standard)
+
+            Group {
+                switch selectedTab {
+                case .sources:
+                    SourcesView(model: sourcesModel, transcriptionResolver: transcriptionResolver, transcriptionModel: model,
+                        primaryTranscriptionBusy: model.state.isProcessing, onPrimaryTranscribe: startTranscription, onReference: openReference)
+                case .summary:
+                    SummaryView(recording: recording, model: summaryModel, onSeek: { playback.seek(to: $0) }, onOpenSource: openReference)
+                case .transcript:
+                    transcriptTab
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+        }
+    }
+
+    private var transcriptTab: some View {
+        VStack(spacing: WorkspaceSpacing.standard) {
+            if recording.transcript != nil {
+                HStack {
+                    Button("History", systemImage: "clock.arrow.circlepath") { showsTranscriptHistory = true }
+                    Text(recording.transcriptHistory.isEmpty ? "1 version" : "\(recording.transcriptHistory.count + 1) versions")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Regenerate…", systemImage: "arrow.clockwise") { showsRegenerationOptions = true }
+                        .disabled(!model.canRegenerate)
+                        .popover(isPresented: $showsRegenerationOptions) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Regenerate Transcript").font(.headline)
+                                TranscriptionOptionsForm(model: model)
+                                Text("The current transcript will be kept in history when the new version is ready.")
+                                    .font(.callout).foregroundStyle(.secondary)
+                                HStack {
+                                    OpenSettingsLink(section: .transcription) { Text("Transcription Settings…") }
+                                    Spacer()
+                                    Button("Regenerate") {
+                                        showsRegenerationOptions = false
+                                        model.startTranscription(using: SwiftDataTranscriptRepository(context: modelContext), replacingExisting: true)
+                                    }.buttonStyle(.borderedProminent).disabled(!model.canRegenerate)
+                                }
+                            }.padding(16).frame(width: 420)
+                        }
+                }
+                .padding(.horizontal, WorkspaceSpacing.majorSection)
+                .padding(.top, WorkspaceSpacing.compact)
+            }
+            if recording.transcript == nil && !recording.audioFileName.isEmpty {
+                if showsTranscriptionStatus {
+                    Spacer()
+                } else {
+                    transcriptionEmptyState
+                }
+            } else {
+                TranscriptView(transcript: recording.transcript, revealedSegmentID: revealedSegmentID) { playback.seek(to: $0) }
+            }
+        }
+    }
+
+    private var transcriptionEmptyState: some View {
+        ContentUnavailableView {
+            Label("No transcript yet", systemImage: "text.alignleft")
+        } description: {
+            VStack(spacing: 4) {
+                Text(model.transcriptionConfiguration)
+                Text(model.transcriptionEstimate.displayText)
+                if model.hasCheckpoint {
+                    Text("Completed parts from an earlier transcription are saved.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } actions: {
+            HStack {
+                TranscriptionOptionsButton(model: model)
+                if model.hasCheckpoint {
+                    Button("Reset", action: model.resetTranscription)
+                        .help("Clear saved progress and start from the beginning")
+                        .accessibilityIdentifier("transcription.reset")
+                }
+                Button(model.hasCheckpoint ? "Resume" : (model.state == .idle ? "Transcribe" : "Retry"), action: startTranscription)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!model.canTranscribe)
+                    .accessibilityIdentifier(model.state == .idle ? "transcription.start" : "transcription.retry")
             }
         }
     }
@@ -266,9 +441,13 @@ struct RecordingDetailView: View {
         }
     }
 
-    private var transcriptionFailed: Bool {
-        if case .failed = model.state { return true }
-        return false
+    private var showsTranscriptionStatus: Bool {
+        switch model.state {
+        case .failed, .cancelled:
+            return true
+        default:
+            return model.showsCompletion || model.state.isProcessing || model.errorDetails != nil
+        }
     }
 
     private func openReference(_ raw: SourceReference) {

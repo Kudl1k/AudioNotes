@@ -105,6 +105,15 @@ struct ExportKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+struct LibrarySharingCommands {
+    let importFile: () -> Void
+    let importFolder: () -> Void
+    let shareProjects: () -> Void
+}
+
+private struct LibrarySharingKey: FocusedValueKey { typealias Value = LibrarySharingCommands }
+private struct ShareRecordingKey: FocusedValueKey { typealias Value = () -> Void }
+
 extension FocusedValues {
     var newProject: (() -> Void)? {
         get { self[NewProjectKey.self] }
@@ -114,6 +123,16 @@ extension FocusedValues {
     var importAudio: (() -> Void)? {
         get { self[ImportAudioKey.self] }
         set { self[ImportAudioKey.self] = newValue }
+    }
+
+    var librarySharing: LibrarySharingCommands? {
+        get { self[LibrarySharingKey.self] }
+        set { self[LibrarySharingKey.self] = newValue }
+    }
+
+    var shareRecording: (() -> Void)? {
+        get { self[ShareRecordingKey.self] }
+        set { self[ShareRecordingKey.self] = newValue }
     }
 
     var exportAction: (() -> Void)? {
@@ -140,12 +159,24 @@ private struct ImportCommands: Commands {
 
 private struct ExportCommands: Commands {
     @FocusedValue(\.exportAction) private var exportAction
+    @FocusedValue(\.librarySharing) private var librarySharing
+    @FocusedValue(\.shareRecording) private var shareRecording
 
     var body: some Commands {
         CommandGroup(after: .importExport) {
-            Button("Export…") { exportAction?() }
+            Button("Export as Markdown or PDF…") { exportAction?() }
                 .keyboardShortcut("e", modifiers: .command)
                 .disabled(exportAction == nil)
+            Divider()
+            Menu("Import Shared Recordings") {
+                Button("From a Package File…") { librarySharing?.importFile() }
+                Button("From a Folder…") { librarySharing?.importFolder() }
+            }
+            .disabled(librarySharing == nil)
+            Button("Share Recording Copy…") { shareRecording?() }
+                .disabled(shareRecording == nil)
+            Button("Share Projects via Google Drive…") { librarySharing?.shareProjects() }
+                .disabled(librarySharing == nil)
         }
     }
 }

@@ -2,6 +2,7 @@
 import SwiftUI
 import SwiftData
 import AVFoundation
+import QuickLook
 
 /// Native compact/regular detail; playback observation is confined to its control leaf.
 struct IOSRecordingDetailShell: View {
@@ -22,6 +23,8 @@ struct IOSRecordingDetailShell: View {
     @State private var showRename = false
     @State private var showRegenerateTranscriptConfirm = false
     @State private var showsUsage = false
+    @State private var showsSharing = false
+    @State private var showsAttachments = false
     @State private var name = ""
     @State private var managementError: String?
 
@@ -107,8 +110,13 @@ struct IOSRecordingDetailShell: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Section { Text(recording.title) }
+                    Button("Share Recording Copy…", systemImage: "square.and.arrow.up") { showsSharing = true }
+                        .disabled(recording.transcript?.segments.isEmpty != false)
                     Button(action: { showsUsage = true }) {
                         Label("Usage & Cost", systemImage: "dollarsign.circle")
+                    }
+                    if recording.sources.contains(where: { !$0.isPrimaryAudio }) {
+                        Button("Attachments", systemImage: "paperclip") { showsAttachments = true }
                     }
                     if recording.transcript != nil {
                         Button(action: { showRegenerateTranscriptConfirm = true }) {
@@ -134,6 +142,12 @@ struct IOSRecordingDetailShell: View {
                     Label("Recording actions", systemImage: "ellipsis.circle")
                 }.accessibilityIdentifier("recording.actions")
             }
+        }
+        .sheet(isPresented: $showsAttachments) {
+            IOSRecordingAttachments(recording: recording, storage: imports.library.projectImports.storage)
+        }
+        .sheet(isPresented: $showsSharing) {
+            RecordingSharingSheet(recording: recording, storage: imports.library.projectImports.storage)
         }
         .sheet(isPresented: $showChatSettings) { IOSSettingsView(services: services, initialSection: .chat) }
         .sheet(isPresented: $showMove) { IOSMoveRecordingSheet(recording: recording, library: imports.library) }
@@ -325,14 +339,22 @@ struct IOSRecordingDetailShell: View {
     @ViewBuilder
     private var transcriptionRecoveryAction: some View {
         if transcriptionModel.canTranscribe || transcriptionModel.canRegenerate {
-            Button("Retry Transcription") {
-                transcriptionModel.startTranscription(
-                    using: SwiftDataTranscriptRepository(context: context),
-                    replacingExisting: recording.transcript != nil
-                )
+            HStack(spacing: 12) {
+                Button("Reset", role: .destructive) {
+                    transcriptionModel.resetTranscription()
+                }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("transcription.reset")
+
+                Button(transcriptionModel.hasCheckpoint ? "Resume Transcription" : "Retry Transcription") {
+                    transcriptionModel.startTranscription(
+                        using: SwiftDataTranscriptRepository(context: context),
+                        replacingExisting: recording.transcript != nil
+                    )
+                }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("transcription.retry")
             }
-            .frame(minHeight: 44)
-            .accessibilityIdentifier("transcription.retry")
         }
     }
 
@@ -603,6 +625,27 @@ private struct IOSCompactPlaybackBar: View {
         .accessibilityLabel("Seek playback")
         .accessibilityValue("\(OperationDurationFormatter.string(model.playback.currentTime)) of \(OperationDurationFormatter.string(model.playback.duration))")
         .accessibilityIdentifier(identifierPrefix + ".position")
+    }
+}
+private struct IOSRecordingAttachments: View {
+    let recording: Recording
+    let storage: LibraryStorage
+    @Environment(\.dismiss) private var dismiss
+    @State private var preview: URL?
+
+    var body: some View {
+        NavigationStack {
+            List(recording.sources.filter { !$0.isPrimaryAudio }.sorted { $0.displayName < $1.displayName }) { source in
+                Button {
+                    preview = storage.sourceURL(source)
+                } label: {
+                    Label(source.displayName, systemImage: source.type.icon)
+                }
+            }
+            .navigationTitle("Attachments")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .quickLookPreview($preview)
+        }
     }
 }
 #endif

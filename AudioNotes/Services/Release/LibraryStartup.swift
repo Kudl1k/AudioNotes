@@ -29,9 +29,10 @@ final class LibraryStartup {
             }
 #endif
             try ManagedFileDeletion(root: support.appending(path: "AudioNotes")).recover()
-            let opened = try LibraryStorage(rootURL: support.appending(path: "AudioNotes"))
-                .makeContainer(databaseURL: support.appending(path: "default.store"))
+            let storage = LibraryStorage(rootURL: support.appending(path: "AudioNotes"))
+            let opened = try storage.makeContainer(databaseURL: support.appending(path: "default.store"))
             let context = ModelContext(opened)
+            try RecordingPackageImport.recover(storage: storage, context: context)
             try UsageRepository().markInterruptedOperations(context: context)
             try SourceCompatibilityMigration().backfill(context: context)
             let interrupted = try context.fetch(FetchDescriptor<RecordingSource>(predicate: #Predicate { $0.statusRaw == "processing" }))

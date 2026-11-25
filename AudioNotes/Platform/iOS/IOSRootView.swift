@@ -14,6 +14,9 @@ struct IOSRootView: View {
     @Environment(\.modelContext) private var context
     @State private var imports = IOSAudioImportModel()
     @State private var showingImporter = false
+    @State private var showsPackageImporter = false
+    @State private var showsDriveProjects = false
+    @State private var showsFolderImporter = false
     @State private var showingNewProject = false
 
     @State private var navigationPath: [LibraryDestination] = []
@@ -90,6 +93,12 @@ struct IOSRootView: View {
         .onChange(of: recordings.map(\.id)) { _, ids in
             if case .recording(let id) = destination, !ids.contains(id) { destination = .allRecordings; navigationPath = [] }
         }
+        .sheet(isPresented: $showsDriveProjects) {
+            DriveProjectsSheet(storage: imports.library.projectImports.storage)
+        }
+        .sheet(isPresented: $showsFolderImporter) {
+            ImportRecordingFolderSheet(storage: imports.library.projectImports.storage) { imports.library.selectRecording($0) }
+        }
         .sheet(isPresented: $showingNewProject) { IOSProjectNameSheet(library: imports.library) }
         .sheet(isPresented: $isShowingSettings, onDismiss: { settingsSection = nil }) {
             IOSSettingsView(services: services, initialSection: settingsSection)
@@ -100,6 +109,8 @@ struct IOSRootView: View {
             case .failure: imports.pickerFailed()
             }
         }
+        .modifier(RecordingPackageImportModifier(isPresented: $showsPackageImporter,
+            storage: imports.library.projectImports.storage, onImported: { imports.library.selectRecording($0) }))
         .environment(\.openSettingsAction, OpenSettingsAction { section in
             settingsSection = section
             isShowingSettings = true
@@ -154,11 +165,18 @@ struct IOSRootView: View {
 
     private var importButton: some View {
         Menu {
-            Button("Import Audio", systemImage: "waveform") { showingImporter = true }
+            Button("Import Audio", systemImage: "waveform.badge.plus") { showingImporter = true }
                 .accessibilityIdentifier("library.import")
                 .disabled(imports.isImporting)
             Button("New Project", systemImage: "folder.badge.plus") { showingNewProject = true }
                 .accessibilityIdentifier("library.newProject")
+            Section("Import Shared Recordings") {
+                Button("From a Package File…") { showsPackageImporter = true }
+                Button("From a Folder…") { showsFolderImporter = true }
+            }
+            Section {
+                Button("Share Projects via Google Drive…") { showsDriveProjects = true }
+            }
         } label: { Label("Add to Library", systemImage: "plus") }
         .accessibilityIdentifier("library.add")
     }
@@ -205,7 +223,7 @@ struct IOSRootView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 24)
-                        Button("Import Audio", systemImage: "plus") { showingImporter = true }
+                        Button("Import Audio", systemImage: "waveform.badge.plus") { showingImporter = true }
                             .disabled(imports.isImporting)
                     } else {
                         ForEach(recordings) { recording in
@@ -324,7 +342,7 @@ struct IOSRootView: View {
                 } description: {
                     Text("Import audio to keep and play it in your library.")
                 } actions: {
-                    Button("Import Audio", systemImage: "plus") { showingImporter = true }
+                    Button("Import Audio", systemImage: "waveform.badge.plus") { showingImporter = true }
                         .buttonStyle(.borderedProminent).disabled(imports.isImporting)
                 }
                 .navigationTitle("All Recordings")

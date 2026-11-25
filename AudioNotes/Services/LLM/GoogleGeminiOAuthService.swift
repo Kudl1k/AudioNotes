@@ -27,9 +27,13 @@ actor GoogleOAuthKeychainStore: GoogleOAuthCredentialStoring, GoogleOAuthClientS
 
     private let service: String
     private let account = "google-gemini-oauth"
-    private let clientSecretAccount = "google-gemini-oauth-client-secret"
+    private let clientSecretAccount: String
 
-    init(service: String = GoogleOAuthKeychainStore.defaultService) { self.service = service }
+    init(service: String = GoogleOAuthKeychainStore.defaultService,
+         clientSecretAccount: String = "google-gemini-oauth-client-secret") {
+        self.service = service
+        self.clientSecretAccount = clientSecretAccount
+    }
 
     func load() throws -> GoogleOAuthCredential? {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
@@ -350,7 +354,7 @@ actor GoogleGeminiOAuthService {
     static func callbackResult(from url: URL) -> ChatGPTCallbackResult {
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         func value(_ name: String) -> String? { query.first(where: { $0.name == name })?.value }
-        return ChatGPTCallbackResult(code: value("code"), state: value("state"), clientID: value("client_id"), error: value("error"), errorDescription: value("error_description"), scope: value("scope"))
+        return ChatGPTCallbackResult(code: value("code"), state: value("state"), clientID: value("client_id"), error: value("error"), errorDescription: value("error_description"), scope: value("scope"), pickedFileIDs: value("picked_file_ids"))
     }
 
     private struct TokenResponse: Decodable { let access_token: String; let refresh_token: String?; let expires_in: Int }

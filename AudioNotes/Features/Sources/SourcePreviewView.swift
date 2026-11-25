@@ -13,6 +13,7 @@ struct SourcePreviewView: View {
     @State private var playback = AudioPlaybackService()
     @State private var previewImage: CGImage?
     @State private var loadingImage = true
+    @State private var originalText: String?
     private let imageLoader = SourceImageLoader()
 
     var body: some View {
@@ -42,6 +43,12 @@ struct SourcePreviewView: View {
         }
         .frame(minWidth: 580, idealWidth: 800, minHeight: 500, idealHeight: 650)
         .task(id: url) {
+            if target.source.type == .document && target.source.textUnits.isEmpty {
+                let result = try? await NativeSourceProcessingService().process(url: url, type: .document)
+                guard !Task.isCancelled else { return }
+                originalText = result?.units.map(\.text).joined(separator: "\n\n")
+                return
+            }
             guard target.source.type == .image else { return }
             loadingImage = true
             let image = await imageLoader.image(url: url, maximumDimension: 2400)
@@ -60,6 +67,7 @@ struct SourcePreviewView: View {
     private var documentText: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                if let originalText { Text(originalText).textSelection(.enabled) }
                 ForEach(target.source.textUnits.sorted { $0.position < $1.position }) { unit in
                     Text(unit.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                 }

@@ -42,6 +42,19 @@ struct TranscriptionCheckpoint: Sendable {
         }
     }
 
+    static func hasSavedProgress(for audioURL: URL) -> Bool {
+        let root = directory(for: audioURL)
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return false }
+        for case let fileURL as URL in enumerator where fileURL.pathExtension == "json" {
+            return true
+        }
+        return false
+    }
+
     static func clear(for audioURL: URL) {
         try? FileManager.default.removeItem(at: directory(for: audioURL))
     }

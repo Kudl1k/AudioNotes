@@ -139,8 +139,22 @@ struct ProjectWorkspaceView: View {
             }
         }
         .toolbar {
-            ToolbarItem { Button("Import Activity", systemImage: "list.bullet") { showsActivity.toggle() }
-                .popover(isPresented: $showsActivity) { ProjectImportActivityView(projectID: project.id, queue: queue) } }
+            ToolbarItem(placement: .automatic) {
+                if queue.items.contains(where: { $0.projectID == project.id }) {
+                    Button {
+                        showsActivity.toggle()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "tray.and.arrow.down")
+                            Text("Imports")
+                        }
+                    }
+                    .help("Project import queue")
+                    .popover(isPresented: $showsActivity) {
+                        ProjectImportActivityView(projectID: project.id, queue: queue)
+                    }
+                }
+            }
         }
         .sheet(item: $exporting) { ExportSheetView(recording: $0) }
         .sheet(item: $preview) { SourcePreviewView(target: $0, url: queue.storage.sourceURL($0.source)) }

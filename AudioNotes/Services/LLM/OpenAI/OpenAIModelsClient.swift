@@ -60,7 +60,7 @@ public actor OpenAIModelsClient: OpenAIModelsFetching {
             throw URLError(.badURL)
         }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
         request.httpMethod = "GET"
         request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -119,7 +119,7 @@ struct OpenAIModelsResponseEnvelope: Decodable {
         } else if let list = try? container.decode([OpenAIModelItem].self, forKey: .data) {
             self.models = list
         } else {
-            self.models = []
+            throw LLMError.invalidResponse
         }
     }
 }
