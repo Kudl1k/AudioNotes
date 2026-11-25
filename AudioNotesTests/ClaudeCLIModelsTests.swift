@@ -119,6 +119,24 @@ struct ClaudeCLIModelsTests {
         #expect(LLMConfiguration(defaults: defaults).cachedClaudeModels.isEmpty)
     }
 
+    @Test func automaticDiscoveryReusesCacheUntilExplicitRefresh() async throws {
+        let name = "ClaudeModelsCache-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let config = LLMConfiguration(defaults: defaults)
+        let cached = [ClaudeCLIModel(id: "sonnet", displayName: "Cached Sonnet")]
+        let updated = [ClaudeCLIModel(id: "opus", displayName: "Updated Opus")]
+        config.cachedClaudeModels = cached
+        let settings = ProviderSettingsViewModel(credentials: MockCredentialStore(), llmConfig: config,
+                                                 claudeModelsClient: ClaudeModelsFixtureClient(models: updated))
+
+        await settings.loadClaudeModelsIfNeeded()
+        #expect(config.cachedClaudeModels == cached)
+
+        await settings.fetchClaudeModels()
+        #expect(config.cachedClaudeModels == updated)
+    }
+
     @Test func failureKeepsCachedModelsAndExistingSelections() async throws {
         let name = "ClaudeModelsFailure-" + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: name))

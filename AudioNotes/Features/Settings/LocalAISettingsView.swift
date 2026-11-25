@@ -11,10 +11,48 @@ struct LocalAISettingsView: View {
     }
     var body: some View {
         Group {
+            Section {
+                LabeledContent("Local Only", value: configuration.localOnly ? "On" : "Off")
+                OpenSettingsLink(section: .privacy) { Text("Privacy & Data…") }
+            }
+
+            Section("On-Device Transcription") {
+                if LocalAISettingsViewModel.supportsWhisper {
+                    ForEach(model.models) { item in
+                        LabeledContent {
+                            HStack {
+                                if model.installed.contains(item.id) {
+                                    Text("Installed").foregroundStyle(.secondary)
+                                    Button("Remove…", role: .destructive) { pendingRemoval = item }
+                                        .disabled(model.downloadModelID != nil)
+                                } else if model.downloadModelID == item.id {
+                                    Text("Downloading…").foregroundStyle(.secondary)
+                                } else {
+                                    Button("Download…") { pendingDownload = item }
+                                        .disabled(model.downloadModelID != nil)
+                                }
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.title)
+                                Text(ByteCountFormatter.string(fromByteCount: item.downloadBytes, countStyle: .file))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    if let progress = model.progress {
+                        OperationProgressView(title: "Downloading Whisper model…",
+                            status: "\(ByteCountFormatter.string(fromByteCount: progress.completedBytes, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: progress.totalBytes, countStyle: .file))",
+                            progress: OperationProgressValue(fraction: progress.totalBytes > 0 ? progress.fraction : nil),
+                            startedAt: model.downloadStartedAt, cancel: model.cancelDownload)
+
+                    }
+                    if let error = model.error { InlineErrorLabel("Download or model operation failed: " + error, font: .body) }
+                } else { Text("Local Whisper requires Apple Silicon.") }
+            }
             Section("Ollama") {
                 TextField("Server", text: $configuration.ollamaAddress)
-                Text((try? OllamaEndpoint(configuration.ollamaAddress))?.executionLocation.title ?? "Invalid server address")
-                    .font(.caption).foregroundStyle(.secondary)
+                LabeledContent("Execution", value: (try? OllamaEndpoint(configuration.ollamaAddress))?.executionLocation.title ?? "Invalid server address")
                 Text(model.connection).textSelection(.enabled)
                 HStack {
                     Button("Test Connection / Refresh Models") { Task { await model.refreshOllama() } }.disabled(model.checking)
@@ -29,41 +67,11 @@ struct LocalAISettingsView: View {
             }
             Section("llama.cpp Server") {
                 TextField("Server", text: $configuration.llamaCppAddress)
-                Text((try? OllamaEndpoint(configuration.llamaCppAddress))?.executionLocation.title ?? "Invalid server address")
-                    .font(.caption).foregroundStyle(.secondary)
+                LabeledContent("Execution", value: (try? OllamaEndpoint(configuration.llamaCppAddress))?.executionLocation.title ?? "Invalid server address")
                 TextField("Loaded model name", text: $configuration.llamaCppModel)
                 Text("Connects to llama.cpp's OpenAI-compatible /v1/chat/completions endpoint. Start llama-server separately and load a model before use. Soniquill does not install or launch it. Chat responses arrive when generation completes.")
                     .font(.caption).foregroundStyle(.secondary)
                 Link("llama.cpp server documentation", destination: URL(string: "https://github.com/ggml-org/llama.cpp/tree/master/examples/server")!)
-            }
-            Section("Local Whisper · Runs on this Mac") {
-                if LocalAISettingsViewModel.supportsWhisper {
-                    Text("Core ML models are stored in Soniquill Application Support. Smaller files use less disk space. Download size is shown before installation.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    ForEach(model.models) { item in
-                        HStack {
-                            Text(item.title)
-                            Text(ByteCountFormatter.string(fromByteCount: item.downloadBytes, countStyle: .file)).foregroundStyle(.secondary)
-                            Spacer()
-                            if model.installed.contains(item.id) {
-                                Text("Installed").foregroundStyle(.secondary)
-                                Button("Remove", role: .destructive) { pendingRemoval = item }.disabled(model.downloadModelID != nil)
-                            } else if model.downloadModelID == item.id {
-                                Text("Downloading…").foregroundStyle(.secondary)
-                            } else {
-                                Button("Download") { pendingDownload = item }.disabled(model.downloadModelID != nil)
-                            }
-                        }
-                    }
-                    if let progress = model.progress {
-                        OperationProgressView(title: "Downloading Whisper model…",
-                            status: "\(ByteCountFormatter.string(fromByteCount: progress.completedBytes, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: progress.totalBytes, countStyle: .file))",
-                            progress: OperationProgressValue(fraction: progress.totalBytes > 0 ? progress.fraction : nil),
-                            startedAt: model.downloadStartedAt, cancel: model.cancelDownload)
-
-                    }
-                    if let error = model.error { InlineErrorLabel("Download or model operation failed: " + error, font: .body) }
-                } else { Text("Local Whisper requires Apple Silicon.") }
             }
         }
         .task { await model.refresh() }

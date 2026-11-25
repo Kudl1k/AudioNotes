@@ -19,15 +19,15 @@ struct IOSLocalAISettingsView: View {
     var body: some View {
         Form {
             if show("overview") { Section {
-                Toggle("Local Only", isOn: Binding(get: { services.llmConfiguration.localAI.localOnly },
-                    set: { services.llmConfiguration.localAI.localOnly = $0 }))
+                LabeledContent("Local Only", value: services.llmConfiguration.localAI.localOnly ? "On" : "Off")
                     .accessibilityIdentifier("localAI.localOnly")
-            } footer: { Text("Blocks external AI providers. Downloading model data remains an explicit action. On-device processing never falls back to cloud automatically.") } }
+                NavigationLink(value: IOSSettingsView.Destination.privacy) { Text("Privacy & Data") }
+            } }
             if show("transcription") { Section {
                 ForEach(services.localAISettings.models) { model in
                     IOSWhisperModelRow(model: model, settings: services.localAISettings)
                 }
-            } header: { Text("Transcription") } footer: { Text("Start with Whisper Tiny. Base and Small need more storage and may use significant memory. Whisper provides timestamps and language detection, without speaker diarization.") } }
+            } header: { Text("On-Device Transcription") } footer: { Text("Start with Whisper Tiny. Base and Small need more storage and may use significant memory. Whisper provides timestamps and language detection, without speaker diarization.") } }
             if show("language") { Section {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(LocalLLMProvider.modelTitle)
@@ -35,7 +35,7 @@ struct IOSLocalAISettingsView: View {
                     Text("Summary · Recording Chat · Project Chat").font(.caption).foregroundStyle(.secondary)
                     Text("4,096-token context · Text only · No API charge").font(.caption).foregroundStyle(.secondary)
                 }.accessibilityIdentifier("localAI.languageModel")
-            } header: { Text("Language Models") } footer: { Text("Apple manages this model through Apple Intelligence in system Settings. Soniquill cannot download, delete, measure its storage, or select its version. Requires iOS 26 on an eligible device; enabling Apple Intelligence is your choice.") } }
+            } header: { Text("Apple Intelligence") } footer: { Text("Apple manages this model through Apple Intelligence in system Settings. Soniquill cannot download, delete, measure its storage, or select its version. Requires iOS 26 on an eligible device; enabling Apple Intelligence is your choice.") } }
             if show("storage") { Section("Storage") {
                 LabeledContent("Soniquill Models", value: services.localAISettings.storageBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "Unavailable")
                     .accessibilityIdentifier("localAI.storage")

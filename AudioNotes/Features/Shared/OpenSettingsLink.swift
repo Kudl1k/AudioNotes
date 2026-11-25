@@ -9,6 +9,7 @@ enum SettingsSection: Hashable, Sendable {
     case gemini
     case localAI
     case usage
+    case privacy
 }
 
 /// An action to open settings, customizable via the environment for platforms or contexts

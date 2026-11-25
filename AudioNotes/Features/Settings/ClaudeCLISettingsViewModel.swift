@@ -3,35 +3,51 @@ import Combine
 
 @MainActor
 final class ClaudeCLISettingsViewModel: ObservableObject {
-    @Published private(set) var account: ProviderAccount?
-    @Published private(set) var isBusy = false
-    @Published private(set) var errorMessage: String?
-    private let runner: any ClaudeCLIRunning
-    private var task: Task<Void, Never>?
-
-    init(runner: any ClaudeCLIRunning = ClaudeCLIRunner()) { self.runner = runner }
-
-    func refresh(path: String) async {
-        guard !isBusy else { return }
-        isBusy = true
-        errorMessage = nil
-        defer { isBusy = false }
-        do { account = try await ClaudeCLIClient(executable: path, runner: runner).account() }
-        catch is CancellationError { }
-        catch { account = nil; errorMessage = error.localizedDescription }
+    enum Operation {
+        case checking, signingIn
     }
 
-    func signIn(path: String) {
-        guard !isBusy else { return }
-        isBusy = true
+    @Published private(set) var account: ProviderAccount?
+    @Published private(set) var operation: Operation?
+    @Published private(set) var errorMessage: String?
+    private let statusRunner: any ClaudeCLIRunning
+    private let signInRunner: any ClaudeCLIRunning
+
+    init(runner: (any ClaudeCLIRunning)? = nil) {
+        statusRunner = runner ?? ClaudeCLIRunner(timeout: .seconds(12))
+        signInRunner = runner ?? ClaudeCLIRunner()
+    }
+
+    func refresh(path: String) async -> Bool {
+        await run(.checking, path: path)
+    }
+
+    func signIn(path: String) async -> Bool {
+        await run(.signingIn, path: path)
+    }
+
+    private func run(_ operation: Operation, path: String) async -> Bool {
+        guard self.operation == nil, !Task.isCancelled else { return false }
+        self.operation = operation
         errorMessage = nil
-        task = Task {
-            defer { isBusy = false; task = nil }
-            do { account = try await ClaudeCLIClient(executable: path, runner: runner).signIn() }
-            catch is CancellationError { }
-            catch { errorMessage = error.localizedDescription }
+        defer { self.operation = nil }
+
+        do {
+            let updatedAccount: ProviderAccount
+            switch operation {
+            case .checking:
+                updatedAccount = try await ClaudeCLIClient(executable: path, runner: statusRunner).account()
+            case .signingIn:
+                updatedAccount = try await ClaudeCLIClient(executable: path, runner: signInRunner).signIn()
+            }
+            try Task.checkCancellation()
+            account = updatedAccount
+            return updatedAccount.state == .connected
+        } catch is CancellationError {
+            return false
+        } catch {
+            if !Task.isCancelled { errorMessage = error.localizedDescription }
+            return false
         }
     }
-
-    func cancelSignIn() { task?.cancel() }
 }

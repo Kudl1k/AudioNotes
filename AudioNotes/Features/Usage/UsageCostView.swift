@@ -34,24 +34,19 @@ struct UsageCostView: View {
         }
     }
 
-#if os(iOS)
-    private var iosForm: some View {
+    private var usageForm: some View {
         Form {
-            Section {
+            Section("Period") {
                 periodPicker
             }
-            Section("API costs") {
+            Section("API Costs") {
                 LabeledContent("Total in USD", value: snapshot.total.displayText)
-                if !snapshot.byFeature.isEmpty {
-                    Text("Activities").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                        .accessibilityAddTraits(.isHeader)
-                    featureRows
-                }
-                if !snapshot.byProvider.isEmpty {
-                    Text("Providers").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                        .accessibilityAddTraits(.isHeader)
-                    providerRows
-                }
+            }
+            if !snapshot.byFeature.isEmpty {
+                Section("By Activity") { featureRows }
+            }
+            if !snapshot.byProvider.isEmpty {
+                Section("By Provider") { providerRows }
             }
             Section {
                 ForEach(AccountUsageProvider.allCases, id: \.self) { provider in
@@ -71,7 +66,7 @@ struct UsageCostView: View {
                     .padding(.vertical, 2)
                 }
             } header: {
-                Text("Account usage")
+                Text("Account Usage")
             } footer: {
                 Text("Requests recorded by Soniquill in the selected period.")
             }
@@ -83,9 +78,10 @@ struct UsageCostView: View {
                 }
             }
             Section {
-                DisclosureGroup("Provider limits & pricing") {
+                DisclosureGroup("Provider Limits & Pricing") {
                     ForEach(AccountUsageProvider.allCases, id: \.self) { provider in
                         Link(provider.dashboardTitle, destination: provider.dashboardURL)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     pricingLinks
                     pricingDate
@@ -94,18 +90,22 @@ struct UsageCostView: View {
             }
         }
         .navigationTitle("Usage & Costs")
+#if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-    }
+#else
+        .formStyle(.grouped)
+        .disclosureGroupStyle(FullWidthDisclosureStyle())
 #endif
+    }
 
     @ViewBuilder
     private var presentation: some View {
 #if os(iOS)
         if isEmbedded {
-            iosForm
+            usageForm
         } else {
             NavigationStack {
-                iosForm
+                usageForm
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Done") { dismiss() }
@@ -114,6 +114,16 @@ struct UsageCostView: View {
             }
         }
 #else
+        if isEmbedded {
+            usageForm
+        } else {
+            macDashboard
+        }
+#endif
+    }
+
+#if os(macOS)
+    private var macDashboard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Usage & Cost").font(.title2.bold())
@@ -154,8 +164,8 @@ struct UsageCostView: View {
             }
         }
         .padding(24).frame(minWidth: 600, idealWidth: 680, minHeight: 500)
-#endif
     }
+#endif
 
     @ViewBuilder
     private func tokenRows(_ usage: AccountRequestUsage) -> some View {

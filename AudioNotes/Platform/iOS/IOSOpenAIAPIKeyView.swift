@@ -25,7 +25,6 @@ struct IOSOpenAIAPIKeyView: View {
 
     var body: some View {
         Form {
-            header
             if showsEntry { entrySections } else { configuredSections }
         }
         .navigationTitle("OpenAI API Key")
@@ -45,56 +44,12 @@ struct IOSOpenAIAPIKeyView: View {
         }
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        Section {
-            VStack(spacing: 12) {
-                Image(systemName: "key.horizontal.fill")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 64, height: 64)
-                    .background(Color.accentColor.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .accessibilityHidden(true)
-                VStack(spacing: 4) {
-                    Text("OpenAI Transcription").font(.title3.bold()).accessibilityAddTraits(.isHeader)
-                    Text("Transcribe recordings with Whisper and GPT-4o Transcribe. Billed to your OpenAI API account, separately from ChatGPT plans.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                statusBadge
-            }
-            .frame(maxWidth: .infinity)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 4, trailing: 16))
-        }
-    }
-
-    private var statusBadge: some View {
-        HStack(spacing: 5) {
-            Image(systemName: settings.keyIsConfigured ? "checkmark.circle.fill" : "circle.dashed")
-                .contentTransition(.symbolEffect(.replace))
-            Text(settings.keyIsConfigured ? "Ready" : "Not Set Up")
-        }
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(settings.keyIsConfigured ? Color.green : Color.secondary)
-            .padding(.horizontal, 10).padding(.vertical, 4)
-            .background((settings.keyIsConfigured ? Color.green : Color.secondary).opacity(0.12), in: Capsule())
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("settings.openai.status")
-    }
-
     // MARK: - Configured
 
     @ViewBuilder private var configuredSections: some View {
         Section {
-            LabeledContent {
-                Text(verbatim: "••••••••••••").font(.body.monospaced()).foregroundStyle(.secondary)
-            } label: {
-                Label("API Key", systemImage: "lock.fill")
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("API key stored")
+            LabeledContent("Status", value: "Configured")
+                .accessibilityIdentifier("settings.openai.status")
             Button {
                 settings.keyInput = ""
                 isRevealed = false
@@ -180,17 +135,13 @@ struct IOSOpenAIAPIKeyView: View {
 
         Section {
             Button(action: save) {
-                HStack(spacing: 8) {
-                    if settings.isBusy { ProgressView().tint(.white) }
-                    Text(settings.keyIsConfigured ? "Replace Key" : "Save Key").fontWeight(.semibold)
+                if settings.isBusy {
+                    ProgressView("Saving Key…")
+                } else {
+                    Text(settings.keyIsConfigured ? "Replace Key" : "Save Key")
                 }
-                .frame(maxWidth: .infinity, minHeight: 34)
             }
-            .modifier(IOSPrimaryAction())
-            .controlSize(.large)
             .disabled(!canSave)
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
             .accessibilityIdentifier("settings.openai.save")
 
             if isEditing {
@@ -199,8 +150,6 @@ struct IOSOpenAIAPIKeyView: View {
                     isEditing = false
                     fieldFocused = false
                 }
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear)
             }
         }
 

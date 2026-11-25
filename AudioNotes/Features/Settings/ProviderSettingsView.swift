@@ -10,10 +10,12 @@ struct ProviderSettingsView: View {
     @ObservedObject private var updates: UpdateService
     @State private var information: ReleaseInformationView.Page?
 
-    @State private var selectedPage: SettingsPage? = .general
+    @State private var selectedPage: SettingsPage? = .defaults(.transcription)
+    private let navigation: SettingsNavigation?
 
     private enum SettingsPage: Hashable, Identifiable {
-        case general, presets, export
+        case defaults(GenerationDefaultsView.Feature)
+        case presets, privacy, usage, about
         case provider(ProviderConnectionsView.ConnectionProvider)
 
         var id: Self { self }
@@ -29,18 +31,24 @@ struct ProviderSettingsView: View {
 
         var title: String {
             switch self {
-            case .general: "General"
+            case .defaults(let feature): feature.title
+            case .privacy: "Privacy & Data"
+            case .usage: "Usage & Costs"
+            case .about: "Help & About"
             case .presets: "Presets"
-            case .export: "Export"
             case .provider(let provider): provider.rawValue
             }
         }
 
         var icon: String {
             switch self {
-            case .general: "gearshape"
+            case .defaults(.transcription): "waveform"
+            case .defaults(.summary): "doc.text"
+            case .defaults(.chat): "bubble.left.and.bubble.right"
+            case .privacy: "hand.raised"
+            case .usage: "dollarsign.circle"
+            case .about: "info.circle"
             case .presets: "slider.horizontal.3"
-            case .export: "square.and.arrow.up"
             case .provider(.openAI): "sparkles"
             case .provider(.anthropic): "text.bubble"
             case .provider(.gemini): "star"
@@ -59,12 +67,14 @@ struct ProviderSettingsView: View {
         googleOAuth: GoogleGeminiOAuthService? = nil,
         whisperStore: WhisperModelStore = WhisperModelStore(),
         localAISettings: LocalAISettingsViewModel? = nil,
-        updates: UpdateService = UpdateService(enabled: false)
+        updates: UpdateService = UpdateService(enabled: false),
+        navigation: SettingsNavigation? = nil
     ) {
         _localAISettings = State(initialValue: localAISettings ?? LocalAISettingsViewModel(
             configuration: llmConfig.localAI, store: whisperStore
         ))
         self.updates = updates
+        self.navigation = navigation
         self.transcriptionConfig = transcriptionConfig
         self.llmConfig = llmConfig
         _model = StateObject(wrappedValue: ProviderSettingsViewModel(
@@ -88,37 +98,58 @@ struct ProviderSettingsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        NavigationSplitView {
             List(selection: $selectedPage) {
-                Section("Settings") {
-                    ForEach([SettingsPage.general, .presets, .export]) { page in
-                        sidebarLabel(for: page)
-                            .tag(page)
+                Section("AI Defaults") {
+                    ForEach(GenerationDefaultsView.Feature.allCases.map(SettingsPage.defaults) + [.presets]) { page in
+                        sidebarLabel(for: page).tag(page)
                     }
                 }
 
-                Section("Providers") {
+                Section("Connections & Models") {
                     ForEach(ProviderConnectionsView.ConnectionProvider.allCases) { provider in
                         let page = SettingsPage.provider(provider)
-                        sidebarLabel(for: page)
-                            .tag(page)
+                        sidebarLabel(for: page).tag(page)
+                    }
+                }
+
+                Section("Soniquill") {
+                    ForEach([SettingsPage.privacy, .usage, .about]) { page in
+                        sidebarLabel(for: page).tag(page)
                     }
                 }
             }
             .listStyle(.sidebar)
-            .frame(width: 200)
-
-            Divider()
-
+            .navigationSplitViewColumnWidth(min: 185, ideal: 205, max: 250)
+        } detail: {
             settingsDetail
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .navigationTitle((selectedPage ?? .defaults(.transcription)).title)
         }
-        .padding(.top, 32)
-        .navigationTitle((selectedPage ?? .general).title)
-        .toolbarVisibility(.visible, for: .windowToolbar)
-        .frame(minWidth: 820, minHeight: 600)
+        .navigationSplitViewStyle(.balanced)
+        .frame(minWidth: 720, minHeight: 520)
         .task { await model.refresh() }
+        .task { await localAISettings.refreshInstalled() }
+        .environment(\.openSettingsAction, OpenSettingsAction { section in
+            if let section { select(section) }
+        })
+        .onChange(of: navigation?.request, initial: true) {
+            if let request = navigation?.request { select(request.section) }
+        }
         .sheet(item: $information) { ReleaseInformationView(page: $0) }
+    }
+
+    private func select(_ section: SettingsSection) {
+        switch section {
+        case .transcription: selectedPage = .defaults(.transcription)
+        case .summary: selectedPage = .defaults(.summary)
+        case .chat: selectedPage = .defaults(.chat)
+        case .presets: selectedPage = .presets
+        case .openAI: selectedPage = .provider(.openAI)
+        case .gemini: selectedPage = .provider(.gemini)
+        case .localAI: selectedPage = .provider(.local)
+        case .usage: selectedPage = .usage
+        case .privacy: selectedPage = .privacy
+        }
     }
 
     private func sidebarLabel(for page: SettingsPage) -> some View {
@@ -143,13 +174,21 @@ struct ProviderSettingsView: View {
 
     @ViewBuilder
     private var settingsDetail: some View {
-        switch selectedPage ?? .general {
-        case .general:
-            generalPage
+        switch selectedPage ?? .defaults(.transcription) {
+        case .defaults(let feature):
+            Form {
+                GenerationDefaultsView(feature: feature, localAISettings: localAISettings, transcriptionConfig: transcriptionConfig, llmConfig: llmConfig, model: model)
+            }
+            .formStyle(.grouped)
+            .id(feature)
+        case .privacy:
+            privacyPage
+        case .usage:
+            UsageCostView(isEmbedded: true)
+        case .about:
+            aboutPage
         case .presets:
             PresetsManagementView()
-        case .export:
-            exportPage
         case .provider(let provider):
             ProviderConnectionsView(
                 llmConfig: llmConfig,
@@ -160,102 +199,78 @@ struct ProviderSettingsView: View {
         }
     }
 
-    // MARK: - General Page
-
-    private var generalPage: some View {
+    private var privacyPage: some View {
         Form {
-            Section("Privacy") {
+            Section {
                 Toggle("Local Only", isOn: Binding(
                     get: { llmConfig.localAI.localOnly },
                     set: { llmConfig.localAI.localOnly = $0 }
                 ))
-                Text("Keep AI source content on this Mac. Cloud providers, remote servers, and cloud-backed Ollama models are blocked. Install local models in Providers before going offline.")
-                    .font(.caption).foregroundStyle(.secondary)
+                OpenSettingsLink(section: .localAI) { Text("Manage Local Models…") }
+            } header: {
+                Text("AI Privacy")
+            } footer: {
+                Text("Local Only blocks cloud providers, remote servers, and cloud-backed Ollama models.")
             }
 
-            GenerationDefaultsView(transcriptionConfig: transcriptionConfig, llmConfig: llmConfig, model: model)
-
-            if PlatformCapabilities.current.supportsSparkleUpdates {
-                Section("Updates") {
-                    Toggle("Automatically check for updates", isOn: $updates.automaticallyChecksForUpdates)
-                        .disabled(!updates.isConfigured)
-                    Button("Check for Updates…") { updates.checkForUpdates() }.disabled(!updates.canCheckForUpdates)
-                    if !updates.isConfigured {
-                        Text("Updates are unavailable in this build. Release hosting and signing must be configured by the publisher.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-            }
-            Section("Storage & Privacy") {
+            Section {
                 if PlatformCapabilities.current.supportsFinderReveal {
                     Button("Reveal Data Folder") { Workspace.open(AppStorageLocations.applicationSupport()) }
                 }
-                Button("Privacy") { information = .privacy }
-                Button("Soniquill Help") { information = .help }
-                Button("Third-Party Licenses") { information = .licenses }
-                Text("Use Help → Export Diagnostics for a report that excludes your content and credentials. To make a full backup, quit Soniquill and copy the data folders described in Help.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Button("Privacy Policy") { information = .privacy }
+            } header: {
+                Text("Data")
+            } footer: {
+                Text("See Soniquill Help for backup instructions. Export Diagnostics is available from the Help menu.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var aboutPage: some View {
+        Form {
+            Section("Help") {
+                Button { information = .help } label: {
+                    Label("Soniquill Help", systemImage: "questionmark.circle")
+                }
+                Button { information = .licenses } label: {
+                    Label("Third-Party Licenses", systemImage: "doc.plaintext")
+                }
+            }
+            Section("About Soniquill") {
+                LabeledContent("Version & Build", value: "\(ReleaseIdentity().version) (\(ReleaseIdentity().build))")
+            }
+            if PlatformCapabilities.current.supportsSparkleUpdates {
+                Section {
+                    Toggle("Automatically check for updates", isOn: $updates.automaticallyChecksForUpdates)
+                        .disabled(!updates.isConfigured)
+                    Button("Check for Updates…") { updates.checkForUpdates() }.disabled(!updates.canCheckForUpdates)
+                } header: {
+                    Text("Updates")
+                } footer: {
+                    if !updates.isConfigured {
+                        Text("Updates are unavailable in this build.")
+                    }
+                }
             }
 #if DEBUG
             Section("Development") {
-                Button("Copy Debug Logs") { model.copyLogs() }
+                Button(model.copiedLogsNotice ? "Copied Debug Logs" : "Copy Debug Logs") { model.copyLogs() }
             }
 #endif
-
-            Section("About Soniquill") {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Soniquill \(ReleaseIdentity().version) (\(ReleaseIdentity().build))")
-                        .font(.headline)
-                    Text("Native audio transcription, AI summaries, and interactive transcript chat.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
         }
         .formStyle(.grouped)
-        .padding(16)
     }
 
-    // MARK: - Export Page
-
-    private var exportPage: some View {
-        Form {
-            Section("Export Defaults") {
-                Text("Export your transcripts, AI summaries, and chat histories into standalone Markdown or PDF documents.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                HStack {
-                    Image(systemName: "doc.text")
-                        .foregroundStyle(.blue).accessibilityHidden(true)
-                    VStack(alignment: .leading) {
-                        Text("Markdown (.md)")
-                            .font(.headline)
-                        Text("Portable GitHub-flavored markdown with clean formatting, timestamps, and optional front-matter.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, 4)
-
-                HStack {
-                    Image(systemName: "doc.richtext")
-                        .foregroundStyle(.red).accessibilityHidden(true)
-                    VStack(alignment: .leading) {
-                        Text("PDF Document (.pdf)")
-                            .font(.headline)
-                        Text("Native multi-page document with headers, page numbers, and custom typography.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-        }
-        .formStyle(.grouped)
-        .padding(16)
-    }
 }
 
+@Observable @MainActor
+final class SettingsNavigation {
+    struct Request: Equatable {
+        let section: SettingsSection
+        let id = UUID()
+    }
+
+    var request: Request?
+}
 #endif

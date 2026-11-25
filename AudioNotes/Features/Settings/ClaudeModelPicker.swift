@@ -30,7 +30,7 @@ struct ClaudeModelPicker: View {
         if let error = settings.claudeModelsError {
             InlineErrorLabel(error)
         }
-        Text("Uses your Claude Code account. Manage the connection in Providers → Anthropic.")
+        Text("Uses your Claude Code account. Manage the connection in Connections & Models → Claude.")
             .font(.caption).foregroundStyle(.secondary)
             .task(id: configuration.claudeExecutablePath) { await settings.loadClaudeModelsIfNeeded() }
     }

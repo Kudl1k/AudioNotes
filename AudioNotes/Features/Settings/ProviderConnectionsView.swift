@@ -5,11 +5,16 @@ struct ProviderConnectionsView: View {
     @ObservedObject var model: ProviderSettingsViewModel
     let localAISettings: LocalAISettingsViewModel
     let selectedProvider: ConnectionProvider
+    @State private var keyEditorProvider: ConnectionProvider?
+    @State private var confirmsKeyRemoval = false
+    @State private var confirmsChatGPTDisconnect = false
+    @State private var confirmsGoogleDisconnect = false
+    @State private var confirmsGeminiKeyRemoval = false
 
     enum ConnectionProvider: String, CaseIterable, Identifiable {
         case openAI = "OpenAI"
-        case anthropic = "Anthropic"
-        case gemini = "Gemini"
+        case anthropic = "Claude"
+        case gemini = "Google / Gemini"
         case local = "Local AI"
 
         var id: String { rawValue }
@@ -17,11 +22,6 @@ struct ProviderConnectionsView: View {
 
     var body: some View {
         Form {
-            Section("Provider connection") {
-                Text("Connect accounts and manage API keys here. Choose the provider and model for each feature in General.")
-                    .font(.callout).foregroundStyle(.secondary)
-            }
-
             switch selectedProvider {
             case .openAI: openAISections
             case .anthropic: anthropicSection
@@ -38,100 +38,117 @@ struct ProviderConnectionsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding(16)
+        .sheet(item: $keyEditorProvider, onDismiss: {
+            model.keyInput = ""
+            model.geminiKeyInput = ""
+        }, content: keyEditor)
+        .confirmationDialog("Disconnect Google?", isPresented: $confirmsGoogleDisconnect, titleVisibility: .visible) {
+            Button("Disconnect Google", role: .destructive) { Task { await model.disconnectGoogle() } }
+        }
+        .confirmationDialog("Remove Gemini API Key?", isPresented: $confirmsGeminiKeyRemoval, titleVisibility: .visible) {
+            Button("Remove Key", role: .destructive) { Task { await model.removeProviderKey(.gemini) } }
+        }
+        .confirmationDialog("Remove OpenAI API Key?", isPresented: $confirmsKeyRemoval, titleVisibility: .visible) {
+            Button("Remove Key", role: .destructive) { Task { await model.removeKey() } }
+        } message: {
+            Text("Features using OpenAI API billing will need a new key.")
+        }
+        .confirmationDialog("Disconnect ChatGPT?", isPresented: $confirmsChatGPTDisconnect, titleVisibility: .visible) {
+            Button("Disconnect ChatGPT", role: .destructive) { Task { await model.disconnectChatGPT() } }
+        } message: {
+            Text("Summaries and chat that use the ChatGPT plan will need you to sign in again.")
+        }
     }
 
     @ViewBuilder
     private var openAISections: some View {
-        Section("OpenAI Credentials") {
-            Label(model.status, systemImage: model.keyIsConfigured ? "key.fill" : "key")
-            SecureField(model.keyIsConfigured ? "Enter a replacement API key" : "Enter an API key", text: $model.keyInput)
-                .autocorrectionDisabled()
-                .disabled(model.isBusy)
-            HStack {
-                Button(model.keyIsConfigured ? "Update Key" : "Save Key") {
-                    Task { await model.saveKey() }
-                }
-                .disabled(model.isBusy || model.keyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                Button("Remove Key", role: .destructive) {
-                    Task { await model.removeKey() }
-                }
-                .disabled(model.isBusy || !model.keyIsConfigured)
-
-                if model.isBusy {
-                    ProgressView().controlSize(.small)
-                }
-            }
-            Text("Stored securely in macOS Keychain.")
-                .font(.caption).foregroundStyle(.secondary)
-        }
-
-        Section("ChatGPT Account (Sign in with ChatGPT)") {
+        Section {
             if let account = model.chatGPTAccount {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Image(systemName: "person.crop.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(.blue)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(account.email ?? account.displayName ?? "Connected Account")
-                                .font(.headline)
-                            Text("Client: \(account.issuedClientID)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    if account.planUsageEnabled {
-                        Label("ChatGPT Plan Usage: Active", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                            .font(.subheadline)
-                    } else {
-                        Label("Plan Permission Not Granted", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .font(.subheadline)
-                    }
+                LabeledContent("Status", value: "Connected")
+                LabeledContent("Account") {
+                    Text(account.email ?? account.displayName ?? "ChatGPT account")
+                        .textSelection(.enabled)
                 }
-                .padding(.vertical, 4)
-
-                HStack {
-                    Link(AccountUsageProvider.chatGPT.dashboardTitle, destination: AccountUsageProvider.chatGPT.dashboardURL)
-                    Spacer()
-                    Button("Disconnect", role: .destructive) {
-                        Task { await model.disconnectChatGPT() }
-                    }
+                LabeledContent("Plan Access", value: account.planUsageEnabled ? "Authorized" : "Not Authorized")
+                Link(AccountUsageProvider.chatGPT.dashboardTitle, destination: AccountUsageProvider.chatGPT.dashboardURL)
+                Button("Disconnect ChatGPT…", role: .destructive) { confirmsChatGPTDisconnect = true }
                     .disabled(model.chatGPTIsBusy)
-                }
+            } else if model.chatGPTIsBusy {
+                ProgressView("Connecting in browser…").controlSize(.small)
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Connect your ChatGPT subscription (Plus/Team/Pro) to generate summaries and chat without API billing.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    HStack {
-                        Button {
-                            Task { await model.signInWithChatGPT() }
-                        } label: {
-                            if model.chatGPTIsBusy {
-                                HStack(spacing: 6) {
-                                    ProgressView().controlSize(.small)
-                                    Text("Connecting in browser…")
-                                }
-                            } else {
-                                Label("Sign in with ChatGPT", systemImage: "arrow.up.right.square")
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.chatGPTIsBusy)
-                    }
-
-                    if let err = model.chatGPTErrorMessage {
-                        InlineErrorLabel(err)
-                    }
+                LabeledContent("Status", value: "Not Connected")
+                Button("Sign in with ChatGPT") {
+                    Task { await model.signInWithChatGPT() }
                 }
-                .padding(.vertical, 4)
+            }
+            if let error = model.chatGPTErrorMessage { InlineErrorLabel(error) }
+        } header: {
+            Text("ChatGPT Account")
+        } footer: {
+            Text("Use your ChatGPT plan for summaries and chat.")
+        }
+
+        Section {
+            LabeledContent("Status", value: model.keyIsConfigured ? "Configured" : "Not Configured")
+            Button(model.keyIsConfigured ? "Replace API Key…" : "Add API Key…") {
+                model.keyInput = ""
+                keyEditorProvider = .openAI
+            }
+            .disabled(model.isBusy)
+            if model.keyIsConfigured {
+                Button("Remove Key…", role: .destructive) { confirmsKeyRemoval = true }
+                    .disabled(model.isBusy)
+            }
+        } header: {
+            Text("OpenAI API Key")
+        } footer: {
+            Text("Enables transcription, summaries, and chat with OpenAI API billing.")
+        }
+    }
+
+    private func keyEditor(for provider: ConnectionProvider) -> some View {
+        let isGemini = provider == .gemini
+        let configured = isGemini ? model.geminiKeyIsConfigured : model.keyIsConfigured
+        let input = isGemini ? $model.geminiKeyInput : $model.keyInput
+        let providerName = isGemini ? "Gemini" : "OpenAI"
+        let canSave = !model.isBusy && !input.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let save: () -> Void = {
+            Task { @MainActor in
+                if isGemini {
+                    await model.saveProviderKey(.gemini)
+                } else {
+                    await model.saveKey()
+                }
+                if model.errorMessage == nil { keyEditorProvider = nil }
             }
         }
+
+        return Form {
+            Section {
+                SecureField("API Key", text: input)
+                    .autocorrectionDisabled()
+                    .disabled(model.isBusy)
+                    .onSubmit { if canSave { save() } }
+                if let error = model.errorMessage { InlineErrorLabel(error) }
+            } header: {
+                Text(configured ? "Replace \(providerName) API Key" : "Add \(providerName) API Key")
+            } footer: {
+                Text("Your key is stored in Keychain.")
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { keyEditorProvider = nil }
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(model.isBusy)
+                Button("Save Key") { if canSave { save() } }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canSave)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(minWidth: 380)
+        .interactiveDismissDisabled(model.isBusy)
     }
 
     private var anthropicSection: some View {
@@ -164,49 +181,50 @@ struct ProviderConnectionsView: View {
         }
     }
 
+    @ViewBuilder
     private var geminiSection: some View {
-        Section("Google Gemini API") {
-            if let error = model.googleOAuthConfigurationError {
-                Text(error).font(.caption).foregroundStyle(.secondary)
-            } else if model.googleOAuthIsConfigured {
-                Label("Google sign-in configured by the app", systemImage: "checkmark.circle")
-            }
+        Section {
             if let account = model.googleAccount {
-                Label(account.email.map { "Connected with Google · \($0)" } ?? "Connected with Google", systemImage: "person.crop.circle.fill")
+                LabeledContent("Status", value: "Connected")
+                LabeledContent("Account") {
+                    Text(account.email ?? "Google account").textSelection(.enabled)
+                }
                 Link(AccountUsageProvider.gemini.dashboardTitle, destination: AccountUsageProvider.gemini.dashboardURL)
-                Button("Disconnect Google", role: .destructive) { Task { await model.disconnectGoogle() } }
+                Button("Disconnect Google…", role: .destructive) { confirmsGoogleDisconnect = true }
                     .disabled(model.googleOAuthIsBusy)
+            } else if model.googleOAuthIsBusy {
+                ProgressView("Connecting in browser…").controlSize(.small)
             } else {
-                Button {
-                    Task { await model.connectGoogle() }
-                } label: {
-                    if model.googleOAuthIsBusy { ProgressView().controlSize(.small) }
-                    else { Label("Sign in with Google", systemImage: "person.crop.circle") }
+                LabeledContent("Status", value: "Not Connected")
+                Button("Sign in with Google") { Task { await model.connectGoogle() } }
+                    .disabled(!model.googleOAuthIsConfigured)
+                if let error = model.googleOAuthConfigurationError {
+                    Text(error).font(.caption).foregroundStyle(.secondary)
                 }
-                .disabled(model.googleOAuthIsBusy || !model.googleOAuthIsConfigured)
             }
-            Text("Google OAuth authorizes Gemini API access for the configured Google Cloud project. It does not imply that a consumer Gemini subscription pays for API use.")
-                .font(.caption).foregroundStyle(.secondary)
             if let error = model.googleOAuthError { InlineErrorLabel(error) }
-            Label(model.geminiKeyIsConfigured ? "API key configured" : "No API key configured",
-                  systemImage: model.geminiKeyIsConfigured ? "key.fill" : "key")
-            SecureField(model.geminiKeyIsConfigured ? "Enter a replacement Gemini API key" : "Enter a Gemini API key",
-                        text: $model.geminiKeyInput)
-                .autocorrectionDisabled()
-                .disabled(model.isBusy)
-            HStack {
-                Button(model.geminiKeyIsConfigured ? "Update Key" : "Save Key") {
-                    Task { await model.saveProviderKey(.gemini) }
-                }
-                .disabled(model.isBusy || model.geminiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Button("Remove Key", role: .destructive) {
-                    Task { await model.removeProviderKey(.gemini) }
-                }
-                .disabled(model.isBusy || !model.geminiKeyIsConfigured)
+        } header: {
+            Text("Google Account")
+        } footer: {
+            Text("Google sign-in authorizes Gemini API access billed to the configured Google Cloud project.")
+        }
+
+        Section {
+            LabeledContent("Status", value: model.geminiKeyIsConfigured ? "Configured" : "Not Configured")
+            Button(model.geminiKeyIsConfigured ? "Replace API Key…" : "Add API Key…") {
+                model.geminiKeyInput = ""
+                keyEditorProvider = .gemini
             }
-            Text("Use a Gemini API key from Google AI Studio. This credential is independent from Google OAuth; neither method implies consumer Gemini subscription billing.")
-                .font(.caption).foregroundStyle(.secondary)
+            .disabled(model.isBusy)
+            if model.geminiKeyIsConfigured {
+                Button("Remove Key…", role: .destructive) { confirmsGeminiKeyRemoval = true }
+                    .disabled(model.isBusy)
+            }
             Link("Get a Gemini API key…", destination: URL(string: "https://ai.google.dev/gemini-api/docs/api-key")!)
+        } header: {
+            Text("Gemini API Key")
+        } footer: {
+            Text("Uses Gemini API billing with a key from Google AI Studio.")
         }
     }
 }

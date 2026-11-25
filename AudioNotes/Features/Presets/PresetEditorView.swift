@@ -23,6 +23,7 @@ struct PresetEditorView: View {
     @State private var topP: Double
     @State private var reasoningEffort: ReasoningEffort
     @State private var outputLength: OutputLength
+    @State private var showModelOverride = false
     @State private var showAdvanced: Bool = false
     @State private var errorMessage: String?
 
@@ -57,14 +58,17 @@ struct PresetEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Preset Details") {
-                    TextField("Preset Name", text: $name, prompt: Text("e.g. Action-Oriented Meeting"))
+                Section("Name & Format") {
+                    TextField("Name", text: $name, prompt: Text("e.g. Meeting Notes"))
 
-                    Picker("Feature", selection: $feature) {
-                        Text("Summary").tag(AIPresetFeature.summary)
-                        Text("Chat").tag(AIPresetFeature.chat)
+                    if existingPreset == nil {
+                        Picker("Feature", selection: $feature) {
+                            Text("Summaries").tag(AIPresetFeature.summary)
+                            Text("Chat").tag(AIPresetFeature.chat)
+                        }
+                    } else {
+                        LabeledContent("Feature", value: feature == .summary ? "Summaries" : "Chat")
                     }
-                    .disabled(existingPreset != nil)
 
                     if feature == .summary {
                         Picker("Base Format", selection: $basePreset) {
@@ -80,24 +84,14 @@ struct PresetEditorView: View {
                     Picker(feature == .summary ? "Summary length" : "Chat response length", selection: $outputLength) {
                         ForEach(OutputLength.allCases) { Text($0.title).tag($0) }
                     }
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Custom Prompt Instructions")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        TextEditor(text: $userInstructions)
-                            .font(.system(.body, design: .monospaced))
-                            .frame(minHeight: 90)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                            )
-                    }
+                    TextField("Custom instructions", text: $userInstructions, axis: .vertical)
+                        .lineLimit(4...8)
                 }
 
-                DisclosureGroup(isExpanded: $showAdvanced) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Picker("Provider Override", selection: $selectedProvider) {
-                            Text("Use Default").tag(Optional<LLMProviderID>.none)
+                Section {
+                    DisclosureGroup("Override Default Model", isExpanded: $showModelOverride) {
+                        Picker("Provider", selection: $selectedProvider) {
+                            Text("Use App Default").tag(Optional<LLMProviderID>.none)
                             Text("OpenAI").tag(Optional(LLMProviderID.openAI))
 #if DEBUG
                             Text("Mock Provider").tag(Optional(LLMProviderID.mock))
@@ -117,45 +111,33 @@ struct PresetEditorView: View {
                         if selectedProvider == .openAI || selectedProvider == .anthropic || selectedProvider == .gemini {
                             TextField("Model Override (Optional)", text: $selectedModel, prompt: Text("e.g. gpt-4o, o3-mini"))
                         }
+                    }
+                }
 
-                        HStack {
-                            Text("Max Output Tokens:")
-                            TextField("Default", text: $maxTokens)
-                                .frame(width: 90)
+                Section {
+                    DisclosureGroup("Advanced Generation", isExpanded: $showAdvanced) {
+                        TextField("Max Output Tokens", text: $maxTokens, prompt: Text("Default"))
+#if os(iOS)
+                            .keyboardType(.numberPad)
+#endif
+                        VStack(alignment: .leading) {
+                            LabeledContent("Temperature", value: temperature.formatted(.number.precision(.fractionLength(2))))
+                                .monospacedDigit()
+                            Slider(value: $temperature, in: 0.0...2.0, step: 0.05) { Text("Temperature") }
                         }
 
                         VStack(alignment: .leading) {
-                            HStack {
-                                Text("Temperature:")
-                                Spacer()
-                                Text(String(format: "%.2f", temperature))
-                                    .monospacedDigit()
-                                    .foregroundStyle(.secondary)
-                            }
-                            Slider(value: $temperature, in: 0.0...2.0, step: 0.05)
+                            LabeledContent("Top P", value: topP.formatted(.number.precision(.fractionLength(2))))
+                                .monospacedDigit()
+                            Slider(value: $topP, in: 0.0...1.0, step: 0.05) { Text("Top P") }
                         }
 
-                        VStack(alignment: .leading) {
-                            HStack {
-                                Text("Top P:")
-                                Spacer()
-                                Text(String(format: "%.2f", topP))
-                                    .monospacedDigit()
-                                    .foregroundStyle(.secondary)
-                            }
-                            Slider(value: $topP, in: 0.0...1.0, step: 0.05)
-                        }
-
-                        Picker("Reasoning Effort (o1/o3):", selection: $reasoningEffort) {
+                        Picker("Reasoning Effort", selection: $reasoningEffort) {
                             ForEach(ReasoningEffort.allCases, id: \.self) { effort in
                                 Text(effort.rawValue.capitalized).tag(effort)
                             }
                         }
                     }
-                    .padding(.vertical, 6)
-                } label: {
-                    Text("Advanced Generation Settings")
-                        .font(.headline)
                 }
 
                 if let errorMessage {
@@ -165,6 +147,9 @@ struct PresetEditorView: View {
                 }
             }
             .formStyle(.grouped)
+#if os(macOS)
+            .disclosureGroupStyle(FullWidthDisclosureStyle())
+#endif
             .navigationTitle(existingPreset == nil ? "New AI Preset" : "Edit AI Preset")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

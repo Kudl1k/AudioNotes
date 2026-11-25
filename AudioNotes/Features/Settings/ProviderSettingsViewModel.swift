@@ -143,7 +143,8 @@ final class ProviderSettingsViewModel: ObservableObject {
     }
 
     func loadClaudeModelsIfNeeded() async {
-        guard let llmConfig, claudeModelsAttemptedPath != llmConfig.claudeExecutablePath else { return }
+        guard let llmConfig, llmConfig.cachedClaudeModels.isEmpty,
+              claudeModelsAttemptedPath != llmConfig.claudeExecutablePath else { return }
         await fetchClaudeModels()
     }
 
@@ -160,10 +161,12 @@ final class ProviderSettingsViewModel: ObservableObject {
             guard llmConfig.claudeExecutablePath == path else { return }
             guard !models.isEmpty else { throw ClaudeCLIError.invalidResponse }
             llmConfig.cachedClaudeModels = models
-        } catch is CancellationError {
-            claudeModelsAttemptedPath = nil
         } catch {
-            if llmConfig.claudeExecutablePath == path { claudeModelsError = error.localizedDescription }
+            if Task.isCancelled || error is CancellationError {
+                claudeModelsAttemptedPath = nil
+            } else if llmConfig.claudeExecutablePath == path {
+                claudeModelsError = error.localizedDescription
+            }
         }
     }
 

@@ -3,6 +3,8 @@ import SwiftUI
 
 struct IOSSettingsView: View {
     let services: AppServices
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
     @StateObject private var providerSettings: ProviderSettingsViewModel
     @State private var disconnectChatGPT = false
@@ -30,6 +32,7 @@ struct IOSSettingsView: View {
         case localAI
         case usage
         case information(ReleaseInformationView.Page)
+        case privacy
         case about
     }
 
@@ -61,6 +64,7 @@ struct IOSSettingsView: View {
         case .gemini: return [.gemini]
         case .localAI: return [.localAI]
         case .usage: return [.usage]
+        case .privacy: return [.privacy]
         }
     }
 
@@ -79,189 +83,241 @@ struct IOSSettingsView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
-            Form {
-                Section {
-                    Toggle("Local Only", isOn: Binding(
-                        get: { services.llmConfiguration.localAI.localOnly },
-                        set: { services.llmConfiguration.localAI.localOnly = $0 }
-                    ))
-                    .accessibilityIdentifier("settings.localOnly")
-                } header: {
-                    Text("Privacy")
-                } footer: {
-                    Text("Keep AI source content on this device. Cloud providers and remote servers are blocked. Download on-device models in Local AI before going offline.")
-                }
-
-                Section {
-                    NavigationLink(value: Destination.transcription) {
-                        defaultRow(
-                            "Transcription",
-                            icon: "waveform",
-                            provider: services.configuration.selectedProvider.title,
-                            model: services.configuration.selectedProvider == .localWhisper
-                                ? services.llmConfiguration.localAI.whisperModel
-                                : services.configuration.openAIModel.title
-                        )
-                    }
-                    .accessibilityIdentifier("settings.transcription")
-
-                    NavigationLink(value: Destination.summary) {
-                        defaultRow(
-                            "Summaries",
-                            icon: "doc.text",
-                            provider: services.llmConfiguration.summaryProvider == .openAI && services.llmConfiguration.summaryAuthMethod == .chatGPT
-                                ? "ChatGPT"
-                                : services.llmConfiguration.summaryProvider.title,
-                            model: services.llmConfiguration.summaryProvider == .gemini
-                                ? services.llmConfiguration.summaryGeminiModel
-                                : services.llmConfiguration.summaryAuthMethod == .chatGPT
-                                    ? services.llmConfiguration.summaryChatGPTModel
-                                    : services.llmConfiguration.summaryOpenAIModel.title
-                        )
-                    }
-                    .accessibilityIdentifier("settings.summary")
-
-                    NavigationLink(value: Destination.chat) {
-                        defaultRow(
-                            "Chat",
-                            icon: "bubble.left.and.bubble.right",
-                            provider: services.llmConfiguration.chatProvider == .openAI && services.llmConfiguration.chatAuthMethod == .chatGPT
-                                ? "ChatGPT"
-                                : services.llmConfiguration.chatProvider.title,
-                            model: services.llmConfiguration.chatProvider == .gemini
-                                ? services.llmConfiguration.chatGeminiModel
-                                : services.llmConfiguration.chatAuthMethod == .chatGPT
-                                    ? services.llmConfiguration.chatChatGPTModel
-                                    : services.llmConfiguration.chatOpenAIModel.title
-                        )
-                    }
-                    .accessibilityIdentifier("settings.chat")
-
-                    NavigationLink(value: Destination.presets) {
-                        Label("Presets", systemImage: "slider.horizontal.3")
-                    }
-                    .accessibilityIdentifier("settings.presets")
-                } header: {
-                    Text("AI Defaults")
-                } footer: {
-                    Text("Connect accounts in Providers to make them available. Transcription, Summaries, and Chat defaults are independent.")
-                }
-
-                Section {
-                    NavigationLink(value: Destination.openAI) {
-                        providerRow(
-                            "OpenAI",
-                            brandImage: "OpenAIProvider",
-                            templateBrand: true,
-                            systemIcon: "sparkles",
-                            status: openAIStatusText
-                        )
-                    }
-                    .accessibilityIdentifier("settings.chatgpt")
-
-                    NavigationLink(value: Destination.gemini) {
-                        providerRow(
-                            "Google / Gemini",
-                            brandImage: "GeminiProvider",
-                            templateBrand: false,
-                            systemIcon: "star",
-                            status: geminiStatusText
-                        )
-                    }
-                    .accessibilityIdentifier("settings.gemini")
-
-                    NavigationLink(value: Destination.localAI) {
-                        providerRow(
-                            "Local AI",
-                            brandImage: nil,
-                            templateBrand: false,
-                            systemIcon: "cpu",
-                            status: localAIStatusText,
-                            showsLoading: false
-                        )
-                    }
-                    .accessibilityIdentifier("settings.localAI")
-                } header: {
-                    Text("Providers")
-                } footer: {
-                    Text("An OpenAI API key enables OpenAI transcription. ChatGPT plan access covers summaries and chat only.")
-                }
-
-                Section("Usage") {
-                    NavigationLink(value: Destination.usage) {
-                        Label("Usage & Costs", systemImage: "dollarsign.circle")
-                    }
-                    .accessibilityIdentifier("settings.usage")
-                }
-
-                Section("Storage, Help & About") {
-                    NavigationLink(value: Destination.information(.privacy)) {
-                        Label("Privacy", systemImage: "hand.raised")
-                    }
-                    NavigationLink(value: Destination.information(.help)) {
-                        Label("Soniquill Help", systemImage: "questionmark.circle")
-                    }
-                    NavigationLink(value: Destination.information(.licenses)) {
-                        Label("Third-Party Licenses", systemImage: "doc.plaintext")
-                    }
-                    NavigationLink(value: Destination.about) {
-                        LabeledContent {
-                            Text("\(ReleaseIdentity().version) (\(ReleaseIdentity().build))")
-                        } label: {
-                            Label("About Soniquill", systemImage: "info.circle")
-                        }
+        Group {
+            if horizontalSizeClass == .regular {
+                NavigationSplitView {
+                    List { overviewSections }
+                        .listStyle(.sidebar)
+                        .navigationTitle("Settings")
+                        .toolbar { doneItem }
+                } detail: {
+                    NavigationStack(path: detailPath) {
+                        let selection = path.first ?? .transcription
+                        destinationView(selection)
+                            .id(selection)
+                            .navigationDestination(for: Destination.self, destination: destinationView)
                     }
                 }
-            }
-            .navigationDestination(for: Destination.self) { destination in
-                switch destination {
-                case .transcription: transcriptionDefaults
-                case .summary: summaryDefaults
-                case .chat: chatDefaults
-                case .defaults: defaultsScreen
-                case .presets: PresetsManagementView().navigationTitle("Presets").navigationBarTitleDisplayMode(.inline)
-                case .openAI: openAIScreen
-                case .openAIKey: openAIKeyScreen
-                case .gemini: geminiScreen
-                case .localAI: IOSLocalAISettingsView(services: services)
-                case .usage: UsageCostView(isEmbedded: true)
-                case .information(let page): ReleaseInformationView(page: page)
-                case .about: aboutScreen
+                .navigationSplitViewStyle(.balanced)
+            } else {
+                NavigationStack(path: $path) {
+                    Form { overviewSections }
+                        .navigationDestination(for: Destination.self, destination: destinationView)
+                        .navigationTitle("Settings")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar { doneItem }
                 }
-            }
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-            .task {
-#if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--performance-fixtures") {
-                    if ProcessInfo.processInfo.arguments.contains("--ios-review-connected-accounts") {
-                        reviewAccount = ChatGPTAccount(id: "offline-review", email: "long.synthetic.account.for.layout.review@example.invalid", issuedClientID: "offline-review", grantedScopes: [], planUsageEnabled: true, expiresAt: .distantFuture)
-                        geminiAccount = ProviderAccount(provider: .gemini, email: "long.synthetic.account.for.layout.review@example.invalid", authenticationMethod: .oauth, state: .connected)
-                    }
-                    if ProcessInfo.processInfo.arguments.contains("--ios-review-chatgpt") { path = [.openAI] }
-                    if ProcessInfo.processInfo.arguments.contains("--ios-review-gemini") { path = [.gemini] }
-                    if ProcessInfo.processInfo.arguments.contains("--ios-local-ai-review") { path = [.localAI] }
-                    if ProcessInfo.processInfo.arguments.contains("--ios-review-defaults") { path = [.defaults] }
-                    if ProcessInfo.processInfo.arguments.contains("--ios-review-openai-key") { path = [.openAIKey] }
-                    if ProcessInfo.processInfo.arguments.contains("--ios-review-usage") { path = [.usage] }
-                    isLoadingAccounts = false
-                    return
-                }
-#endif
-                await providerSettings.refresh()
-                await services.localAISettings.refreshInstalled()
-                guard !Task.isCancelled else { return }
-                geminiAccount = providerSettings.googleAccount
-                isLoadingAccounts = false
-                if providerSettings.isChatGPTPlanUsageEnabled { await providerSettings.fetchChatGPTModels() }
             }
         }
+        .presentationSizing(.page)
+        .task {
+#if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--performance-fixtures") {
+                if ProcessInfo.processInfo.arguments.contains("--ios-review-connected-accounts") {
+                    reviewAccount = ChatGPTAccount(id: "offline-review", email: "long.synthetic.account.for.layout.review@example.invalid", issuedClientID: "offline-review", grantedScopes: [], planUsageEnabled: true, expiresAt: .distantFuture)
+                    geminiAccount = ProviderAccount(provider: .gemini, email: "long.synthetic.account.for.layout.review@example.invalid", authenticationMethod: .oauth, state: .connected)
+                }
+                if ProcessInfo.processInfo.arguments.contains("--ios-review-chatgpt") { path = [.openAI] }
+                if ProcessInfo.processInfo.arguments.contains("--ios-review-gemini") { path = [.gemini] }
+                if ProcessInfo.processInfo.arguments.contains("--ios-local-ai-review") { path = [.localAI] }
+                if ProcessInfo.processInfo.arguments.contains("--ios-review-defaults") { path = [.defaults] }
+                if ProcessInfo.processInfo.arguments.contains("--ios-review-openai-key") { path = [.openAIKey] }
+                if ProcessInfo.processInfo.arguments.contains("--ios-review-usage") { path = [.usage] }
+                isLoadingAccounts = false
+                return
+            }
+#endif
+            await providerSettings.refresh()
+            await services.localAISettings.refreshInstalled()
+            guard !Task.isCancelled else { return }
+            geminiAccount = providerSettings.googleAccount
+            isLoadingAccounts = false
+        }
+    }
+
+    private var detailPath: Binding<[Destination]> {
+        Binding(
+            get: { Array(path.dropFirst()) },
+            set: { detail in
+                guard !detail.isEmpty || !path.isEmpty else { return }
+                path = [path.first ?? .transcription] + detail
+            }
+        )
+    }
+
+    private var doneItem: some ToolbarContent {
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Done") { dismiss() }
+        }
+    }
+
+    @ViewBuilder
+    private func rootLink<Content: View>(_ destination: Destination, @ViewBuilder content: () -> Content) -> some View {
+        if horizontalSizeClass == .regular {
+            let isSelected = (path.first ?? .transcription) == destination
+            Button { path = [destination] } label: {
+                content()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .listRowBackground(isSelected ? Color.accentColor.opacity(0.14) : nil)
+        } else {
+            NavigationLink(value: destination, label: content)
+        }
+    }
+
+    @ViewBuilder
+    private func destinationView(_ destination: Destination) -> some View {
+        switch destination {
+        case .transcription: transcriptionDefaults
+        case .summary: summaryDefaults
+        case .chat: chatDefaults
+        case .defaults: defaultsScreen
+        case .presets: PresetsManagementView().navigationTitle("Presets").navigationBarTitleDisplayMode(.inline)
+        case .openAI: openAIScreen
+        case .openAIKey: openAIKeyScreen
+        case .gemini: geminiScreen
+        case .localAI: IOSLocalAISettingsView(services: services)
+        case .usage: UsageCostView(isEmbedded: true)
+        case .information(let page): ReleaseInformationView(page: page)
+        case .privacy: privacyScreen
+        case .about: aboutScreen
+        }
+    }
+
+    @ViewBuilder
+    private var overviewSections: some View {
+        Section {
+            rootLink(.transcription) {
+                defaultRow(
+                    "Transcription",
+                    icon: "waveform",
+                    provider: services.configuration.selectedProvider.title,
+                    model: services.configuration.selectedProvider == .localWhisper
+                        ? services.llmConfiguration.localAI.whisperModel
+                        : services.configuration.openAIModel.title
+                )
+            }
+            .accessibilityIdentifier("settings.transcription")
+
+            rootLink(.summary) {
+                defaultRow(
+                    "Summaries",
+                    icon: "doc.text",
+                    provider: services.llmConfiguration.summaryProvider == .openAI && services.llmConfiguration.summaryAuthMethod == .chatGPT
+                        ? "ChatGPT"
+                        : services.llmConfiguration.summaryProvider.title,
+                    model: services.llmConfiguration.summaryProvider == .gemini
+                        ? services.llmConfiguration.summaryGeminiModel
+                        : services.llmConfiguration.summaryAuthMethod == .chatGPT
+                            ? services.llmConfiguration.summaryChatGPTModel
+                            : services.llmConfiguration.summaryOpenAIModel.title
+                )
+            }
+            .accessibilityIdentifier("settings.summary")
+
+            rootLink(.chat) {
+                defaultRow(
+                    "Chat",
+                    icon: "bubble.left.and.bubble.right",
+                    provider: services.llmConfiguration.chatProvider == .openAI && services.llmConfiguration.chatAuthMethod == .chatGPT
+                        ? "ChatGPT"
+                        : services.llmConfiguration.chatProvider.title,
+                    model: services.llmConfiguration.chatProvider == .gemini
+                        ? services.llmConfiguration.chatGeminiModel
+                        : services.llmConfiguration.chatAuthMethod == .chatGPT
+                            ? services.llmConfiguration.chatChatGPTModel
+                            : services.llmConfiguration.chatOpenAIModel.title
+                )
+            }
+            .accessibilityIdentifier("settings.chat")
+
+            rootLink(.presets) {
+                Label("Presets", systemImage: "slider.horizontal.3")
+            }
+            .accessibilityIdentifier("settings.presets")
+        } header: {
+            Text("AI Defaults")
+        }
+
+        Section {
+            rootLink(.openAI) {
+                providerRow(
+                    "OpenAI",
+                    brandImage: "OpenAIProvider",
+                    templateBrand: true,
+                    systemIcon: "sparkles",
+                    status: openAIStatusText
+                )
+            }
+            .accessibilityIdentifier("settings.chatgpt")
+
+            rootLink(.gemini) {
+                providerRow(
+                    "Google / Gemini",
+                    brandImage: "GeminiProvider",
+                    templateBrand: false,
+                    systemIcon: "star",
+                    status: geminiStatusText
+                )
+            }
+            .accessibilityIdentifier("settings.gemini")
+
+            rootLink(.localAI) {
+                providerRow(
+                    "Local AI",
+                    brandImage: nil,
+                    templateBrand: false,
+                    systemIcon: "cpu",
+                    status: localAIStatusText,
+                    showsLoading: false
+                )
+            }
+            .accessibilityIdentifier("settings.localAI")
+        } header: {
+            Text("Connections & Models")
+        }
+
+        Section("Usage") {
+            rootLink(.usage) {
+                Label("Usage & Costs", systemImage: "dollarsign.circle")
+            }
+            .accessibilityIdentifier("settings.usage")
+        }
+
+        Section("Soniquill") {
+            rootLink(.privacy) { Label("Privacy & Data", systemImage: "hand.raised") }
+            rootLink(.about) { Label("Help & About", systemImage: "info.circle") }
+        }
+    }
+
+    private var privacyScreen: some View {
+        Form {
+            Section {
+                Toggle("Local Only", isOn: Binding(
+                    get: { services.llmConfiguration.localAI.localOnly },
+                    set: { services.llmConfiguration.localAI.localOnly = $0 }
+                ))
+                .accessibilityIdentifier("settings.localOnly")
+                NavigationLink(value: Destination.localAI) {
+                    Label("Manage Local Models", systemImage: "cpu")
+                }
+            } header: {
+                Text("AI Privacy")
+            } footer: {
+                Text("Local Only keeps AI source content on this device by blocking cloud providers and remote servers.")
+            }
+
+            Section("Data") {
+                NavigationLink(value: Destination.information(.privacy)) {
+                    Label("Privacy Policy", systemImage: "hand.raised")
+                }
+            }
+        }
+        .navigationTitle("Privacy & Data")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     // MARK: - Row Builders & Status
@@ -290,7 +346,7 @@ struct IOSSettingsView: View {
 
     private var localAIStatusText: String {
         let count = services.localAISettings.installed.count
-        if count == 0 { return "On Device" }
+        if count == 0 { return "No Whisper Models Installed" }
         return count == 1 ? "1 Model Installed" : "\(count) Models Installed"
     }
 
@@ -302,41 +358,44 @@ struct IOSSettingsView: View {
         status: String,
         showsLoading: Bool = true
     ) -> some View {
-        LabeledContent {
-            if showsLoading && isLoadingAccounts {
-                ProgressView().accessibilityLabel("Loading account status")
+        let label = Label {
+            Text(title)
+        } icon: {
+            if let brandImage {
+                Image(brandImage)
+                    .renderingMode(templateBrand ? .template : .original)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.primary)
+                    .frame(width: 18, height: 18)
+                    .accessibilityHidden(true)
             } else {
-                Text(status)
+                Image(systemName: systemIcon)
             }
-        } label: {
-            Label {
-                Text(title)
-            } icon: {
-                if let brandImage {
-                    Image(brandImage)
-                        .renderingMode(templateBrand ? .template : .original)
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundStyle(.primary)
-                        .frame(width: 18, height: 18)
-                        .accessibilityHidden(true)
-                } else {
-                    Image(systemName: systemIcon)
+        }
+        return Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 4) {
+                    label
+                    providerStatus(status, showsLoading: showsLoading)
+                        .foregroundStyle(.secondary)
                 }
+            } else {
+                LabeledContent {
+                    providerStatus(status, showsLoading: showsLoading)
+                } label: { label }
             }
         }
         .accessibilityElement(children: .combine)
     }
 
-    private func accountRow(_ title: String, connected: Bool, connectedText: String = "Connected", disconnectedText: String = "Not Connected") -> some View {
-        LabeledContent(title) {
-            if isLoadingAccounts {
-                ProgressView().accessibilityLabel("Loading account status")
-            } else {
-                Text(connected ? connectedText : disconnectedText)
-            }
+    @ViewBuilder
+    private func providerStatus(_ status: String, showsLoading: Bool) -> some View {
+        if showsLoading && isLoadingAccounts {
+            ProgressView().accessibilityLabel("Loading account status")
+        } else {
+            Text(status)
         }
-        .accessibilityElement(children: .combine)
     }
 
     private func defaultRow(_ title: String, icon: String, provider: String, model: String) -> some View {
@@ -379,6 +438,7 @@ struct IOSSettingsView: View {
                         .disabled(isOfflineReview)
                         .accessibilityIdentifier("settings.chatgpt.disconnect")
                 } else {
+                    LabeledContent("Status", value: "Not Connected")
                     Button(isConnectingAccount ? "Connecting…" : "Sign in with ChatGPT") {
                         Task {
                             isConnectingAccount = true
@@ -390,24 +450,21 @@ struct IOSSettingsView: View {
                     .disabled(isConnectingAccount || isOfflineReview)
                 }
             } header: {
-                Text("ChatGPT Account (Sign in with ChatGPT)")
+                Text("ChatGPT Account")
             } footer: {
-                Text("Connect your ChatGPT subscription (Plus/Team/Pro) to generate summaries and chat without API billing.")
+                Text("Use your ChatGPT plan for summaries and chat.")
             }
 
             Section {
+                LabeledContent("Status", value: providerSettings.keyIsConfigured ? "Configured" : "Not Configured")
                 NavigationLink(value: Destination.openAIKey) {
-                    LabeledContent {
-                        Text(providerSettings.keyIsConfigured ? "Configured" : "Not Configured")
-                    } label: {
-                        Label("OpenAI API Key", systemImage: providerSettings.keyIsConfigured ? "key.fill" : "key")
-                    }
+                    Text(providerSettings.keyIsConfigured ? "Manage API Key" : "Add API Key")
                 }
                 .accessibilityIdentifier("settings.openai")
             } header: {
-                Text("OpenAI Credentials (API Key)")
+                Text("OpenAI API Key")
             } footer: {
-                Text("ChatGPT plan access does not cover transcription. Add an OpenAI API key to transcribe with OpenAI (Whisper and GPT-4o Transcribe) or use API-key billing.")
+                Text("Enables transcription, summaries, and chat with OpenAI API billing.")
             }
 
             Section("Usage") {
@@ -432,16 +489,17 @@ struct IOSSettingsView: View {
 
     private var geminiScreen: some View {
         Form {
-            Section("Google Account (OAuth)") {
+            Section {
                 if isLoadingAccounts {
                     ProgressView("Loading account status…")
                 } else if let geminiAccount {
                     LabeledContent("Status", value: "Connected")
-                    LabeledContent("Email") { Text(geminiAccount.email ?? "Google account").textSelection(.enabled) }
+                    LabeledContent("Account") { Text(geminiAccount.email ?? "Google account").textSelection(.enabled) }
                     Button("Disconnect Google", role: .destructive) { disconnectGemini = true }
                         .disabled(isOfflineReview)
                         .accessibilityIdentifier("settings.gemini.disconnect")
                 } else {
+                    LabeledContent("Status", value: "Not Connected")
                     Button(isConnectingAccount ? "Connecting…" : "Sign in with Google") {
                         Task {
                             isConnectingAccount = true
@@ -455,17 +513,22 @@ struct IOSSettingsView: View {
                         Text(error).font(.footnote).foregroundStyle(.secondary)
                     }
                 }
+            } header: {
+                Text("Google Account")
+            } footer: {
+                Text("Your Google account authorizes Gemini API access for summaries and chat.")
             }
 
             Section {
-                accountRow("Gemini Developer API", connected: geminiAccount != nil)
-                LabeledContent("Billing", value: "Google Cloud project")
+                LabeledContent("API Billing", value: "Google Cloud project")
                 if !isLoadingAccounts, geminiAccount != nil {
                     NavigationLink(value: Destination.usage) {
                         Text("Soniquill Usage & Costs")
                     }
                     Link(AccountUsageProvider.gemini.dashboardTitle, destination: AccountUsageProvider.gemini.dashboardURL)
                 }
+            } header: {
+                Text("Usage")
             } footer: {
                 Text("Google OAuth authorizes Gemini API access for the configured Google Cloud project. Gemini API usage is separate from a consumer Gemini subscription.")
             }
@@ -550,9 +613,29 @@ struct IOSSettingsView: View {
 
     // MARK: - Generation Defaults (Unified with macOS GenerationDefaultsView)
 
+    @ViewBuilder
+    private func openAIConnectionRow(selection: Binding<OpenAIAuthenticationMethod>) -> some View {
+        let methods = OpenAIAuthenticationMethod.allCases.filter { method in
+            switch method {
+            case .apiKey: providerSettings.keyIsConfigured
+            case .chatGPT: presentedChatGPTAccount?.planUsageEnabled == true
+            }
+        }
+        if methods == [selection.wrappedValue] {
+            LabeledContent("Connection", value: selection.wrappedValue.title)
+        } else if !methods.isEmpty {
+            Picker("Connection", selection: selection) {
+                if !methods.contains(selection.wrappedValue) {
+                    Text(selection.wrappedValue.title + " (Unavailable)").tag(selection.wrappedValue)
+                }
+                ForEach(methods) { Text($0.title).tag($0) }
+            }
+        }
+    }
+
     private var summaryDefaults: some View {
         Form {
-            Section("Summaries") {
+            Section("Model") {
                 Picker("Provider", selection: Binding<LLMProviderID?>(
                     get: { availableLLMProviders.contains(services.llmConfiguration.summaryProvider) ? Optional(services.llmConfiguration.summaryProvider) : nil },
                     set: { selection in
@@ -575,13 +658,10 @@ struct IOSSettingsView: View {
                 }
 
                 if services.llmConfiguration.summaryProvider == .openAI {
-                    Picker("Authentication", selection: Binding(
+                    openAIConnectionRow(selection: Binding(
                         get: { services.llmConfiguration.summaryAuthMethod },
                         set: { services.llmConfiguration.summaryAuthMethod = $0 }
-                    )) {
-                        if providerSettings.keyIsConfigured { Text("OpenAI API").tag(OpenAIAuthenticationMethod.apiKey) }
-                        if presentedChatGPTAccount?.planUsageEnabled == true { Text("ChatGPT Plan").tag(OpenAIAuthenticationMethod.chatGPT) }
-                    }
+                    ))
                     if services.llmConfiguration.summaryAuthMethod == .chatGPT {
                         Picker("Model", selection: Binding(
                             get: { services.llmConfiguration.summaryChatGPTModel },
@@ -591,6 +671,7 @@ struct IOSSettingsView: View {
                                 Text(model.displayName).tag(model.slug)
                             }
                         }
+                        .pickerStyle(.navigationLink)
                         if providerSettings.isFetchingChatGPTModels {
                             HStack { ProgressView(); Text("Fetching ChatGPT models…").foregroundStyle(.secondary) }
                         } else if presentedChatGPTAccount != nil {
@@ -605,6 +686,7 @@ struct IOSSettingsView: View {
                         )) {
                             ForEach(OpenAILLMModel.allCases) { model in Text(model.title).tag(model) }
                         }
+                        .pickerStyle(.navigationLink)
                     }
                 }
 
@@ -618,16 +700,20 @@ struct IOSSettingsView: View {
                     Text("Gemini Developer API use is billed to the configured Google Cloud project. Gemini Advanced does not pay API charges.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+            }
 
+            Section("Output") {
                 Picker("Detail Level", selection: Binding(
                     get: { services.llmConfiguration.summaryOutputLength },
                     set: { services.llmConfiguration.summaryOutputLength = $0 }
                 )) {
                     ForEach(OutputLength.allCases) { Text($0.title).tag($0) }
                 }
+            }
 
-                if services.llmConfiguration.summaryCapabilities.supportsMaxOutputTokens || services.llmConfiguration.summaryCapabilities.supportsTemperature {
-                    DisclosureGroup("Advanced Summary Settings", isExpanded: $showAdvancedSummary) {
+            if services.llmConfiguration.summaryCapabilities.supportsMaxOutputTokens || services.llmConfiguration.summaryCapabilities.supportsTemperature {
+                Section {
+                    DisclosureGroup("Advanced", isExpanded: $showAdvancedSummary) {
                         if services.llmConfiguration.summaryCapabilities.supportsMaxOutputTokens {
                             LabeledContent("Max output tokens") {
                                 TextField("Tokens", value: Binding(
@@ -678,7 +764,7 @@ struct IOSSettingsView: View {
 
     private var chatDefaults: some View {
         Form {
-            Section("Chat") {
+            Section("Model") {
                 Picker("Provider", selection: Binding<LLMProviderID?>(
                     get: { availableLLMProviders.contains(services.llmConfiguration.chatProvider) ? Optional(services.llmConfiguration.chatProvider) : nil },
                     set: { selection in
@@ -701,13 +787,10 @@ struct IOSSettingsView: View {
                 }
 
                 if services.llmConfiguration.chatProvider == .openAI {
-                    Picker("Authentication", selection: Binding(
+                    openAIConnectionRow(selection: Binding(
                         get: { services.llmConfiguration.chatAuthMethod },
                         set: { services.llmConfiguration.chatAuthMethod = $0 }
-                    )) {
-                        if providerSettings.keyIsConfigured { Text("OpenAI API").tag(OpenAIAuthenticationMethod.apiKey) }
-                        if presentedChatGPTAccount?.planUsageEnabled == true { Text("ChatGPT Plan").tag(OpenAIAuthenticationMethod.chatGPT) }
-                    }
+                    ))
                     if services.llmConfiguration.chatAuthMethod == .chatGPT {
                         Picker("Model", selection: Binding(
                             get: { services.llmConfiguration.chatChatGPTModel },
@@ -717,6 +800,7 @@ struct IOSSettingsView: View {
                                 Text(model.displayName).tag(model.slug)
                             }
                         }
+                        .pickerStyle(.navigationLink)
                         if providerSettings.isFetchingChatGPTModels {
                             HStack { ProgressView(); Text("Fetching ChatGPT models…").foregroundStyle(.secondary) }
                         } else if presentedChatGPTAccount != nil {
@@ -733,6 +817,7 @@ struct IOSSettingsView: View {
                         )) {
                             ForEach(OpenAILLMModel.allCases) { model in Text(model.title).tag(model) }
                         }
+                        .pickerStyle(.navigationLink)
                         Text("Chat is billed per token by OpenAI. Responses use reasoning where supported.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
@@ -748,16 +833,20 @@ struct IOSSettingsView: View {
                     Text("Gemini Developer API use is billed to the configured Google Cloud project. Gemini Advanced does not pay API charges.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+            }
 
+            Section("Output") {
                 Picker("Response length", selection: Binding(
                     get: { services.llmConfiguration.chatOutputLength },
                     set: { services.llmConfiguration.chatOutputLength = $0 }
                 )) {
                     ForEach(OutputLength.allCases) { Text($0.title).tag($0) }
                 }
+            }
 
-                if services.llmConfiguration.chatCapabilities.supportsMaxOutputTokens || services.llmConfiguration.chatCapabilities.supportsTemperature {
-                    DisclosureGroup("Advanced Chat Settings", isExpanded: $showAdvancedChat) {
+            if services.llmConfiguration.chatCapabilities.supportsMaxOutputTokens || services.llmConfiguration.chatCapabilities.supportsTemperature {
+                Section {
+                    DisclosureGroup("Advanced", isExpanded: $showAdvancedChat) {
                         if services.llmConfiguration.chatCapabilities.supportsMaxOutputTokens {
                             LabeledContent("Max output tokens") {
                                 TextField("Tokens", value: Binding(
@@ -808,7 +897,7 @@ struct IOSSettingsView: View {
 
     private var transcriptionDefaults: some View {
         Form {
-            Section("Transcription") {
+            Section {
                 Picker("Provider", selection: Binding<TranscriptionProviderID?>(
                     get: { availableTranscriptionProviders.contains(services.configuration.selectedProvider) ? Optional(services.configuration.selectedProvider) : nil },
                     set: { if let provider = $0 { services.configuration.selectedProvider = provider } }
@@ -820,26 +909,15 @@ struct IOSSettingsView: View {
                 }
 
                 if services.configuration.selectedProvider == .localWhisper {
-                    Picker("On-device Model", selection: Binding(
+                    Picker("Model", selection: Binding(
                         get: { services.llmConfiguration.localAI.whisperModel },
                         set: { services.llmConfiguration.localAI.whisperModel = $0 }
                     )) {
                         ForEach(services.localAISettings.models) { Text("Whisper " + $0.title).tag($0.id) }
                     }
-                    Picker("Language", selection: Binding(
-                        get: { services.llmConfiguration.localAI.whisperLanguage },
-                        set: { services.llmConfiguration.localAI.whisperLanguage = $0 }
-                    )) {
-                        Text("Automatic detection").tag("")
-                        ForEach(LocalAISettingsViewModel.languages, id: \.self) { code in
-                            Text(Locale.current.localizedString(forLanguageCode: code) ?? code).tag(code)
-                        }
+                    if !services.localAISettings.installed.contains(services.llmConfiguration.localAI.whisperModel) {
+                        NavigationLink(value: Destination.localAI) { Text("Manage Whisper Models") }
                     }
-                    NavigationLink(value: Destination.localAI) {
-                        Text("Manage Whisper Models")
-                    }
-                    Text("No audio upload. Download a model explicitly before transcribing.")
-                        .font(.footnote).foregroundStyle(.secondary)
                 }
 
                 if services.configuration.selectedProvider == .openAI {
@@ -859,7 +937,45 @@ struct IOSSettingsView: View {
                     }
                     if let error = providerSettings.transcriptionModelsError { InlineErrorLabel(error) }
 
-                    Picker("Audio Language", selection: Binding(
+                }
+
+                if !isLoadingAccounts, !providerSettings.keyIsConfigured,
+                   services.configuration.selectedProvider == .openAI {
+                    NavigationLink(value: Destination.openAIKey) {
+                        Label("Set Up OpenAI API Key", systemImage: "key")
+                    }
+                    .accessibilityIdentifier("settings.transcription.addOpenAIKey")
+                }
+            } header: {
+                Text("Transcription Service")
+            } footer: {
+                switch services.configuration.selectedProvider {
+                case .mock:
+                    Text("Generates sample transcripts locally for development.")
+                case .localWhisper:
+                    Text("Processes audio on this device and provides segment timestamps.")
+                case .openAI:
+                    Text(services.configuration.openAIModel.supportsSegmentTimestamps
+                         ? "Provides segment timestamps for playback. Audio is sent to OpenAI for API billing."
+                         : "Returns transcript text. Audio is sent to OpenAI for API billing.")
+                }
+            }
+
+            if services.configuration.selectedProvider == .localWhisper {
+                Section("Audio") {
+                    Picker("Language", selection: Binding(
+                        get: { services.llmConfiguration.localAI.whisperLanguage },
+                        set: { services.llmConfiguration.localAI.whisperLanguage = $0 }
+                    )) {
+                        Text("Automatic detection").tag("")
+                        ForEach(LocalAISettingsViewModel.languages, id: \.self) { code in
+                            Text(Locale.current.localizedString(forLanguageCode: code) ?? code).tag(code)
+                        }
+                    }
+                }
+            } else if services.configuration.selectedProvider == .openAI {
+                Section("Audio") {
+                    Picker("Language", selection: Binding(
                         get: { services.configuration.language },
                         set: { services.configuration.language = $0 }
                     )) {
@@ -867,20 +983,18 @@ struct IOSSettingsView: View {
                             Text(lang.title).tag(lang)
                         }
                     }
-                    Text("Whisper-1 supplies segment timestamps for playback seeking. Audio is uploaded to OpenAI and billed per minute; larger recordings are split automatically.")
-                        .font(.footnote).foregroundStyle(.secondary)
                 }
-
             }
 
-            if !isLoadingAccounts, !providerSettings.keyIsConfigured {
+            if !isLoadingAccounts, !providerSettings.keyIsConfigured,
+               services.configuration.selectedProvider != .openAI {
                 Section {
                     NavigationLink(value: Destination.openAIKey) {
-                        Label("Add OpenAI API Key", systemImage: "key")
+                        Label("Set Up OpenAI API Key", systemImage: "key")
                     }
                     .accessibilityIdentifier("settings.transcription.addOpenAIKey")
                 } footer: {
-                    Text("An OpenAI API key enables OpenAI transcription (Whisper and GPT-4o Transcribe). ChatGPT plan sign-in does not cover transcription.")
+                    Text("An API key enables cloud transcription with OpenAI.")
                 }
             }
         }
@@ -900,32 +1014,17 @@ struct IOSSettingsView: View {
 
     private var aboutScreen: some View {
         Form {
-            Section("About Soniquill") {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Soniquill \(ReleaseIdentity().version) (\(ReleaseIdentity().build))")
-                        .font(.headline)
-                    Text("Native audio transcription, AI summaries, and interactive transcript chat.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
-
-                LabeledContent("Application", value: "Soniquill")
-                LabeledContent("Version", value: ReleaseIdentity().version)
-                LabeledContent("Build", value: ReleaseIdentity().build)
-                LabeledContent("Platform Shell", value: "Native iOS & iPadOS")
-            }
-
-            Section("Information") {
-                NavigationLink(value: Destination.information(.privacy)) {
-                    Label("Privacy", systemImage: "hand.raised")
-                }
+            Section("Help") {
                 NavigationLink(value: Destination.information(.help)) {
                     Label("Soniquill Help", systemImage: "questionmark.circle")
                 }
                 NavigationLink(value: Destination.information(.licenses)) {
                     Label("Third-Party Licenses", systemImage: "doc.plaintext")
                 }
+            }
+
+            Section("About Soniquill") {
+                LabeledContent("Version & Build", value: "\(ReleaseIdentity().version) (\(ReleaseIdentity().build))")
             }
 
 #if DEBUG
@@ -936,7 +1035,7 @@ struct IOSSettingsView: View {
             }
 #endif
         }
-        .navigationTitle("About Soniquill")
+        .navigationTitle("Help & About")
         .navigationBarTitleDisplayMode(.inline)
     }
 

@@ -235,7 +235,7 @@ struct RecordingDetailView: View {
                                         Text("The current transcript will be kept in history when the new version is ready.")
                                             .font(.callout).foregroundStyle(.secondary)
                                         HStack {
-                                            OpenSettingsLink { Text("Transcription Settings…") }
+                                            OpenSettingsLink(section: .transcription) { Text("Transcription Settings…") }
                                             Spacer()
                                             Button("Regenerate") {
                                                 showsRegenerationOptions = false

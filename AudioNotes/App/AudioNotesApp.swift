@@ -8,6 +8,7 @@ struct AudioNotesApp: App {
     @NSApplicationDelegateAdaptor(PerformanceFixtureApplicationDelegate.self) private var fixtureDelegate
 #endif
     @State private var services = AppServices()
+    @State private var settingsNavigation = SettingsNavigation()
     @State private var startup = LibraryStartup()
     @StateObject private var updates = UpdateService(enabled: !BuildEnvironment.isDevelopmentHost)
     private var container: ModelContainer? { startup.container }
@@ -54,7 +55,8 @@ struct AudioNotesApp: App {
                     googleOAuth: services.googleGeminiOAuth,
                     whisperStore: services.whisperStore,
                     localAISettings: services.localAISettings,
-                    updates: updates
+                    updates: updates,
+                    navigation: settingsNavigation
                 )
                 .modelContainer(container)
                 .environment(services.llmConfiguration.localAI)
@@ -74,8 +76,23 @@ struct AudioNotesApp: App {
             .environment(services.llmConfiguration.localAI)
             .frame(minWidth: 760, minHeight: 500)
             .modifier(WelcomePresentation())
+            .modifier(SettingsLinkRouting(navigation: settingsNavigation))
     }
 
+}
+
+private struct SettingsLinkRouting: ViewModifier {
+    @Environment(\.openSettings) private var openSettings
+    let navigation: SettingsNavigation
+
+    func body(content: Content) -> some View {
+        content.environment(\.openSettingsAction, OpenSettingsAction { section in
+            if let section {
+                navigation.request = .init(section: section)
+            }
+            openSettings()
+        })
+    }
 }
 
 private struct NewProjectKey: FocusedValueKey { typealias Value = () -> Void }
