@@ -496,9 +496,9 @@ final class DriveProjectSyncTests {
         #expect(first.uploaded == 2)
         let linkedID = try #require(await mocked.projectFolderID())
 
-        // Editor of someone else's folder: may sync, may not create a new sharing folder there.
+        // Editor of someone else's folder: may sync and may use it as a sharing folder.
         await mocked.setAccess(linkedID, owned: false, writable: true)
-        await #expect(throws: DriveProjectError.folderUnavailable) { try await remote.validateFolder(id: linkedID) }
+        _ = try await remote.validateFolder(id: linkedID)
         let editable = try await remote.validateFolder(id: linkedID, access: .linkPublished)
         #expect(editable.publishedProjectID == project.id)
         let editorRun = try await sync.run(projects: [snapshot], folder: editable, remote: remote) { _, _ in }
@@ -506,14 +506,15 @@ final class DriveProjectSyncTests {
 
         // Viewer: can verify and import, cannot sync.
         await mocked.setAccess(linkedID, owned: false, writable: false)
-        await #expect(throws: DriveProjectError.folderUnavailable) {
+        await #expect(throws: DriveProjectError.folderReadOnly) {
             try await remote.validateFolder(id: linkedID, access: .linkPublished)
         }
+        await #expect(throws: DriveProjectError.folderReadOnly) { try await remote.validateFolder(id: linkedID) }
         let readable = try await remote.validateFolder(id: linkedID, access: .read)
         #expect(readable.publishedProjectID == project.id)
         let verified = try await sync.verify(projects: [snapshot], folder: readable, remote: remote) { _ in }
         #expect(verified.projects[project.id] == true)
-        await #expect(throws: DriveProjectError.folderUnavailable) {
+        await #expect(throws: DriveProjectError.folderReadOnly) {
             try await sync.run(projects: [snapshot], folder: readable, remote: remote) { _, _ in }
         }
         let receiver = try TestWorkspace(); defer { receiver.cleanUp() }
@@ -523,10 +524,13 @@ final class DriveProjectSyncTests {
         #expect(imported.importedSources == 1)
         #expect(imported.failures.isEmpty)
 
-        // A folder in a shared drive is never a new sharing folder, but an editor may sync into it.
+        // Shared drives are not supported for writing (requests don't send supportsAllDrives).
         await mocked.setAccess(mocked.root, owned: true, writable: true, sharedDrive: true)
-        await #expect(throws: DriveProjectError.folderUnavailable) { try await remote.validateFolder(id: mocked.root) }
-        _ = try await remote.validateFolder(id: mocked.root, access: .linkPublished)
+        await #expect(throws: DriveProjectError.sharedDriveUnsupported) { try await remote.validateFolder(id: mocked.root) }
+        await #expect(throws: DriveProjectError.sharedDriveUnsupported) {
+            try await remote.validateFolder(id: mocked.root, access: .linkPublished)
+        }
+        _ = try await remote.validateFolder(id: mocked.root, access: .read)
     }
 
     @Test func renamedDriveFolderKeepsSyncingAndReportsCurrentName() async throws {
@@ -557,7 +561,7 @@ final class DriveProjectSyncTests {
 
         // A different published project behind the same ID is still rejected.
         let other = DriveProjectFolder(id: linkedID, name: "Course", publishedProjectID: UUID())
-        await #expect(throws: DriveProjectError.folderUnavailable) {
+        await #expect(throws: DriveProjectError.folderChanged) {
             try await sync.run(projects: [snapshot], folder: other, remote: remote) { _, _ in }
         }
     }

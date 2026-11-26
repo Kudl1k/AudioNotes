@@ -4,11 +4,18 @@ import SwiftData
 import UniformTypeIdentifiers
 
 enum DriveProjectError: LocalizedError {
-    case folderUnavailable, conflictingFiles, conflictingVersion, remoteVersionChanged, noProjects, selectOneProject, selectPublishedProject
+    case folderUnavailable, folderReadOnly, sharedDriveUnsupported, folderChanged, conflictingFiles, conflictingVersion, remoteVersionChanged, noProjects, selectOneProject, selectPublishedProject
 
     var errorDescription: String? {
         switch self {
-        case .folderUnavailable: "Choose a writable folder you own in My Drive."
+        case .folderUnavailable:
+            "This Google Drive folder is no longer available. It may have been deleted, moved to the trash, or unshared."
+        case .folderReadOnly:
+            "You can view this Google Drive folder but can’t add files to it. Ask its owner to make you an Editor, or use Import Project from Drive… to get a copy of a project shared with you."
+        case .sharedDriveUnsupported:
+            "Folders in shared drives aren’t supported yet. Choose a folder in My Drive or a folder someone shared with you."
+        case .folderChanged:
+            "This Google Drive folder no longer contains the project you linked. Choose the project folder again."
         case .conflictingFiles: "Drive contains conflicting copies of a synchronized item."
         case .conflictingVersion: "The local and Drive versions differ. Both copies were kept."
         case .remoteVersionChanged: "This item has a newer version on Drive. The Drive copy was kept."
@@ -417,7 +424,7 @@ actor DriveProjectSync {
         )
         let resolvingParents = Set(activeResolutions.map(\.conflict.parent))
         let destination = try await remote.validateFolder(id: folder.id, access: .linkPublished)
-        guard destination.isSameFolder(as: folder) else { throw DriveProjectError.folderUnavailable }
+        guard destination.isSameFolder(as: folder) else { throw DriveProjectError.folderChanged }
         if destination.publishedProjectID != nil, projects.count != 1 { throw DriveProjectError.selectOneProject }
         var result = Result()
         result.destination = destination
@@ -505,7 +512,7 @@ actor DriveProjectSync {
         defer { running = false }
         let checkedAt = Date()
         let destination = try await remote.validateFolder(id: folder.id, access: .read)
-        guard destination.isSameFolder(as: folder) else { throw DriveProjectError.folderUnavailable }
+        guard destination.isSameFolder(as: folder) else { throw DriveProjectError.folderChanged }
         if destination.publishedProjectID != nil, projects.count != 1 { throw DriveProjectError.selectOneProject }
         let runKeys = Set(projects.map { "p-" + $0.id.uuidString })
         var verified: [UUID: Bool] = [:]

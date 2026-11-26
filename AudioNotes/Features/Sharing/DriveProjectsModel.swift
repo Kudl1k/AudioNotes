@@ -459,7 +459,8 @@ final class DriveProjectsModel {
         case GoogleDriveSharingError.signInRequired, GoogleDriveSharingError.consent, GoogleDriveSharingError.http(401):
             .reconnect
         case GoogleDriveSharingError.localOnly, GoogleDriveSharingError.configuration,
-             DriveProjectError.selectOneProject, DriveProjectError.selectPublishedProject, DriveProjectError.noProjects:
+             DriveProjectError.selectOneProject, DriveProjectError.selectPublishedProject, DriveProjectError.noProjects,
+             DriveProjectError.folderReadOnly, DriveProjectError.sharedDriveUnsupported, DriveProjectError.folderChanged:
             .fatal
         default:
             .transient
