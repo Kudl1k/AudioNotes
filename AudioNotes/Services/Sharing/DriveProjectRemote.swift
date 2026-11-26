@@ -18,9 +18,12 @@ struct DriveProjectFolder: Codable, Sendable, Equatable {
 }
 
 /// What a validated Drive folder must permit.
-/// - `publish`: owned by me in My Drive and writable (creating a new sharing folder).
-/// - `linkPublished`: writable only; an editor of someone else's shared folder may sync.
+/// - `publish`: a writable folder outside shared drives (a new sharing folder). Ownership is not required,
+///   so an Editor of a folder someone else shared may use it.
+/// - `linkPublished`: the same write rule for syncing into an already published project folder.
 /// - `read`: any readable, non-trashed folder (import/listing/verification).
+/// Shared drives need `supportsAllDrives` on every request, which this client does not send, so they are
+/// rejected for writing.
 enum DriveFolderAccess: Sendable {
     case publish, linkPublished, read
 }
@@ -102,21 +105,26 @@ struct DriveProjectRemote: Sendable {
     private func folderItem(id: String, access: DriveFolderAccess = .publish) async throws -> Item {
         guard Self.validID(id) else { throw GoogleDriveSharingError.invalidResponse }
         let item: Item = try await get(Self.files.appendingPathComponent(id), fields: Self.fields)
-        guard item.id == id, item.mimeType == Self.folderType, item.trashed != true,
-              Self.allows(access, item) else {
+        guard item.id == id, item.mimeType == Self.folderType, item.trashed != true else {
             throw DriveProjectError.folderUnavailable
         }
+        if let denial = Self.denial(access, item) { throw denial }
         return item
     }
 
     static func allows(_ access: DriveFolderAccess, _ item: Item) -> Bool {
+        denial(access, item) == nil
+    }
+
+    /// Why `item` cannot be used for `access`, or nil when it can.
+    static func denial(_ access: DriveFolderAccess, _ item: Item) -> DriveProjectError? {
         switch access {
-        case .publish:
-            item.driveId == nil && item.ownedByMe == true && item.capabilities?.canAddChildren == true
-        case .linkPublished:
-            item.capabilities?.canAddChildren == true
         case .read:
-            true
+            return nil
+        case .publish, .linkPublished:
+            if item.driveId != nil { return .sharedDriveUnsupported }
+            if item.capabilities?.canAddChildren != true { return .folderReadOnly }
+            return nil
         }
     }
 
