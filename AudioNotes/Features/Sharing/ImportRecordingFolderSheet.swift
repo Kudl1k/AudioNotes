@@ -66,7 +66,7 @@ struct ImportRecordingFolderSheet: View {
 #endif
         .interactiveDismissDisabled(model.isBusy)
         .task {
-            if !sourceBookmark.isEmpty { model.restoreSource(sourceBookmark) }
+            if !sourceBookmark.isEmpty { model.restoreSource(sourceBookmark) { sourceBookmark = $0 } }
         }
         .onDisappear { model.cancel() }
         .fileImporter(isPresented: $showPicker, allowedContentTypes: [.folder]) { result in

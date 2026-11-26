@@ -4,7 +4,50 @@ import Testing
 @testable import AudioNotes
 
 @MainActor
-struct DriveProjectSyncTests {
+final class DriveProjectSyncTests {
+    private let suiteName = "DriveProjectSyncTests." + UUID().uuidString
+    private let defaults: UserDefaults
+
+    init() throws {
+        defaults = try #require(UserDefaults(suiteName: suiteName))
+    }
+
+    deinit {
+        UserDefaults().removePersistentDomain(forName: suiteName)
+    }
+
+    private func makeRemote(_ mocked: MockDrive) -> DriveProjectRemote {
+        DriveProjectRemote(transport: DriveHTTPTransport(send: { try await mocked.send($0) }),
+                           checkPrivacy: {}, token: { _ in "token" }, defaults: defaults)
+    }
+
+    private func finishedRecording(in workspace: TestWorkspace, title: String, id: UUID = UUID(),
+                                   segmentID: UUID = UUID(), text: String = "Hotovo",
+                                   createdAt: Date = Date(timeIntervalSinceReferenceDate: 800_000_000),
+                                   audioName: String? = nil) throws -> Recording {
+        let storage = workspace.storage
+        let fileName = audioName ?? "\(id.uuidString).wav"
+        let target = storage.recordingURL(fileName: fileName)
+        if !FileManager.default.fileExists(atPath: target.path) {
+            let audio = try workspace.makeAudio(name: UUID().uuidString + ".wav")
+            try FileManager.default.createDirectory(at: storage.recordingsURL, withIntermediateDirectories: true)
+            try FileManager.default.moveItem(at: audio, to: target)
+        }
+        let recording = Recording(id: id, title: title, audioFileName: fileName, originalFileName: "audio.wav", duration: 1)
+        let transcript = Transcript(languageCode: "cs", createdAt: createdAt)
+        transcript.segments = [TranscriptSegment(id: segmentID, position: 0, startTime: 0, endTime: 1, text: text, speaker: nil)]
+        recording.transcript = transcript
+        return recording
+    }
+
+    private func projectSource(in workspace: TestWorkspace, name: String = "Notes.txt", text: String) throws -> RecordingSource {
+        let source = RecordingSource(type: .document, displayName: name, originalFilename: name,
+                                     localFileReference: "original.txt")
+        let url = workspace.storage.sourceURL(source)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(text.utf8).write(to: url)
+        return source
+    }
     @Test func detectsIndependentEditsFromTheLastCommonVersion() {
         let baseline = DriveProjectSync.Version(name: "Recording.soniquill", checksum: "baseline")
         let mac = DriveProjectSync.Version(name: baseline.name, checksum: "mac")
@@ -43,8 +86,7 @@ struct DriveProjectSyncTests {
                                                    originalFileName: "pending.wav", duration: 1)]
         let mocked = MockDrive(root: "root_" + UUID().uuidString)
         let root = mocked.root
-        let remote = DriveProjectRemote(transport: DriveHTTPTransport(send: { try await mocked.send($0) }),
-                                        checkPrivacy: {}, token: { _ in "token" })
+        let remote = makeRemote(mocked)
         let sync = DriveProjectSync()
         let snapshot = try DriveProjectSnapshot(project: project, storage: workspace.storage)
         let folder = DriveProjectFolder(id: root, name: "Shared folder")
@@ -83,8 +125,11 @@ struct DriveProjectSyncTests {
 
         await mocked.modifyRecordingOnDrive()
         let remoteEdit = try await sync.run(projects: [editedSnapshot], folder: folder, remote: remote) { _, _ in }
+        // A Drive-only change that can't be applied here is a reviewable conflict, not a permanent failure.
         #expect(remoteEdit.failures.count == 1)
-        #expect(remoteEdit.failures.first?.contains(DriveProjectError.remoteVersionChanged.localizedDescription) == true)
+        #expect(remoteEdit.conflicts.count == 1)
+        #expect(remoteEdit.conflicts.first?.canDownload == false)
+        #expect(!remoteEdit.failures.contains { $0.contains(DriveProjectError.remoteVersionChanged.localizedDescription) })
         transcript.segments[0].text = "Lokální úprava"
         let localEdit = try DriveProjectSnapshot(project: project, storage: workspace.storage)
         let conflict = try await sync.run(projects: [localEdit], folder: folder, remote: remote) { _, _ in }
@@ -127,7 +172,9 @@ struct DriveProjectSyncTests {
         let receiverContainer = try receiver.storage.makeContainer(inMemory: true)
         let imported = try await sync.importProject(linkedFolder, remote: remote, storage: receiver.storage,
                                                     container: receiverContainer)
-        #expect(imported == 1)
+        #expect(imported.importedRecordings == 1)
+        #expect(imported.importedSources == 2)
+        #expect(imported.failures.isEmpty)
         let received = try #require(receiverContainer.mainContext.fetch(FetchDescriptor<Project>()).first)
         #expect(received.id == project.id)
         #expect(received.recordings.map(\.id) == [completed.id])
@@ -135,7 +182,11 @@ struct DriveProjectSyncTests {
         #expect(received.recordings.first?.transcript?.segments.first?.text == "Úprava z druhého zařízení")
         let retried = try await sync.importProject(linkedFolder, remote: remote, storage: receiver.storage,
                                                    container: receiverContainer)
-        #expect(retried == 0)
+        #expect(retried.importedRecordings == 0)
+        #expect(retried.importedSources == 0)
+        #expect(retried.skipped.count == 3)
+        #expect(retried.skipped.allSatisfy { $0.reason == .alreadyInProject })
+        #expect(retried.failures.isEmpty)
         let otherProject = Project(name: "Local project on another device")
         let pulledRecording = Recording(id: completed.id, title: completed.title,
                                         audioFileName: completed.audioFileName, originalFileName: completed.originalFileName,
@@ -334,8 +385,7 @@ struct DriveProjectSyncTests {
 
         let mocked = MockDrive(root: "root_" + UUID().uuidString)
         let rootFolder = DriveProjectFolder(id: mocked.root, name: "Shared folder")
-        let remote = DriveProjectRemote(transport: DriveHTTPTransport(send: { try await mocked.send($0) }),
-                                        checkPrivacy: {}, token: { _ in "token" })
+        let remote = makeRemote(mocked)
         let sync = DriveProjectSync()
 
         let macSnapshot = try DriveProjectSnapshot(project: macProject, storage: storage)
@@ -406,8 +456,7 @@ struct DriveProjectSyncTests {
 
         let mocked = MockDrive(root: "root_" + UUID().uuidString)
         let rootFolder = DriveProjectFolder(id: mocked.root, name: "Shared folder")
-        let remote = DriveProjectRemote(transport: DriveHTTPTransport(send: { try await mocked.send($0) }),
-                                        checkPrivacy: {}, token: { _ in "token" })
+        let remote = makeRemote(mocked)
         let sync = DriveProjectSync()
         let snapshot = try DriveProjectSnapshot(project: project, storage: storage)
 
@@ -432,6 +481,378 @@ struct DriveProjectSyncTests {
         let verified = try await sync.verify(projects: [snapshot], folder: rootFolder, remote: remote) { _ in }
         #expect(verified.projects[project.id] == true)
     }
+
+    @Test func folderAccessLevelsAllowSharedAndReadOnlyFolders() async throws {
+        let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
+        let project = Project(name: "Shared")
+        project.recordings = [try finishedRecording(in: workspace, title: "Lecture")]
+        project.sources = [try projectSource(in: workspace, text: "notes")]
+        let mocked = MockDrive(root: "root_" + UUID().uuidString)
+        let remote = makeRemote(mocked)
+        let sync = DriveProjectSync()
+        let snapshot = try DriveProjectSnapshot(project: project, storage: workspace.storage)
+        let root = DriveProjectFolder(id: mocked.root, name: "Shared folder")
+        let first = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        #expect(first.uploaded == 2)
+        let linkedID = try #require(await mocked.projectFolderID())
+
+        // Editor of someone else's folder: may sync, may not create a new sharing folder there.
+        await mocked.setAccess(linkedID, owned: false, writable: true)
+        await #expect(throws: DriveProjectError.folderUnavailable) { try await remote.validateFolder(id: linkedID) }
+        let editable = try await remote.validateFolder(id: linkedID, access: .linkPublished)
+        #expect(editable.publishedProjectID == project.id)
+        let editorRun = try await sync.run(projects: [snapshot], folder: editable, remote: remote) { _, _ in }
+        #expect(editorRun.unchanged == 2, Comment(rawValue: editorRun.failures.joined(separator: "\n")))
+
+        // Viewer: can verify and import, cannot sync.
+        await mocked.setAccess(linkedID, owned: false, writable: false)
+        await #expect(throws: DriveProjectError.folderUnavailable) {
+            try await remote.validateFolder(id: linkedID, access: .linkPublished)
+        }
+        let readable = try await remote.validateFolder(id: linkedID, access: .read)
+        #expect(readable.publishedProjectID == project.id)
+        let verified = try await sync.verify(projects: [snapshot], folder: readable, remote: remote) { _ in }
+        #expect(verified.projects[project.id] == true)
+        await #expect(throws: DriveProjectError.folderUnavailable) {
+            try await sync.run(projects: [snapshot], folder: readable, remote: remote) { _, _ in }
+        }
+        let receiver = try TestWorkspace(); defer { receiver.cleanUp() }
+        let container = try receiver.storage.makeContainer(inMemory: true)
+        let imported = try await sync.importProject(readable, remote: remote, storage: receiver.storage, container: container)
+        #expect(imported.importedRecordings == 1)
+        #expect(imported.importedSources == 1)
+        #expect(imported.failures.isEmpty)
+
+        // A folder in a shared drive is never a new sharing folder, but an editor may sync into it.
+        await mocked.setAccess(mocked.root, owned: true, writable: true, sharedDrive: true)
+        await #expect(throws: DriveProjectError.folderUnavailable) { try await remote.validateFolder(id: mocked.root) }
+        _ = try await remote.validateFolder(id: mocked.root, access: .linkPublished)
+    }
+
+    @Test func renamedDriveFolderKeepsSyncingAndReportsCurrentName() async throws {
+        let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
+        let project = Project(name: "Course")
+        project.recordings = [try finishedRecording(in: workspace, title: "Week 1")]
+        let mocked = MockDrive(root: "root_" + UUID().uuidString)
+        let remote = makeRemote(mocked)
+        let sync = DriveProjectSync()
+        let snapshot = try DriveProjectSnapshot(project: project, storage: workspace.storage)
+        let stored = DriveProjectFolder(id: mocked.root, name: "Shared folder")
+        _ = try await sync.run(projects: [snapshot], folder: stored, remote: remote) { _, _ in }
+
+        await mocked.renameRoot("Team folder")
+        let renamed = try await sync.run(projects: [snapshot], folder: stored, remote: remote) { _, _ in }
+        #expect(renamed.unchanged == 1, Comment(rawValue: renamed.failures.joined(separator: "\n")))
+        #expect(renamed.destination?.name == "Team folder")
+        let verified = try await sync.verify(projects: [snapshot], folder: stored, remote: remote) { _ in }
+        #expect(verified.folder.name == "Team folder")
+        #expect(verified.projects[project.id] == true)
+
+        let linkedID = try #require(await mocked.projectFolderID())
+        await mocked.renameEntry(linkedID, to: "Course (shared)")
+        let linked = DriveProjectFolder(id: linkedID, name: "Course", publishedProjectID: project.id)
+        let linkedRun = try await sync.run(projects: [snapshot], folder: linked, remote: remote) { _, _ in }
+        #expect(linkedRun.unchanged == 1, Comment(rawValue: linkedRun.failures.joined(separator: "\n")))
+        #expect(linkedRun.destination?.name == "Course (shared)")
+
+        // A different published project behind the same ID is still rejected.
+        let other = DriveProjectFolder(id: linkedID, name: "Course", publishedProjectID: UUID())
+        await #expect(throws: DriveProjectError.folderUnavailable) {
+            try await sync.run(projects: [snapshot], folder: other, remote: remote) { _, _ in }
+        }
+    }
+
+    @Test func movedRecordingNeverPairsANewProjectWithAnotherProjectsFolder() async throws {
+        let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
+        let recordingID = UUID(), segmentID = UUID()
+        let alpha = Project(name: "SUS")
+        alpha.recordings = [try finishedRecording(in: workspace, title: "DNS", id: recordingID, segmentID: segmentID)]
+        let mocked = MockDrive(root: "root_" + UUID().uuidString)
+        let remote = makeRemote(mocked)
+        let sync = DriveProjectSync()
+        let root = DriveProjectFolder(id: mocked.root, name: "Shared folder")
+        _ = try await sync.run(projects: [try DriveProjectSnapshot(project: alpha, storage: workspace.storage)],
+                               folder: root, remote: remote) { _, _ in }
+        #expect(await mocked.folderCreates == 1)
+
+        // The recording moved to a new project with a different name: no same-name folder, so a new folder.
+        let alphaAfterMove = Project(id: alpha.id, name: "SUS")
+        let beta = Project(name: "Networks")
+        beta.recordings = [try finishedRecording(in: workspace, title: "DNS", id: recordingID, segmentID: segmentID,
+                                                 audioName: "\(recordingID.uuidString).wav")]
+        let snapshots = try [alphaAfterMove, beta].map { try DriveProjectSnapshot(project: $0, storage: workspace.storage) }
+        let moved = try await sync.run(projects: snapshots, folder: root, remote: remote) { _, _ in }
+        #expect(moved.failures.isEmpty, Comment(rawValue: moved.failures.joined(separator: "\n")))
+        #expect(await mocked.folderCreates == 2)
+        #expect(await mocked.folderID(forKey: "p-" + beta.id.uuidString) != nil)
+
+        // Even with the same name, a folder owned by another project of this run is excluded.
+        let gamma = Project(name: "SUS")
+        gamma.recordings = [try finishedRecording(in: workspace, title: "DNS", id: recordingID, segmentID: segmentID,
+                                                  audioName: "\(recordingID.uuidString).wav")]
+        let sameName = try [alphaAfterMove, gamma].map { try DriveProjectSnapshot(project: $0, storage: workspace.storage) }
+        _ = try await sync.run(projects: sameName, folder: root, remote: remote) { _, _ in }
+        #expect(await mocked.folderCreates == 3)
+        #expect(await mocked.folderID(forKey: "p-" + gamma.id.uuidString) != nil)
+        #expect(defaults.string(forKey: DriveProjectRemote.pairingKey(parent: mocked.root, projectID: gamma.id)) == nil)
+    }
+
+    @Test func confirmedPairingIsPersistedValidatedAndDropped() async throws {
+        let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
+        let recordingID = UUID(), segmentID = UUID()
+        let mac = Project(name: "SUS")
+        mac.recordings = [try finishedRecording(in: workspace, title: "DNS", id: recordingID, segmentID: segmentID)]
+        let mocked = MockDrive(root: "root_" + UUID().uuidString)
+        let remote = makeRemote(mocked)
+        let sync = DriveProjectSync()
+        let root = DriveProjectFolder(id: mocked.root, name: "Shared folder")
+        _ = try await sync.run(projects: [try DriveProjectSnapshot(project: mac, storage: workspace.storage)],
+                               folder: root, remote: remote) { _, _ in }
+        let macFolder = try #require(await mocked.folderID(forKey: "p-" + mac.id.uuidString))
+
+        let phone = Project(name: "SUS")
+        phone.recordings = [try finishedRecording(in: workspace, title: "DNS", id: recordingID, segmentID: segmentID,
+                                                  audioName: "\(recordingID.uuidString).wav")]
+        let snapshot = try DriveProjectSnapshot(project: phone, storage: workspace.storage)
+        let scansBefore = await mocked.folderScans
+        let paired = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        #expect(paired.unchanged == 1, Comment(rawValue: paired.failures.joined(separator: "\n")))
+        #expect(await mocked.folderCreates == 1)
+        #expect(await mocked.folderScans == scansBefore + 1)
+        let pairingKey = DriveProjectRemote.pairingKey(parent: mocked.root, projectID: phone.id)
+        #expect(defaults.string(forKey: pairingKey) == macFolder)
+
+        _ = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        let verified = try await sync.verify(projects: [snapshot], folder: root, remote: remote) { _ in }
+        #expect(verified.projects[phone.id] == true)
+        #expect(await mocked.folderScans == scansBefore + 1)
+
+        // A trashed paired folder invalidates the pairing; the project gets its own folder.
+        await mocked.trashEntry(macFolder)
+        let recreated = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        #expect(recreated.uploaded == 1, Comment(rawValue: recreated.failures.joined(separator: "\n")))
+        #expect(defaults.string(forKey: pairingKey) == nil)
+        #expect(await mocked.folderID(forKey: "p-" + phone.id.uuidString) != nil)
+    }
+
+    @Test func sourceChangedOnDriveBecomesAResolvableConflict() async throws {
+        let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
+        let source = try projectSource(in: workspace, text: "original notes")
+        let project = Project(name: "Docs")
+        project.sources = [source]
+        let mocked = MockDrive(root: "root_" + UUID().uuidString)
+        let remote = makeRemote(mocked)
+        let sync = DriveProjectSync()
+        let snapshot = try DriveProjectSnapshot(project: project, storage: workspace.storage)
+        let root = DriveProjectFolder(id: mocked.root, name: "Shared folder")
+        _ = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+
+        await mocked.modifySourceOnDrive(id: source.id)
+        let detected = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        let conflict = try #require(detected.conflicts.first)
+        #expect(conflict.canDownload == false)
+        #expect(!detected.failures.contains { $0.contains(DriveProjectError.remoteVersionChanged.localizedDescription) })
+
+        let rejected = try await sync.run(projects: [snapshot], folder: root, remote: remote,
+                                          resolutions: [.init(conflict: conflict, choice: .drive)]) { _, _ in }
+        #expect(rejected.conflicts.first?.canDownload == false)
+        #expect(rejected.resolvedConflictIDs.isEmpty)
+        #expect(await mocked.updates == 0)
+
+        let local = try await sync.run(projects: [snapshot], folder: root, remote: remote,
+                                       resolutions: [.init(conflict: conflict, choice: .local)]) { _, _ in }
+        #expect(local.uploaded == 1, Comment(rawValue: local.failures.joined(separator: "\n")))
+        #expect(local.resolvedConflictIDs == [conflict.id])
+        #expect(await mocked.updates == 1)
+        let settled = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        #expect(settled.unchanged == 1)
+        #expect(settled.conflicts.isEmpty)
+
+        await mocked.modifySourceOnDrive(id: source.id)
+        let again = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        let second = try #require(again.conflicts.first)
+        let creates = await mocked.creates
+        let both = try await sync.run(projects: [snapshot], folder: root, remote: remote,
+                                      resolutions: [.init(conflict: second, choice: .both)]) { _, _ in }
+        #expect(both.uploaded == 1)
+        #expect(await mocked.creates == creates + 1)
+        #expect(await mocked.updates == 1)
+        let stable = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        #expect(stable.unchanged == 1)
+        #expect(stable.conflicts.isEmpty)
+    }
+
+    @Test func unchangedRecordingsAndSourcesAreNotExportedOrHashedAgain() async throws {
+        let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
+        let recording = try finishedRecording(in: workspace, title: "Cached")
+        let source = try projectSource(in: workspace, text: "cached notes")
+        let project = Project(name: "Cache")
+        project.recordings = [recording]
+        project.sources = [source]
+        let mocked = MockDrive(root: "root_" + UUID().uuidString)
+        let remote = makeRemote(mocked)
+        let sync = DriveProjectSync()
+        let snapshot = try DriveProjectSnapshot(project: project, storage: workspace.storage)
+        let root = DriveProjectFolder(id: mocked.root, name: "Shared folder")
+        let first = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        #expect(first.uploaded == 2)
+
+        // Unreadable inputs prove that nothing is read again while their fingerprints are unchanged.
+        let fm = FileManager.default
+        let audio = workspace.storage.recordingURL(fileName: recording.audioFileName)
+        let sourceURL = workspace.storage.sourceURL(source)
+        try fm.setAttributes([.posixPermissions: 0], ofItemAtPath: audio.path)
+        try fm.setAttributes([.posixPermissions: 0], ofItemAtPath: sourceURL.path)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: audio.path)
+            try? fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: sourceURL.path)
+        }
+        let second = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        #expect(second.unchanged == 2, Comment(rawValue: second.failures.joined(separator: "\n")))
+        let verified = try await sync.verify(projects: [snapshot], folder: root, remote: remote) { _ in }
+        #expect(verified.projects[project.id] == true)
+
+        // A changed input needs bytes again, so the export runs (and here fails on the unreadable audio).
+        recording.transcript?.segments[0].text = "Changed"
+        let changed = try DriveProjectSnapshot(project: project, storage: workspace.storage)
+        let blocked = try await sync.run(projects: [changed], folder: root, remote: remote) { _, _ in }
+        #expect(blocked.failures.count == 1)
+        try fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: audio.path)
+        let uploaded = try await sync.run(projects: [changed], folder: root, remote: remote) { _, _ in }
+        #expect(uploaded.uploaded == 1, Comment(rawValue: uploaded.failures.joined(separator: "\n")))
+        #expect(await mocked.updates == 1)
+    }
+
+    @Test func checksumCacheIsBounded() {
+        var cache = LocalChecksumCache(limit: 2)
+        for key in ["a", "b", "c"] { cache[key] = .init(checksum: key, manifestFiles: nil) }
+        #expect(cache.count == 2)
+        #expect(cache["a"] == nil)
+        #expect(cache["c"]?.checksum == "c")
+        cache["b"] = nil
+        #expect(cache.count == 1)
+    }
+
+    @Test func importContinuesPastSkippedAndFailedItems() async throws {
+        let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
+        let first = try finishedRecording(in: workspace, title: "First")
+        let second = try finishedRecording(in: workspace, title: "Second")
+        let project = Project(name: "Import")
+        project.recordings = [first, second]
+        project.sources = [try projectSource(in: workspace, text: "shared notes")]
+        let mocked = MockDrive(root: "root_" + UUID().uuidString)
+        let remote = makeRemote(mocked)
+        let sync = DriveProjectSync()
+        _ = try await sync.run(projects: [try DriveProjectSnapshot(project: project, storage: workspace.storage)],
+                               folder: DriveProjectFolder(id: mocked.root, name: "Shared folder"), remote: remote) { _, _ in }
+        let linkedID = try #require(await mocked.projectFolderID())
+        await mocked.duplicateEntry(key: "r-" + first.id.uuidString)
+        await mocked.addFile(name: "payload.exe", key: "s-" + UUID().uuidString, parent: linkedID, data: Data("x".utf8))
+        let linked = try await remote.validateFolder(id: linkedID, access: .read)
+
+        let receiver = try TestWorkspace(); defer { receiver.cleanUp() }
+        let container = try receiver.storage.makeContainer(inMemory: true)
+        let elsewhere = Project(name: "Elsewhere")
+        elsewhere.recordings = [Recording(id: second.id, title: "Second", audioFileName: "x.wav",
+                                          originalFileName: "x.wav", duration: 1)]
+        container.mainContext.insert(elsewhere)
+        try container.mainContext.save()
+
+        let result = try await sync.importProject(linked, remote: remote, storage: receiver.storage, container: container)
+        #expect(result.importedRecordings == 1)
+        #expect(result.importedSources == 1)
+        #expect(result.skipped.filter { $0.reason == .duplicateOnDrive }.count == 1)
+        #expect(result.skipped.filter { $0.reason == .belongsToOtherProject }.count == 1)
+        #expect(result.failures.count == 1)
+        #expect(result.failures.first?.name == "payload.exe")
+        let imported = try #require(container.mainContext.fetch(FetchDescriptor<Project>()).first { $0.id == project.id })
+        #expect(imported.recordings.map(\.id) == [first.id])
+
+        let again = try await sync.importProject(linked, remote: remote, storage: receiver.storage, container: container)
+        #expect(again.importedRecordings == 0)
+        #expect(again.importedSources == 0)
+        #expect(again.skipped.filter { $0.reason == .alreadyInProject }.count == 2)
+    }
+
+    @Test func driveChangeBetweenListingAndUpdateBecomesAConflict() async throws {
+        let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
+        let recording = try finishedRecording(in: workspace, title: "Race")
+        let project = Project(name: "Race")
+        project.recordings = [recording]
+        let mocked = MockDrive(root: "root_" + UUID().uuidString)
+        let remote = makeRemote(mocked)
+        let sync = DriveProjectSync()
+        let root = DriveProjectFolder(id: mocked.root, name: "Shared folder")
+        _ = try await sync.run(projects: [try DriveProjectSnapshot(project: project, storage: workspace.storage)],
+                               folder: root, remote: remote) { _, _ in }
+        recording.transcript?.segments[0].text = "Local edit"
+        let edited = try DriveProjectSnapshot(project: project, storage: workspace.storage)
+        await mocked.mutateOnNextFetch(keyPrefix: "r-")
+        let raced = try await sync.run(projects: [edited], folder: root, remote: remote) { _, _ in }
+        let conflict = try #require(raced.conflicts.first)
+        #expect(conflict.drive.checksum == String(repeating: "c", count: 64))
+        #expect(raced.uploaded == 0)
+        #expect(await mocked.updates == 0)
+    }
+
+    @Test func syncStateUsesInjectedDefaultsAndPrunesRemovedItems() async throws {
+        let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
+        let project = Project(name: "State")
+        project.sources = [try projectSource(in: workspace, text: "state")]
+        let mocked = MockDrive(root: "root_" + UUID().uuidString)
+        let remote = makeRemote(mocked)
+        let sync = DriveProjectSync()
+        let snapshot = try DriveProjectSnapshot(project: project, storage: workspace.storage)
+        let root = DriveProjectFolder(id: mocked.root, name: "Shared folder")
+        _ = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        let fileID = try #require(await mocked.entryIDs(keyPrefix: "s-").first)
+        let folderID = try #require(await mocked.projectFolderID())
+        #expect(defaults.data(forKey: "drive.project.baseline.\(fileID)") != nil)
+        #expect(UserDefaults.standard.data(forKey: "drive.project.baseline.\(fileID)") == nil)
+
+        await mocked.trashEntry(fileID)
+        remote.saveReservation("stale_reservation", parent: folderID, key: "s-" + UUID().uuidString)
+        let recreated = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
+        #expect(recreated.uploaded == 1, Comment(rawValue: recreated.failures.joined(separator: "\n")))
+        #expect(defaults.data(forKey: "drive.project.baseline.\(fileID)") == nil)
+        let newID = try #require(await mocked.entryIDs(keyPrefix: "s-").first)
+        #expect(defaults.data(forKey: "drive.project.baseline.\(newID)") != nil)
+        #expect(!defaults.dictionaryRepresentation().values.contains { ($0 as? String) == "stale_reservation" })
+    }
+
+    @Test func snapshotsAreBuiltFromSavedStateOffTheMainActor() async throws {
+        let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
+        let container = try workspace.storage.makeContainer(inMemory: true)
+        let project = Project(name: "Background")
+        project.recordings = [try finishedRecording(in: workspace, title: "Done"),
+                              Recording(title: "Waiting", audioFileName: "w.wav", originalFileName: "w.wav", duration: 1)]
+        project.sources = [try projectSource(in: workspace, text: "notes")]
+        container.mainContext.insert(project)
+        try container.mainContext.save()
+        let snapshots = try await DriveProjectSnapshot.make(projectIDs: [UUID(), project.id],
+                                                            storage: workspace.storage, container: container)
+        let snapshot = try #require(snapshots.first)
+        #expect(snapshots.count == 1)
+        #expect(snapshot.id == project.id)
+        #expect(snapshot.recordings.count == 1)
+        #expect(snapshot.unfinished == 1)
+        #expect(snapshot.sources.first?.url == workspace.storage.sourceURL(project.sources[0]))
+    }
+
+    @Test func registryCancelsAndAwaitsProjectWork() async throws {
+        let registry = DriveProjectSyncRegistry()
+        let projectID = UUID()
+        let task = Task<Bool, Never> {
+            while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(5)) }
+            return true
+        }
+        await registry.register(projectIDs: [projectID, UUID()], task: task)
+        #expect(await registry.isActive(projectID: projectID))
+        await registry.cancelAndWait(projectID: projectID)
+        #expect(task.isCancelled)
+        #expect(await registry.isActive(projectID: projectID) == false)
+        await registry.cancelAndWait(projectID: UUID())
+    }
 }
 
 private actor MockDrive {
@@ -454,8 +875,56 @@ private actor MockDrive {
     private(set) var creates = 0
     private(set) var updates = 0
     private(set) var folderCreates = 0
+    private(set) var folderScans = 0
+    private var rootName = "Shared folder"
+    private var notOwned: Set<String> = []
+    private var readOnly: Set<String> = []
+    private var sharedDrive: Set<String> = []
+    private var mutateOnFetch: Set<String> = []
 
     init(root: String) { self.root = root }
+
+    func setAccess(_ id: String, owned: Bool, writable: Bool, sharedDrive inSharedDrive: Bool = false) {
+        if owned { notOwned.remove(id) } else { notOwned.insert(id) }
+        if writable { readOnly.remove(id) } else { readOnly.insert(id) }
+        if inSharedDrive { sharedDrive.insert(id) } else { sharedDrive.remove(id) }
+    }
+
+    func renameRoot(_ name: String) { rootName = name }
+
+    func renameEntry(_ id: String, to name: String) { entries[id]?.name = name }
+
+    func trashEntry(_ id: String) { entries[id]?.trashed = true }
+
+    func folderID(forKey key: String) -> String? {
+        entries.values.first { $0.mime == DriveProjectRemote.folderType && $0.key == key && !$0.trashed }?.id
+    }
+
+    func entryIDs(keyPrefix: String) -> [String] {
+        entries.values.filter { $0.key.hasPrefix(keyPrefix) && !$0.trashed }.map(\.id)
+    }
+
+    func mutateOnNextFetch(keyPrefix: String) { mutateOnFetch.insert(keyPrefix) }
+
+    func duplicateEntry(key: String) {
+        guard let existing = entries.values.first(where: { $0.key == key && !$0.trashed }) else { return }
+        generated += 1
+        let id = "\(root)_copy_\(generated)"
+        entries[id] = Entry(id: id, name: existing.name, mime: existing.mime, parent: existing.parent,
+                            key: existing.key, hash: existing.hash, modifiedTime: existing.modifiedTime)
+        downloads[id] = downloads[existing.id]
+    }
+
+    func addFile(name: String, key: String, parent: String, data: Data) {
+        generated += 1
+        let id = "\(root)_file_\(generated)"
+        let temporary = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        try? data.write(to: temporary)
+        entries[id] = Entry(id: id, name: name, mime: "application/octet-stream", parent: parent, key: key,
+                            hash: try? SourceImportService.hash(temporary))
+        downloads[id] = data
+    }
 
     func projectFolderID() -> String? {
         entries.values.first { $0.mime == DriveProjectRemote.folderType && !$0.trashed }?.id
@@ -512,10 +981,15 @@ private actor MockDrive {
         let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
         let method = request.httpMethod
         if url.path == "/drive/v3/files/\(root)" {
-            return try respond(url, json: folder(id: root, name: "Shared folder"))
+            return try respond(url, json: folder(id: root, name: rootName))
         }
         if method == "GET", query["alt"] != "media", url.path.hasPrefix("/drive/v3/files/"),
-           url.lastPathComponent != "generateIds", let entry = entries[url.lastPathComponent] {
+           url.lastPathComponent != "generateIds", var entry = entries[url.lastPathComponent] {
+            if let prefix = mutateOnFetch.first(where: { entry.key.hasPrefix($0) }) {
+                mutateOnFetch.remove(prefix)
+                entry.hash = String(repeating: "c", count: 64)
+                entries[entry.id] = entry
+            }
             var item = metadata(entry)
             if let data = downloads[entry.id] { item["size"] = String(data.count) }
             else if entry.mime != DriveProjectRemote.folderType { item["size"] = "1" }
@@ -545,6 +1019,7 @@ private actor MockDrive {
         }
         if url.path == "/drive/v3/files", method == "GET" {
             let q = try #require(query["q"])
+            if q.contains("mimeType = '\(DriveProjectRemote.folderType)'") { folderScans += 1 }
             let matching = entries.values.filter { entry in
                 if q.contains("trashed = false") && entry.trashed { return false }
                 guard q.contains("'\(entry.parent)' in parents") else { return false }
@@ -634,8 +1109,11 @@ private actor MockDrive {
     }
 
     private func folder(id: String, name: String) -> [String: Any] {
-        ["id": id, "name": name, "mimeType": DriveProjectRemote.folderType,
-         "ownedByMe": true, "capabilities": ["canAddChildren": true]]
+        var item: [String: Any] = ["id": id, "name": name, "mimeType": DriveProjectRemote.folderType,
+                                   "ownedByMe": !notOwned.contains(id),
+                                   "capabilities": ["canAddChildren": !readOnly.contains(id)]]
+        if sharedDrive.contains(id) { item["driveId"] = "shared_drive" }
+        return item
     }
 
     private func respond(_ url: URL, status: Int = 200, json: [String: Any], headers: [String: String] = [:]) throws -> (Data, HTTPURLResponse) {

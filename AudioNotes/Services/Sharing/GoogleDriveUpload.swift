@@ -9,6 +9,9 @@ actor GoogleDriveUpload {
     private static let fields = "id,size,sha256Checksum,trashed,parents,webViewLink"
     private static let mime = "application/octet-stream"
     private static let chunkSize = 8 * 1_048_576
+    /// Bounded recovery so a misbehaving server cannot loop forever.
+    private static let maxRestarts = 3
+    private static let maxChunkRecoveries = 3
 
     private let file: URL
     private let name: String
@@ -24,6 +27,8 @@ actor GoogleDriveUpload {
     private let transport: DriveHTTPTransport
     private let checkPrivacy: @Sendable () throws -> Void
     private let token: Token
+    private let knownChecksum: String?
+    private let retry: DriveRetryPolicy
     private var fileID: String?
     var currentFileID: String? { fileID }
     private var sessionURL: URL?
@@ -33,6 +38,7 @@ actor GoogleDriveUpload {
 
     init(file: URL, name: String, target: Target? = nil, transport: DriveHTTPTransport = .live,
          checkPrivacy: @escaping @Sendable () throws -> Void = DriveSharingPrivacy.check,
+         knownChecksum: String? = nil, retry: DriveRetryPolicy = .standard,
          token: @escaping Token) {
         self.file = file
         self.name = name
@@ -41,6 +47,8 @@ actor GoogleDriveUpload {
         self.transport = transport
         self.checkPrivacy = checkPrivacy
         self.token = token
+        self.knownChecksum = knownChecksum?.lowercased()
+        self.retry = retry
     }
 
     func run(progress: Progress) async throws -> URL {
@@ -54,7 +62,9 @@ actor GoogleDriveUpload {
             throw GoogleDriveSharingError.changedFile
         }
         let length = size.uint64Value
-        let hash = try SourceImportService.hash(file)
+        // A caller that already hashed this exact file (e.g. sync) can skip re-reading it; the size is still
+        // checked here and Drive's reported SHA-256 is verified against it on completion.
+        let hash = try knownChecksum ?? SourceImportService.hash(file)
         guard total == nil || (total == length && checksum == hash) else { throw GoogleDriveSharingError.changedFile }
         total = length
         checksum = hash
@@ -70,21 +80,15 @@ actor GoogleDriveUpload {
 
         var offset: UInt64 = 0
         if let sessionURL {
-            var probe = URLRequest(url: sessionURL)
-            probe.httpMethod = "PUT"
-            probe.setValue("bytes */\(length)", forHTTPHeaderField: "Content-Range")
-            probe.setValue("0", forHTTPHeaderField: "Content-Length")
-            let (data, response) = try await send(probe)
-            switch response.statusCode {
-            case 200, 201:
+            switch try await probe(sessionURL, length: length) {
+            case .completed(let data):
                 let link = try completed(data, id: id, length: length, checksum: hash)
                 await progress(length, length)
                 return link
-            case 308:
-                offset = try confirmed(response, length: length)
-            case 404, 410:
+            case .persisted(let next):
+                offset = next
+            case .expired:
                 self.sessionURL = nil
-            default: throw GoogleDriveSharingError.http(response.statusCode)
             }
         }
         if sessionURL == nil {
@@ -117,6 +121,8 @@ actor GoogleDriveUpload {
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
         await progress(offset, length)
+        var restarts = 0
+        var recoveries = 0
         while offset < length {
             try checkPrivacy()
             try handle.seek(toOffset: offset)
@@ -137,17 +143,64 @@ actor GoogleDriveUpload {
                 await progress(length, length)
                 return link
             case 308:
-                let next = try confirmed(response, length: length)
+                guard let next = try confirmed(response, length: length) else {
+                    // No Range header: Google persisted nothing for this session, so start over from byte 0.
+                    restarts += 1
+                    guard restarts <= Self.maxRestarts else { throw GoogleDriveSharingError.invalidResponse }
+                    offset = 0
+                    await progress(offset, length)
+                    continue
+                }
                 guard next > offset, next <= end + 1 else { throw GoogleDriveSharingError.invalidResponse }
                 offset = next
+                recoveries = 0
                 await progress(offset, length)
             case 404, 410:
                 self.sessionURL = nil
                 throw GoogleDriveSharingError.http(response.statusCode)
+            case let status where DriveRetryPolicy.isTransient(response, body: body):
+                // A failed chunk must not be replayed blindly: wait, then ask the session what it persisted.
+                guard recoveries < Self.maxChunkRecoveries else { throw GoogleDriveSharingError.http(status) }
+                try await retry.sleep(retry.delay(attempt: recoveries, retryAfter: response))
+                recoveries += 1
+                switch try await probe(sessionURL, length: length) {
+                case .completed(let data):
+                    let link = try completed(data, id: id, length: length, checksum: hash)
+                    await progress(length, length)
+                    return link
+                case .persisted(let next):
+                    offset = next
+                    await progress(offset, length)
+                case .expired:
+                    self.sessionURL = nil
+                    throw GoogleDriveSharingError.http(status)
+                }
             default: throw GoogleDriveSharingError.http(response.statusCode)
             }
         }
         throw GoogleDriveSharingError.invalidResponse
+    }
+
+    private enum ProbeResult {
+        case completed(Data)
+        /// Next byte offset the session expects (0 when nothing was persisted).
+        case persisted(UInt64)
+        case expired
+    }
+
+    /// Queries a resumable session's state (`Content-Range: bytes */N`).
+    private func probe(_ sessionURL: URL, length: UInt64) async throws -> ProbeResult {
+        var probe = URLRequest(url: sessionURL)
+        probe.httpMethod = "PUT"
+        probe.setValue("bytes */\(length)", forHTTPHeaderField: "Content-Range")
+        probe.setValue("0", forHTTPHeaderField: "Content-Length")
+        let (data, response) = try await send(probe)
+        switch response.statusCode {
+        case 200, 201: return .completed(data)
+        case 308: return .persisted(try confirmed(response, length: length) ?? 0)
+        case 404, 410: return .expired
+        default: throw GoogleDriveSharingError.http(response.statusCode)
+        }
     }
 
     private func generateID() async throws -> String {
@@ -208,8 +261,9 @@ actor GoogleDriveUpload {
         return try await transport.send(request)
     }
 
-    private func confirmed(_ response: HTTPURLResponse, length: UInt64) throws -> UInt64 {
-        guard let range = response.value(forHTTPHeaderField: "Range") else { return 0 }
+    /// Returns the next offset confirmed by a 308 response, or `nil` when no bytes were persisted.
+    private func confirmed(_ response: HTTPURLResponse, length: UInt64) throws -> UInt64? {
+        guard let range = response.value(forHTTPHeaderField: "Range") else { return nil }
         guard range.hasPrefix("bytes=0-"), let end = UInt64(range.dropFirst(8)), end < length - 1 else {
             throw GoogleDriveSharingError.invalidResponse
         }

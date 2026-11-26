@@ -60,6 +60,7 @@ struct AudioNotesApp: App {
                 )
                 .modelContainer(container)
                 .environment(services.llmConfiguration.localAI)
+                .environment(\.libraryStorage, startup.storage)
                 .frame(minWidth: 580, minHeight: 520)
             } else {
                 ContentUnavailableView("Settings unavailable", systemImage: "externaldrive.badge.exclamationmark",

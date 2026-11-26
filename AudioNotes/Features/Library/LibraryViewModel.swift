@@ -150,6 +150,15 @@ final class LibraryViewModel {
         }
         let id = project.id
         let recordingIDs = deletingRecordings ? project.recordings.map(\.id) : []
+        // Block new Drive sync for this project, then cancel and await any that is running.
+        await DriveProjectSyncRegistry.shared.beginDeletion(projectID: id)
+        await deleteProjectAfterDriveWork(project, id: id, recordingIDs: recordingIDs,
+                                          deletingRecordings: deletingRecordings, context: context)
+        await DriveProjectSyncRegistry.shared.endDeletion(projectID: id)
+    }
+
+    private func deleteProjectAfterDriveWork(_ project: Project, id: UUID, recordingIDs: [UUID],
+                                             deletingRecordings: Bool, context: ModelContext) async {
         await projectChatModels[id]?.cancelAndWait()
         await retrieval.beginDeletion(.project(id))
         for recordingID in recordingIDs { await retrieval.beginDeletion(.recording(recordingID)) }
@@ -167,6 +176,7 @@ final class LibraryViewModel {
             try SwiftDataProjectRepository(context: context, storage: projectImports.storage).delete(project, deletingRecordings: deletingRecordings)
         } catch let error as WorkspaceDeletionError { showWorkspaceError(error.localizedDescription) }
         catch { showWorkspaceError(error, fallback: "The project could not be deleted. Nothing was removed."); return }
+        DriveProjectLinks.remove(projectID: id)
         if projectSelection == id { projectSelection = nil }
         for recordingID in recordingIDs {
             if selection == recordingID { selection = nil }

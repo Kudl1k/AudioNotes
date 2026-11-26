@@ -10,6 +10,19 @@ struct DriveProjectFolder: Codable, Sendable, Equatable {
         guard DriveProjectRemote.validID(id) else { return nil }
         return URL(string: "https://drive.google.com/drive/folders/\(id)")
     }
+
+    /// Identity check that survives renames: the Drive ID and published project are stable, the name is not.
+    func isSameFolder(as other: DriveProjectFolder) -> Bool {
+        id == other.id && publishedProjectID == other.publishedProjectID
+    }
+}
+
+/// What a validated Drive folder must permit.
+/// - `publish`: owned by me in My Drive and writable (creating a new sharing folder).
+/// - `linkPublished`: writable only; an editor of someone else's shared folder may sync.
+/// - `read`: any readable, non-trashed folder (import/listing/verification).
+enum DriveFolderAccess: Sendable {
+    case publish, linkPublished, read
 }
 
 struct DriveProjectRemote: Sendable {
@@ -19,6 +32,21 @@ struct DriveProjectRemote: Sendable {
     let transport: DriveHTTPTransport
     let checkPrivacy: @Sendable () throws -> Void
     let token: GoogleDriveUpload.Token
+    private let store: DefaultsBox
+    /// Store for baselines, ID reservations and folder pairings. Tests inject a dedicated suite.
+    var defaults: UserDefaults { store.value }
+
+    /// `UserDefaults` is documented as thread-safe but not annotated `Sendable`.
+    private struct DefaultsBox: @unchecked Sendable { let value: UserDefaults }
+
+    init(transport: DriveHTTPTransport, checkPrivacy: @escaping @Sendable () throws -> Void,
+         token: @escaping GoogleDriveUpload.Token, defaults: UserDefaults = .standard) {
+        self.transport = transport
+        self.checkPrivacy = checkPrivacy
+        self.token = token
+        self.store = DefaultsBox(value: defaults)
+    }
+    private static let baselineIndexLimit = 4096
 
     struct Item: Decodable, Sendable {
         struct Capabilities: Decodable, Sendable { let canAddChildren: Bool? }
@@ -43,14 +71,14 @@ struct DriveProjectRemote: Sendable {
         }
     }
 
-    func validateFolder(id: String) async throws -> DriveProjectFolder {
-        let item = try await folderItem(id: id)
+    func validateFolder(id: String, access: DriveFolderAccess = .publish) async throws -> DriveProjectFolder {
+        let item = try await folderItem(id: id, access: access)
         return .init(id: item.id, name: item.name, publishedProjectID: publishedProjectID(in: item))
     }
 
     func sharingParent(of folder: DriveProjectFolder) async throws -> DriveProjectFolder? {
         guard let projectID = folder.publishedProjectID else { return nil }
-        let item = try await folderItem(id: folder.id)
+        let item = try await folderItem(id: folder.id, access: .read)
         guard publishedProjectID(in: item) == projectID,
               let parents = item.parents, parents.count == 1, let parentID = parents.first,
               parentID != folder.id else { return nil }
@@ -63,14 +91,33 @@ struct DriveProjectRemote: Sendable {
         return UUID(uuidString: String(key.dropFirst(2)))
     }
 
-    private func folderItem(id: String) async throws -> Item {
+    /// Current metadata of one Drive file, used to re-check its version immediately before an update.
+    func metadata(id: String) async throws -> Item {
+        guard Self.validID(id) else { throw GoogleDriveSharingError.invalidResponse }
+        let item: Item = try await get(Self.files.appendingPathComponent(id), fields: Self.fields)
+        guard item.id == id else { throw GoogleDriveSharingError.invalidResponse }
+        return item
+    }
+
+    private func folderItem(id: String, access: DriveFolderAccess = .publish) async throws -> Item {
         guard Self.validID(id) else { throw GoogleDriveSharingError.invalidResponse }
         let item: Item = try await get(Self.files.appendingPathComponent(id), fields: Self.fields)
         guard item.id == id, item.mimeType == Self.folderType, item.trashed != true,
-              item.driveId == nil, item.ownedByMe == true, item.capabilities?.canAddChildren == true else {
+              Self.allows(access, item) else {
             throw DriveProjectError.folderUnavailable
         }
         return item
+    }
+
+    static func allows(_ access: DriveFolderAccess, _ item: Item) -> Bool {
+        switch access {
+        case .publish:
+            item.driveId == nil && item.ownedByMe == true && item.capabilities?.canAddChildren == true
+        case .linkPublished:
+            item.capabilities?.canAddChildren == true
+        case .read:
+            true
+        }
     }
 
     func children(in parent: String, key: String) async throws -> [Item] {
@@ -98,48 +145,102 @@ struct DriveProjectRemote: Sendable {
         return UUID(uuidString: String(key.dropFirst(2)))
     }
 
-    func projectFolder(in parent: String, project: DriveProjectSnapshot) async throws -> Item? {
-        let direct = try await children(in: parent, key: "p-" + project.id.uuidString)
-            .filter { $0.mimeType == Self.folderType && $0.capabilities?.canAddChildren == true }
+    /// Finds the Drive folder of `project` inside the sharing folder `parent`.
+    ///
+    /// Order: the folder carrying the project's own key, then a previously confirmed pairing, then
+    /// (only when the project has recordings) a one-time scan of same-named project folders that already
+    /// hold one of its recordings. Folders whose key belongs to another project of the same run are never
+    /// paired. A scan match is persisted so later runs don't repeat the scan.
+    func projectFolder(in parent: String, project: DriveProjectSnapshot,
+                       access: DriveFolderAccess = .linkPublished,
+                       excluding: Set<String> = []) async throws -> Item? {
+        let key = "p-" + project.id.uuidString
+        let direct = try await children(in: parent, key: key)
+            .filter { $0.mimeType == Self.folderType && Self.allows(access, $0) }
         if let canonical = Self.canonicalFolder(from: direct, preferredName: project.name) {
             return canonical
         }
+        let excluded = excluding.subtracting([key])
+        if let paired = try await pairedFolder(in: parent, project: project, access: access, excluding: excluded) {
+            return paired
+        }
         guard !project.recordings.isEmpty else { return nil }
         let folderQuery = "'\(parent)' in parents and trashed = false and mimeType = '\(Self.folderType)'"
-        let allSubfolders = try await listFiles(query: folderQuery).filter {
-            $0.mimeType == Self.folderType &&
-            $0.ownedByMe == true &&
-            $0.driveId == nil &&
-            $0.capabilities?.canAddChildren == true &&
-            ($0.appProperties?["soniquillKey"]?.hasPrefix("p-") == true)
+        let target = Self.normalizedName(project.name)
+        let candidates = try await listFiles(query: folderQuery).filter {
+            guard $0.mimeType == Self.folderType, $0.trashed != true, Self.allows(access, $0),
+                  let candidateKey = $0.appProperties?["soniquillKey"], candidateKey.hasPrefix("p-"),
+                  !excluded.contains(candidateKey) else { return false }
+            return Self.normalizedName($0.name).localizedCaseInsensitiveCompare(target) == .orderedSame
         }
-        guard !allSubfolders.isEmpty else { return nil }
-        let normalizedTarget = project.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let sameName = allSubfolders.filter {
-            $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                .localizedCaseInsensitiveCompare(normalizedTarget) == .orderedSame
-        }
-        let otherSubfolders = allSubfolders.filter { folder in !sameName.contains(where: { $0.id == folder.id }) }
-        for pool in [sameName, otherSubfolders] where !pool.isEmpty {
-            var matched: [Item] = []
-            for candidate in pool.prefix(20) {
-                for recording in project.recordings {
-                    let items = try await children(in: candidate.id, key: "r-" + recording.recordingID.uuidString)
-                    if items.contains(where: { $0.mimeType != Self.folderType }) {
-                        matched.append(candidate)
-                        break
-                    }
+        var matched: [Item] = []
+        for candidate in candidates.prefix(20) {
+            for recording in project.recordings {
+                try Task.checkCancellation()
+                let items = try await children(in: candidate.id, key: "r-" + recording.recordingID.uuidString)
+                if items.contains(where: { $0.mimeType != Self.folderType }) {
+                    matched.append(candidate)
+                    break
                 }
             }
-            if matched.count == 1 { return matched[0] }
         }
-        return nil
+        guard matched.count == 1 else { return nil }
+        savePairing(matched[0].id, parent: parent, projectID: project.id)
+        return matched[0]
     }
 
-    func ensureProjectFolder(in parent: String, project: DriveProjectSnapshot) async throws -> String {
+    private func pairedFolder(in parent: String, project: DriveProjectSnapshot,
+                              access: DriveFolderAccess, excluding: Set<String>) async throws -> Item? {
+        let preference = Self.pairingKey(parent: parent, projectID: project.id)
+        guard let id = defaults.string(forKey: preference) else { return nil }
+        guard Self.validID(id) else {
+            defaults.removeObject(forKey: preference)
+            return nil
+        }
+        let item: Item
+        do {
+            item = try await metadata(id: id)
+        } catch GoogleDriveSharingError.http(let status) where status == 404 || status == 403 {
+            defaults.removeObject(forKey: preference)
+            return nil
+        }
+        let ownKey = "p-" + project.id.uuidString
+        let itemKey = item.appProperties?["soniquillKey"]
+        let keyAcceptable: Bool
+        if let itemKey {
+            keyAcceptable = itemKey == ownKey || (itemKey.hasPrefix("p-") && !excluding.contains(itemKey))
+        } else {
+            keyAcceptable = true
+        }
+        guard item.mimeType == Self.folderType, item.trashed != true, item.parents?.contains(parent) == true,
+              keyAcceptable else {
+            // A pairing that no longer fits (moved, trashed, re-keyed or claimed by another project) is dropped.
+            defaults.removeObject(forKey: preference)
+            return nil
+        }
+        // Still a valid pairing, but possibly not usable at this access level (e.g. read-only for an upload).
+        return Self.allows(access, item) ? item : nil
+    }
+
+    static func pairingKey(parent: String, projectID: UUID) -> String {
+        "drive.project.pairing.\(parent).\(projectID.uuidString)"
+    }
+
+    func savePairing(_ folderID: String, parent: String, projectID: UUID) {
+        guard Self.validID(folderID) else { return }
+        defaults.set(folderID, forKey: Self.pairingKey(parent: parent, projectID: projectID))
+    }
+
+    private static func normalizedName(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func ensureProjectFolder(in parent: String, project: DriveProjectSnapshot,
+                             excluding: Set<String> = []) async throws -> String {
         let key = "p-" + project.id.uuidString
         let name = project.name
-        if let match = try await projectFolder(in: parent, project: project) {
+        if let match = try await projectFolder(in: parent, project: project, access: .linkPublished,
+                                               excluding: excluding) {
             if match.name != name, match.appProperties?["soniquillKey"] == key {
                 var request = Self.request(Self.files.appendingPathComponent(match.id),
                                            items: [.init(name: "fields", value: Self.fields)])
@@ -237,33 +338,62 @@ struct DriveProjectRemote: Sendable {
 
     func saveReservation(_ id: String, parent: String, key: String) {
         guard Self.validID(id) else { return }
-        UserDefaults.standard.set(id, forKey: "drive.project.fileID.\(parent).\(key)")
+        defaults.set(id, forKey: "drive.project.fileID.\(parent).\(key)")
     }
 
     func clearReservation(parent: String, key: String) {
-        UserDefaults.standard.removeObject(forKey: "drive.project.fileID.\(parent).\(key)")
+        defaults.removeObject(forKey: "drive.project.fileID.\(parent).\(key)")
     }
 
     func baseline(for id: String) -> DriveProjectSync.Version? {
-        guard let data = UserDefaults.standard.data(forKey: "drive.project.baseline.\(id)") else { return nil }
+        guard let data = defaults.data(forKey: "drive.project.baseline.\(id)") else { return nil }
         return try? JSONDecoder().decode(DriveProjectSync.Version.self, from: data)
     }
 
-    func saveBaseline(_ version: DriveProjectSync.Version, for id: String) {
+    func saveBaseline(_ version: DriveProjectSync.Version, for id: String, parent: String? = nil) {
         guard let data = try? JSONEncoder().encode(version) else { return }
-        UserDefaults.standard.set(data, forKey: "drive.project.baseline.\(id)")
+        defaults.set(data, forKey: "drive.project.baseline.\(id)")
+        guard let parent, Self.validID(parent) else { return }
+        let indexKey = "drive.project.baselineIndex.\(parent)"
+        var index = defaults.stringArray(forKey: indexKey) ?? []
+        guard !index.contains(id) else { return }
+        index.append(id)
+        if index.count > Self.baselineIndexLimit { index.removeFirst(index.count - Self.baselineIndexLimit) }
+        defaults.set(index, forKey: indexKey)
+    }
+
+    /// Drops baselines and ID reservations recorded for `parent` whose Drive items are no longer listed there.
+    /// One paged listing of the folder; only entries tracked for this folder are touched.
+    func pruneLocalState(parent: String) async throws {
+        guard Self.validID(parent) else { return }
+        let present = Set(try await listFiles(query: "'\(parent)' in parents and trashed = false").map(\.id))
+        let indexKey = "drive.project.baselineIndex.\(parent)"
+        if let index = defaults.stringArray(forKey: indexKey) {
+            let kept = index.filter { present.contains($0) }
+            for id in index where !present.contains(id) {
+                defaults.removeObject(forKey: "drive.project.baseline.\(id)")
+            }
+            if kept.count != index.count {
+                if kept.isEmpty { defaults.removeObject(forKey: indexKey) } else { defaults.set(kept, forKey: indexKey) }
+            }
+        }
+        let prefix = "drive.project.fileID.\(parent)."
+        for (key, value) in defaults.dictionaryRepresentation() where key.hasPrefix(prefix) {
+            guard let id = value as? String, !present.contains(id) else { continue }
+            defaults.removeObject(forKey: key)
+        }
     }
 
     func reserveID(parent: String, key: String) async throws -> String {
         struct IDs: Decodable { let ids: [String] }
         let preference = "drive.project.fileID.\(parent).\(key)"
-        if let saved = UserDefaults.standard.string(forKey: preference), Self.validID(saved) { return saved }
+        if let saved = defaults.string(forKey: preference), Self.validID(saved) { return saved }
         let url = Self.files.appendingPathComponent("generateIds")
         let result: IDs = try await send(Self.request(url, items: [
             .init(name: "count", value: "1"), .init(name: "space", value: "drive"), .init(name: "type", value: "files")
         ]))
         guard let id = result.ids.first, Self.validID(id) else { throw GoogleDriveSharingError.invalidResponse }
-        UserDefaults.standard.set(id, forKey: preference)
+        defaults.set(id, forKey: preference)
         return id
     }
 

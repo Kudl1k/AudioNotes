@@ -14,6 +14,7 @@ struct AudioNotesiOSApp: App {
                 IOSRootView(services: services)
                     .modelContainer(container)
                     .environment(services.llmConfiguration.localAI)
+                    .environment(\.libraryStorage, startup.storage)
             } else {
                 LibraryRecoveryView(startup: startup)
             }
