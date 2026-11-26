@@ -200,13 +200,14 @@ final class DriveProjectsModel {
     func importDriveProject(storage: LibraryStorage, container: ModelContainer,
                             onImported: @escaping (DriveProjectFolder, UUID) -> Void) {
         start("Choose a published project folder in Drive…", cloud: true) {
-            let folder = try await self.connection.chooseFolder(access: .read)
-            guard let id = folder.publishedProjectID else { throw DriveProjectError.selectPublishedProject }
+            let selected = try await self.connection.chooseFolder(access: .read)
             self.isDriveConnected = true
             self.needsReconnect = false
             self.status = "Importing Drive Project…"
             let token = try await self.connection.uploadToken()
             let remote = DriveProjectRemote(transport: .live, checkPrivacy: DriveSharingPrivacy.check, token: token)
+            let folder = try await remote.projectFolderForImport(selected)
+            guard let id = folder.publishedProjectID else { throw DriveProjectError.selectPublishedProject }
             let result = try await DriveProjectSync.shared.importProject(folder, remote: remote, storage: storage, container: container)
             try Task.checkCancellation()
             onImported(folder, id)
