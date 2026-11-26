@@ -44,15 +44,33 @@ struct DriveProjectRemote: Sendable {
     }
 
     func validateFolder(id: String) async throws -> DriveProjectFolder {
+        let item = try await folderItem(id: id)
+        return .init(id: item.id, name: item.name, publishedProjectID: publishedProjectID(in: item))
+    }
+
+    func sharingParent(of folder: DriveProjectFolder) async throws -> DriveProjectFolder? {
+        guard let projectID = folder.publishedProjectID else { return nil }
+        let item = try await folderItem(id: folder.id)
+        guard publishedProjectID(in: item) == projectID,
+              let parents = item.parents, parents.count == 1, let parentID = parents.first,
+              parentID != folder.id else { return nil }
+        let parent = try await validateFolder(id: parentID)
+        return parent.publishedProjectID == nil ? parent : nil
+    }
+
+    private func publishedProjectID(in item: Item) -> UUID? {
+        guard let key = item.appProperties?["soniquillKey"], key.hasPrefix("p-") else { return nil }
+        return UUID(uuidString: String(key.dropFirst(2)))
+    }
+
+    private func folderItem(id: String) async throws -> Item {
         guard Self.validID(id) else { throw GoogleDriveSharingError.invalidResponse }
         let item: Item = try await get(Self.files.appendingPathComponent(id), fields: Self.fields)
         guard item.id == id, item.mimeType == Self.folderType, item.trashed != true,
               item.driveId == nil, item.ownedByMe == true, item.capabilities?.canAddChildren == true else {
             throw DriveProjectError.folderUnavailable
         }
-        let key = item.appProperties?["soniquillKey"]
-        let projectID = key.flatMap { $0.hasPrefix("p-") ? UUID(uuidString: String($0.dropFirst(2))) : nil }
-        return .init(id: item.id, name: item.name, publishedProjectID: projectID)
+        return item
     }
 
     func children(in parent: String, key: String) async throws -> [Item] {

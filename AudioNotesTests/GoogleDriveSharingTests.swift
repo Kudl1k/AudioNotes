@@ -3,6 +3,35 @@ import Testing
 @testable import AudioNotes
 
 struct GoogleDriveSharingTests {
+    @Test(arguments: [false, true])
+    func recoversAnAccessibleParentOnlyWhenItIsAGeneralSharingFolder(parentIsPublished: Bool) async throws {
+        let projectID = UUID()
+        let folder = DriveProjectFolder(id: "project", name: "Project", publishedProjectID: projectID)
+        let remote = DriveProjectRemote(transport: DriveHTTPTransport(send: { request in
+            let id = request.url?.lastPathComponent
+            #expect(request.httpMethod == "GET")
+            switch id {
+            case "project":
+                return response(request, 200, body: """
+                    {"id":"project","name":"Project","mimeType":"application/vnd.google-apps.folder","ownedByMe":true,
+                     "capabilities":{"canAddChildren":true},"parents":["sharing"],"appProperties":{"soniquillKey":"p-\(projectID)"}}
+                    """)
+            case "sharing":
+                let properties = parentIsPublished ? #","appProperties":{"soniquillKey":"p-\#(projectID)"}"# : ""
+                return response(request, 200, body: """
+                    {"id":"sharing","name":"Team Drive Folder","mimeType":"application/vnd.google-apps.folder","ownedByMe":true,
+                     "capabilities":{"canAddChildren":true}\(properties)}
+                    """)
+            default:
+                Issue.record("Unexpected Drive folder lookup")
+                return response(request, 404)
+            }
+        }), checkPrivacy: {}, token: { _ in "injected-token" })
+
+        let parent = try await remote.sharingParent(of: folder)
+        #expect(parent == (parentIsPublished ? nil : DriveProjectFolder(id: "sharing", name: "Team Drive Folder")))
+    }
+
     @Test func resumesFromConfirmedBytesAndRecoversCompletedFileWithoutDuplicate() async throws {
         let workspace = try TestWorkspace(); defer { workspace.cleanUp() }
         let length = 8 * 1_048_576 + 32

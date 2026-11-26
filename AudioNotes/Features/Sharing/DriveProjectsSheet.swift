@@ -14,25 +14,31 @@ struct DriveProjectsSheet: View {
     @AppStorage("ai.localOnly") private var localOnly = false
     @AppStorage("drive.project.selection") private var selectionData = Data()
     @AppStorage("drive.project.destination") private var destinationData = Data()
+    // Keep the general sharing folder available while the existing destination holds a project link.
+    @AppStorage("drive.project.sharingDestination") private var sharingDestinationData = Data()
     @AppStorage("drive.project.linkedLocalID") private var linkedLocalID = ""
     /// Folder + project set the user already confirmed sharing for, so repeat syncs skip the privacy prompt.
     @AppStorage("drive.project.confirmedScope") private var confirmedScope = ""
     @State private var model = DriveProjectsModel()
-    @State private var pendingShare: ShareAction?
+    @State private var pendingShare: ShareConfirmation?
     @State private var showsConflictSheet = false
     @State private var repeatWhileOpen = false
     @State private var projectSelectionOverride: Set<UUID>?
+    @State private var attemptedRecovery: DriveProjectFolder?
 
-    private enum ShareAction: Identifiable {
+    private enum ShareAction {
         case once, automatic
-        var id: Self { self }
+    }
+
+    private struct ShareConfirmation {
+        let action: ShareAction
+        let scope: String
     }
 
     private enum Phase: Equatable {
         case paused, checking, unavailable(String), needsFolder, needsReconnect, ready
     }
 
-    private var destination: DriveProjectFolder? { try? JSONDecoder().decode(DriveProjectFolder.self, from: destinationData) }
     init(storage: LibraryStorage, initialProject: UUID? = nil, isEmbedded: Bool = false) {
         self.storage = storage
         self.isEmbedded = isEmbedded
@@ -41,11 +47,34 @@ struct DriveProjectsSheet: View {
 
     private var selected: Set<UUID> {
         let stored = projectSelectionOverride ?? (try? JSONDecoder().decode(Set<UUID>.self, from: selectionData)) ?? []
-        return stored.intersection(projects.map(\.id))
+        var available = stored.intersection(projects.map(\.id))
+        // A linked copy can have a different Drive identity from the local project.
+        if available.count > 1, let linkedProject { available.remove(linkedProject.id) }
+        return available
     }
     private var selectedProjects: [Project] { projects.filter { selected.contains($0.id) } }
     private var linkedProject: Project? { projects.first { $0.id.uuidString == linkedLocalID } }
-    private var matchesLink: Bool { linkedLocalID.isEmpty || selectedProjects.map { $0.id.uuidString } == [linkedLocalID] }
+    private var usesLinkedDestination: Bool {
+        guard let linkedProject else { return false }
+        return selected == [linkedProject.id]
+    }
+
+    private var savedDestination: DriveProjectFolder? {
+        try? JSONDecoder().decode(DriveProjectFolder.self, from: destinationData)
+    }
+
+    private var recoveryCandidate: DriveProjectFolder? {
+        guard !localOnly, model.isDriveConnected, !usesLinkedDestination, !selected.isEmpty,
+              destination == nil, let folder = savedDestination, folder.publishedProjectID != nil else { return nil }
+        return folder
+    }
+
+    private var destination: DriveProjectFolder? {
+        let data = usesLinkedDestination || linkedLocalID.isEmpty ? destinationData : sharingDestinationData
+        guard let folder = try? JSONDecoder().decode(DriveProjectFolder.self, from: data),
+              usesLinkedDestination || folder.publishedProjectID == nil else { return nil }
+        return folder
+    }
     private var shareScope: String {
         (destination?.id ?? "") + "|" + selected.map(\.uuidString).sorted().joined(separator: ",")
     }
@@ -57,13 +86,14 @@ struct DriveProjectsSheet: View {
         case nil: return .checking
         case .failure(let message): return .unavailable(message)
         case .available:
+            if recoveryCandidate != nil && attemptedRecovery != recoveryCandidate { return .checking }
             if destination == nil { return .needsFolder }
             return model.isDriveConnected ? .ready : .needsReconnect
         }
     }
 
     private var canAct: Bool {
-        phase == .ready && !selectedProjects.isEmpty && matchesLink && !model.isBusy && !repeatWhileOpen
+        phase == .ready && !selectedProjects.isEmpty && !model.isBusy
     }
 
     var body: some View {
@@ -98,25 +128,31 @@ struct DriveProjectsSheet: View {
             model.verification = nil
             model.conflicts = []
             showsConflictSheet = false
-            if selected.isEmpty, repeatWhileOpen {
-                repeatWhileOpen = false
-                model.cancelCloud()
-            }
         }
         .onChange(of: destination) { model.verification = nil; model.conflicts = []; showsConflictSheet = false }
+        .onChange(of: shareScope) {
+            repeatWhileOpen = false
+            pendingShare = nil
+        }
         .onChange(of: localOnly) { _, enabled in
             if enabled { repeatWhileOpen = false; showsConflictSheet = false; model.cancelCloud() }
         }
 #if os(iOS)
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background && repeatWhileOpen { repeatWhileOpen = false; model.cancelCloud() }
+            if phase == .background { repeatWhileOpen = false }
         }
 #endif
         .task { await model.checkDriveAvailability() }
+        .task(id: recoveryCandidate) { await recoverSharingFolder() }
         .task(id: repeatWhileOpen) {
             guard repeatWhileOpen else { return }
             while !Task.isCancelled {
+                guard phase == .ready, isConfirmed else {
+                    repeatWhileOpen = false
+                    return
+                }
                 await sync()
+                guard !Task.isCancelled else { return }
                 if model.error != nil || !model.conflicts.isEmpty { repeatWhileOpen = false; return }
                 do { try await Task.sleep(for: .seconds(300)) }
                 catch { return }
@@ -137,11 +173,13 @@ struct DriveProjectsSheet: View {
         }
         .confirmationDialog(confirmationTitle,
                             isPresented: Binding(get: { pendingShare != nil }, set: { if !$0 { pendingShare = nil } }),
-                            titleVisibility: .visible, presenting: pendingShare) { action in
-            Button(action == .automatic ? "Share and Keep in Sync" : "Share") { perform(action) }
+                            titleVisibility: .visible, presenting: pendingShare) { confirmation in
+            Button(confirmation.action == .automatic ? "Enable Auto-Sync" : primaryActionTitle) {
+                perform(confirmation.action, scope: confirmation.scope)
+            }
             Button("Cancel", role: .cancel) {}
-        } message: { action in
-            Text(confirmationMessage(for: action))
+        } message: { confirmation in
+            Text(confirmationMessage(for: confirmation.action))
         }
         .alert("Google Drive", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
@@ -278,8 +316,8 @@ struct DriveProjectsSheet: View {
         case .needsReconnect:
             return "Sign in again to keep sharing to “\(destination?.name ?? "your folder")”."
         case .ready:
-            if repeatWhileOpen { return "Keeping in sync every 5 minutes while this window is open." }
-            if let linkedProject { return "Linked Drive project for “\(linkedProject.name)”. Files inherit the folder’s access." }
+            if repeatWhileOpen { return "Auto-sync is on." }
+            if usesLinkedDestination, let linkedProject { return "Linked Drive project for “\(linkedProject.name)”. Files inherit the folder’s access." }
             return "Google Drive folder. Shared files inherit its access settings."
         }
     }
@@ -316,10 +354,11 @@ struct DriveProjectsSheet: View {
                 if let url = destination?.webURL {
                     Button("Open in Google Drive", systemImage: "arrow.up.right.square") { openURL(url) }
                 }
-                Button("Change Folder…", systemImage: "folder") { chooseFolder() }
-                if linkedProject != nil {
+                if usesLinkedDestination {
                     Divider()
                     Button("Unlink Drive Project", systemImage: "xmark.circle") { unlink() }
+                } else {
+                    Button("Change Folder…", systemImage: "folder") { chooseFolder() }
                 }
             } label: {
                 Label("Folder Options", systemImage: "ellipsis.circle")
@@ -419,7 +458,7 @@ struct DriveProjectsSheet: View {
             }
         } footer: {
             if let linkedProject {
-                Text("This folder is the Drive copy of “\(linkedProject.name)”, so only that project syncs here. Unlink it or change the folder to share other projects.")
+                Text("“\(linkedProject.name)” syncs with its linked Drive copy. Choose other projects to share them through your sharing folder.")
             } else if !projects.isEmpty {
                 Text("Shares completed recordings with their transcripts and attachments, plus project documents and images. Summaries and chats stay on this device. Turning a project off stops future updates; copies already in Drive stay.")
             }
@@ -439,7 +478,6 @@ struct DriveProjectsSheet: View {
     private func projectRow(_ project: Project) -> some View {
         let isSelected = selected.contains(project.id)
         let isLinked = project.id.uuidString == linkedLocalID
-        let lockedByLink = !linkedLocalID.isEmpty && !isLinked
         return HStack(spacing: 10) {
             Button { toggle(project.id) } label: {
                 HStack(spacing: 10) {
@@ -466,7 +504,7 @@ struct DriveProjectsSheet: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(model.isBusy || repeatWhileOpen || lockedByLink)
+            .disabled(model.isBusy || repeatWhileOpen)
             .accessibilityLabel(project.name)
             .accessibilityValue(isSelected ? "Selected" : "Not selected")
             .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -497,7 +535,6 @@ struct DriveProjectsSheet: View {
                 .disabled(model.isBusy || repeatWhileOpen)
             }
         }
-        .opacity(lockedByLink ? 0.5 : 1)
         .contextMenu { projectMenuItems(project, isLinked: isLinked) }
     }
 
@@ -533,35 +570,51 @@ struct DriveProjectsSheet: View {
 
     private var shareSection: some View {
         Section {
-            HStack(spacing: 12) {
-                Button("Check for Changes", systemImage: "arrow.triangle.2.circlepath") { verify() }
-                    .disabled(!canAct)
-                    .help("Compares your projects with the copies in Drive without uploading anything.")
-                Spacer(minLength: 8)
-                Button { requestShare(.once) } label: {
-                    Text(isConfirmed ? "Sync Now" : "Share…").frame(minWidth: 90)
+            HStack {
+                Button(primaryActionTitle) { requestShare(.once) }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(isEmbedded ? nil : .defaultAction)
+                    .disabled(!canAct || repeatWhileOpen)
+
+                Spacer()
+
+                if repeatWhileOpen {
+                    Text("Auto-Sync On")
+                        .accessibilityHint("Syncs every five minutes while this screen is open.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .keyboardShortcut(isEmbedded ? nil : .defaultAction)
-                .disabled(!canAct)
+
+                Menu {
+                    if repeatWhileOpen {
+                        Button("Turn Off Auto-Sync") { repeatWhileOpen = false }
+                    } else {
+                        Button("Turn On Auto-Sync") { requestShare(.automatic) }
+                    }
+                    Button("Check for Changes") { verify() }
+                        .disabled(!canAct || repeatWhileOpen)
+                } label: {
+                    Label("Sync Options", systemImage: "ellipsis.circle")
+                        .labelStyle(.iconOnly)
+                }
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .disabled(!canAct && !repeatWhileOpen)
             }
-            Toggle("Keep in sync while this window is open", isOn: Binding(
-                get: { repeatWhileOpen },
-                set: { enabled in
-                    if enabled { requestShare(.automatic) }
-                    else { repeatWhileOpen = false; model.cancelCloud() }
-                }
-            ))
-            .disabled(!repeatWhileOpen && !canAct)
+        } header: {
+            Text("Sync")
         } footer: {
             if let hint = shareHint { Text(hint) }
         }
     }
 
+    private var primaryActionTitle: String {
+        isConfirmed || usesLinkedDestination ? "Sync Now" : "Share"
+    }
+
     private var shareHint: String? {
         if selectedProjects.isEmpty { return "Select at least one project to share." }
-        if !matchesLink { return "This folder belongs to “\(linkedProject?.name ?? "another project")”. Select only that project, or choose a different folder." }
         if let result = model.verification, result.folder == destination {
             var text = "Last checked \(result.checkedAt.formatted(date: .omitted, time: .shortened))."
             if result.unfinished > 0 {
@@ -570,13 +623,6 @@ struct DriveProjectsSheet: View {
                     : " \(result.unfinished) recordings are waiting for a transcript and will be shared once they’re transcribed."
             }
             return text
-        }
-        if repeatWhileOpen {
-#if os(iOS)
-            return "Stops when you close this screen or leave the app."
-#else
-            return "Stops when you close this window."
-#endif
         }
         return nil
     }
@@ -599,13 +645,14 @@ struct DriveProjectsSheet: View {
     private var confirmationTitle: String {
         let target = destination.map { "“\($0.name)”" } ?? "Google Drive"
         let count = selectedProjects.count
+        if usesLinkedDestination, let linkedProject { return "Sync “\(linkedProject.name)” with Google Drive?" }
         return count == 1 ? "Share “\(selectedProjects[0].name)” to \(target)?" : "Share \(count) projects to \(target)?"
     }
 
     private func confirmationMessage(for action: ShareAction) -> String {
         var text = "Anyone with access to this Drive folder will be able to open the recordings, transcripts, attachments, and documents in "
         text += selectedProjects.count == 1 ? "this project." : "\(selectedProjects.map(\.name).joined(separator: ", "))."
-        if action == .automatic { text += " New content you add while this window is open is shared too." }
+        if action == .automatic { text += " Auto-Sync runs every five minutes while this screen is open and shares new content you add." }
         return text
     }
 
@@ -613,15 +660,52 @@ struct DriveProjectsSheet: View {
 
     private func toggle(_ id: UUID) {
         var ids = selected
-        if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }
+        if ids.contains(id) {
+            ids.remove(id)
+        } else if let linkedProject {
+            if id == linkedProject.id {
+                ids = [id]
+            } else {
+                ids.remove(linkedProject.id)
+                ids.insert(id)
+            }
+        } else {
+            ids.insert(id)
+        }
         if projectSelectionOverride != nil { projectSelectionOverride = ids }
         else { selectionData = (try? JSONEncoder().encode(ids)) ?? Data() }
     }
 
+    private func recoverSharingFolder() async {
+        guard let candidate = recoveryCandidate, attemptedRecovery != candidate else { return }
+        let folder = try? await model.recoverSharingFolder(from: candidate)
+        guard !Task.isCancelled, recoveryCandidate == candidate else { return }
+        attemptedRecovery = candidate
+        if let folder { saveSharingFolder(folder) }
+    }
+
+    private func saveSharingFolder(_ folder: DriveProjectFolder) {
+        guard let data = try? JSONEncoder().encode(folder) else { return }
+        if linkedLocalID.isEmpty { destinationData = data }
+        else { sharingDestinationData = data }
+    }
+
     private func chooseFolder() {
+        let linkedFolder = usesLinkedDestination ? destination : nil
         model.chooseDestination { folder in
-            linkedLocalID = ""
-            destinationData = (try? JSONEncoder().encode(folder)) ?? Data()
+            if let linkedFolder {
+                guard folder.id == linkedFolder.id, folder.publishedProjectID == linkedFolder.publishedProjectID else {
+                    model.error = "Choose “\(linkedFolder.name)” to reconnect the linked project."
+                    return
+                }
+                destinationData = (try? JSONEncoder().encode(folder)) ?? destinationData
+                return
+            }
+            guard folder.publishedProjectID == nil else {
+                model.error = "Choose a sharing folder outside the published project folder."
+                return
+            }
+            saveSharingFolder(folder)
         }
     }
 
@@ -634,17 +718,20 @@ struct DriveProjectsSheet: View {
 
     private func unlink() {
         linkedLocalID = ""
-        destinationData = Data()
+        destinationData = sharingDestinationData
+        sharingDestinationData = Data()
         model.status = nil
     }
 
     private func requestShare(_ action: ShareAction) {
         guard canAct else { return }
-        if isConfirmed { perform(action) } else { pendingShare = action }
+        if isConfirmed { perform(action, scope: shareScope) }
+        else { pendingShare = ShareConfirmation(action: action, scope: shareScope) }
     }
 
-    private func perform(_ action: ShareAction) {
-        confirmedScope = shareScope
+    private func perform(_ action: ShareAction, scope: String) {
+        guard canAct, scope == shareScope else { return }
+        confirmedScope = scope
         switch action {
         case .once: Task { await sync() }
         case .automatic: repeatWhileOpen = true
@@ -652,7 +739,7 @@ struct DriveProjectsSheet: View {
     }
 
     private func verify() {
-        guard let destination, matchesLink, !model.isBusy, !localOnly else { return }
+        guard canAct, let destination else { return }
         do {
             let snapshots = try selectedProjects.map { try DriveProjectSnapshot(project: $0, storage: storage) }
             model.verify(snapshots, folder: destination)
@@ -664,6 +751,7 @@ struct DriveProjectsSheet: View {
     private func saveLink(_ folder: DriveProjectFolder, to id: UUID) {
         guard let folderData = try? JSONEncoder().encode(folder),
               let ids = try? JSONEncoder().encode(Set([id])) else { return }
+        if linkedLocalID.isEmpty { sharingDestinationData = destinationData }
         linkedLocalID = id.uuidString
         destinationData = folderData
         selectionData = ids
@@ -671,12 +759,13 @@ struct DriveProjectsSheet: View {
     }
 
     private func sync(resolutions: [DriveProjectSync.Resolution] = []) async {
-        guard let destination, matchesLink, !model.isBusy, !Task.isCancelled else { return }
+        guard phase == .ready, let destination, isConfirmed, !selectedProjects.isEmpty,
+              !model.isBusy, !Task.isCancelled else { return }
         do {
             let snapshots = try selectedProjects.map { try DriveProjectSnapshot(project: $0, storage: storage) }
             await model.sync(snapshots, folder: destination, storage: storage, container: context.container,
                              resolutions: resolutions)
-            if resolutions.isEmpty && !model.conflicts.isEmpty && model.error == nil {
+            if !Task.isCancelled && resolutions.isEmpty && !model.conflicts.isEmpty && model.error == nil {
                 showsConflictSheet = true
             }
         } catch {
@@ -908,6 +997,10 @@ final class DriveProjectsModel {
         }
     }
 
+    func recoverSharingFolder(from folder: DriveProjectFolder) async throws -> DriveProjectFolder? {
+        try await connection.sharingParent(of: folder)
+    }
+
     func chooseDestination(requirePublishedProject: Bool = false, _ selected: @escaping (DriveProjectFolder) -> Void) {
         start("Waiting for Google Drive…", cloud: true) {
             let folder = try await self.connection.chooseFolder()
@@ -970,6 +1063,7 @@ final class DriveProjectsModel {
                     self.progress = fraction
                 }
             }
+            try Task.checkCancellation()
             if !resolutions.isEmpty {
                 let refreshedByID = Dictionary(uniqueKeysWithValues: result.conflicts.map { ($0.id, $0) })
                 var updated: [DriveProjectSync.Conflict] = []
@@ -1045,4 +1139,3 @@ final class DriveProjectsModel {
         }
     }
 }
-

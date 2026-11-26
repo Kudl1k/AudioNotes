@@ -178,6 +178,12 @@ actor GoogleDriveConnection {
         return folder
     }
 
+    func sharingParent(of folder: DriveProjectFolder) async throws -> DriveProjectFolder? {
+        let token = try await uploadToken()
+        return try await DriveProjectRemote(transport: transport, checkPrivacy: checkPrivacy, token: token)
+            .sharingParent(of: folder)
+    }
+
     func uploadToken() async throws -> GoogleDriveUpload.Token {
         try checkPrivacy()
         let id = connectionID
