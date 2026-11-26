@@ -8,6 +8,7 @@ struct ChatGPTCallbackResult: Sendable {
     let error: String?
     let errorDescription: String?
     let scope: String?
+    var pickedFileIDs: String? = nil
 }
 
 enum LoopbackError: LocalizedError, Equatable {
@@ -203,7 +204,8 @@ final class ChatGPTLoopbackListener: ChatGPTLoopbackListening, @unchecked Sendab
             clientID: value(for: "client_id"),
             error: value(for: "error"),
             errorDescription: value(for: "error_description"),
-            scope: value(for: "scope")
+            scope: value(for: "scope"),
+            pickedFileIDs: value(for: "picked_file_ids")
         )
     }
 

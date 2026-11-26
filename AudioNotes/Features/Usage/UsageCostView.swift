@@ -280,3 +280,21 @@ struct TranscriptionCostLabel: View {
         }
     }
 }
+
+struct TranscriptionCostInlineLabel: View {
+    @Query private var records: [GenerationRecord]
+    init(recordingID: UUID) {
+        _records = Query(filter: #Predicate<GenerationRecord> {
+            $0.recordingID == recordingID && $0.featureRaw == "transcription" && $0.statusRaw == "succeeded"
+        }, sort: \GenerationRecord.startedAt, order: .reverse)
+    }
+    var body: some View {
+        if let record = records.first {
+            Text("·").accessibilityHidden(true)
+            Text("\(record.providerDisplayName) · \(record.usageCost.displayText)")
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .help(record.usageDetails)
+        }
+    }
+}

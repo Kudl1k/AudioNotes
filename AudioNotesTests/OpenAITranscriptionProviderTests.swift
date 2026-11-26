@@ -226,6 +226,42 @@ struct OpenAITranscriptionProviderTests {
         #expect(model.state == .completed)
         #expect(recording.transcript?.isMock == true)
     }
+
+    @Test func resetTranscriptionClearsCheckpointAndReturnsToIdle() async throws {
+        let workspace = try TestWorkspace()
+        defer { workspace.cleanUp() }
+        let container = try workspace.storage.makeContainer(inMemory: true)
+        let context = ModelContext(container)
+        let recording = try await workspace.makeRecording(in: context)
+        let audio = workspace.storage.recordingURL(fileName: recording.audioFileName)
+        let fixture = OpenAINetworkFixture(data: OpenAIResponseTests.validJSON)
+        defer { fixture.cleanUp() }
+        let splitter = FixedAudioPreparing(parts: [
+            OpenAIAudioPart(url: audio, startTime: 0, duration: 10),
+            OpenAIAudioPart(url: audio, startTime: 10, duration: 20)
+        ], totalDuration: 30)
+        let provider = OpenAITranscriptionProvider(
+            configuration: .init(),
+            credentials: MockCredentialStore(key: "offline-placeholder"),
+            client: OpenAITranscriptionClient(session: fixture.session),
+            splitter: splitter
+        )
+        let interrupted = Task {
+            _ = try await provider.transcribe(audioURL: audio, progress: { _ in }, status: { status in
+                if status.completedParts == 1 {
+                    withUnsafeCurrentTask { $0?.cancel() }
+                }
+            })
+        }
+        await #expect(throws: CancellationError.self) { _ = try await interrupted.value }
+
+        let model = RecordingViewModel(recording: recording, provider: provider, storage: workspace.storage)
+        #expect(model.hasCheckpoint)
+        model.resetTranscription()
+        #expect(!model.hasCheckpoint)
+        #expect(model.state == .idle)
+        #expect(!FileManager.default.fileExists(atPath: TranscriptionCheckpoint.directory(for: audio).path))
+    }
 }
 
 private struct FixedAudioPreparing: OpenAIAudioPreparing {

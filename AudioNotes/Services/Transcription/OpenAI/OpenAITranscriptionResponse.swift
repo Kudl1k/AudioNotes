@@ -16,30 +16,65 @@ struct OpenAITranscriptionResponse: Codable, Sendable {
     @MainActor
     func makeTranscript(modelName: String = "whisper-1", audioDuration: Double = 0) throws -> Transcript {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw OpenAITranscriptionError.noSpeech }
 
+        let validSegments: [(start: Double, end: Double, text: String)]?
         if let segments {
-            // When segments is present, it must be valid and non-empty (as returned by verbose_json)
-            guard let duration, duration.isFinite, duration > 0 else { throw OpenAITranscriptionError.invalidResponse }
-            guard !segments.isEmpty, segments.allSatisfy({
-                $0.start.isFinite && $0.end.isFinite && $0.start >= 0 && $0.end >= $0.start &&
-                !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            }) else { throw OpenAITranscriptionError.invalidResponse }
+            guard segments.allSatisfy({ $0.start.isFinite && $0.end.isFinite }) else {
+                throw OpenAITranscriptionError.invalidResponse
+            }
+            validSegments = segments.compactMap { segment in
+                let segmentText = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !segmentText.isEmpty else { return nil }
+                let start = max(0, segment.start)
+                let end = max(start, segment.end)
+                return (start, end, segmentText)
+            }
+        } else {
+            validSegments = nil
+        }
 
+        guard !trimmed.isEmpty || (validSegments?.isEmpty == false) else {
+            throw OpenAITranscriptionError.noSpeech
+        }
+
+        let resolvedDuration: Double? = if let duration, duration.isFinite, duration > 0 {
+            duration
+        } else if audioDuration.isFinite, audioDuration > 0 {
+            audioDuration
+        } else {
+            nil
+        }
+
+        if let validSegments {
+            guard let effectiveDuration = resolvedDuration else {
+                throw OpenAITranscriptionError.invalidResponse
+            }
             let transcript = Transcript(languageCode: languageCode, sourceName: "OpenAI · \(modelName)")
-            transcript.segments = segments.enumerated().map { index, segment in
-                TranscriptSegment(
-                    position: index,
-                    startTime: segment.start,
-                    endTime: segment.end,
-                    text: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
-                    speaker: nil
-                )
+            if validSegments.isEmpty {
+                transcript.segments = [
+                    TranscriptSegment(
+                        position: 0,
+                        startTime: 0,
+                        endTime: effectiveDuration,
+                        text: trimmed,
+                        speaker: nil
+                    )
+                ]
+            } else {
+                transcript.segments = validSegments.enumerated().map { index, segment in
+                    TranscriptSegment(
+                        position: index,
+                        startTime: segment.start,
+                        endTime: segment.end,
+                        text: segment.text,
+                        speaker: nil
+                    )
+                }
             }
             return transcript
         } else {
             // Simple json format with text only
-            let effectiveDuration = duration ?? (audioDuration > 0 ? audioDuration : 1.0)
+            let effectiveDuration = resolvedDuration ?? 1.0
             let transcript = Transcript(languageCode: languageCode, sourceName: "OpenAI · \(modelName)")
             transcript.segments = [
                 TranscriptSegment(

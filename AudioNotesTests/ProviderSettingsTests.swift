@@ -130,7 +130,8 @@ struct ProviderSettingsTests {
         #expect(transcriptionConfig.availableVoiceModels.map(\.rawValue).contains("gpt-4o-transcribe"))
     }
 
-    @Test func fetchChatGPTModelsUsesAccountVisibilityAndUpdatesConfiguration() async throws {
+    @Test(arguments: [true, false])
+    func refreshChatGPTModelsReplacesCachedCatalog(hasVisibleModels: Bool) async {
         let store = MockCredentialStore()
         let mockAuth = MockChatGPTAuthService()
         mockAuth.authState = .signedIn(account: ChatGPTAccount(
@@ -155,28 +156,29 @@ struct ProviderSettingsTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let llmConfig = LLMConfiguration(defaults: defaults)
-        llmConfig.chatGPTModel = "gpt-4o-mini" // Initially set to invalid model
+        llmConfig.chatGPTModel = "gpt-4o-mini"
+        llmConfig.chatChatGPTModel = "retired-model"
+        llmConfig.cachedChatGPTModels = [.init(slug: "retired-model", displayName: "Retired")]
+        llmConfig.cachedChatGPTModelsAccountIdentifier = "user_test"
 
         let model = ProviderSettingsViewModel(
             credentials: store,
             chatGPTAuth: mockAuth,
             tokenRefresher: MockChatGPTTokenRefresher(),
-            modelsClient: MockOpenAIModelsClient(models: mockModels),
+            modelsClient: MockOpenAIModelsClient(models: hasVisibleModels ? mockModels : Array(mockModels.suffix(1))),
             llmConfig: llmConfig
         )
 
         #expect(model.isChatGPTSignedIn)
 
-        await model.fetchChatGPTModels()
+        await model.refresh()
 
         let slugs = model.availableChatGPTModels.map(\.slug)
-        #expect(slugs.contains("gpt-4o"))
-        #expect(slugs.contains("o3-mini"))
-        #expect(slugs.contains("gpt-4o-mini")) // Account catalog ordering/visibility is authoritative
-        #expect(!slugs.contains("internal-model")) // Hidden filtered out
-
-        // Model selection should have adjusted away from gpt-4o-mini
+        #expect(slugs == (hasVisibleModels ? ["gpt-4o", "gpt-4o-mini", "o3-mini"] : []))
         #expect(llmConfig.chatGPTModel == "gpt-4o-mini")
-        #expect(llmConfig.cachedChatGPTModels.map(\.slug).contains("gpt-4o"))
+        #expect(llmConfig.chatChatGPTModel == (hasVisibleModels ? "gpt-4o" : "retired-model"))
+        #expect((model.chatGPTModelsError == nil) == hasVisibleModels)
+        #expect(LLMConfiguration(defaults: defaults).summaryChatGPTModel == "gpt-4o-mini")
+        #expect(llmConfig.cachedChatGPTModels.map(\.slug) == slugs)
     }
 }

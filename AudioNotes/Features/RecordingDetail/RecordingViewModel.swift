@@ -28,6 +28,7 @@ final class RecordingViewModel {
     @ObservationIgnored private var attemptID: UUID?
     @ObservationIgnored private var monotonicStart: ContinuousClock.Instant?
     private var progressTracker: TranscriptionProgressTracker?
+    private var checkpointRevision = 0
 
     init(recording: Recording, provider: any TranscriptionProvider = MockTranscriptionProvider(),
          storage: LibraryStorage = LibraryStorage()) {
@@ -45,10 +46,20 @@ final class RecordingViewModel {
     }
 
     var audioURL: URL { storage.recordingURL(fileName: recording.audioFileName) }
+    var hasCheckpoint: Bool {
+        _ = checkpointRevision
+        guard !recording.audioFileName.isEmpty else { return false }
+        return TranscriptionCheckpoint.hasSavedProgress(for: audioURL)
+    }
     var executionLocation: ProviderExecutionLocation { (activeProvider ?? resolvedProvider).executionLocation }
     var selectedModelName: String? { (activeProvider ?? resolvedProvider).modelDisplayName }
     var providerName: String { (activeProvider ?? resolvedProvider).displayName }
     var isMockProvider: Bool { (activeProvider ?? resolvedProvider).isMock }
+    var transcriptionConfiguration: String {
+        if isMockProvider { return "Mock provider · Generates sample text" }
+        let model = selectedModelName.flatMap { providerName.localizedStandardContains($0) ? nil : $0 }
+        return [providerName, model, executionLocation.title].compactMap { $0 }.joined(separator: " · ")
+    }
     var transcriptionEstimate: TranscriptionCostEstimate {
         let provider = resolvedProvider
         let size = try? audioURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
@@ -155,6 +166,7 @@ final class RecordingViewModel {
                 transcript.generationID = generation.id
                 try repository.save(transcript, for: self.recording)
                 TranscriptionCheckpoint.clear(for: self.audioURL)
+                self.checkpointRevision &+= 1
                 self.progress = 1
                 self.progressTracker?.setPhase(.completed)
                 self.progressSnapshot = self.progressTracker?.snapshot
@@ -164,6 +176,7 @@ final class RecordingViewModel {
             } catch {
                 guard self.attemptID == id else { return }
                 self.progress = nil
+                self.checkpointRevision &+= 1
                 if Task.isCancelled || error is CancellationError {
                     self.state = .cancelled
                 } else {
@@ -187,7 +200,25 @@ final class RecordingViewModel {
         progressTracker = nil
         monotonicStart = nil
         errorDetails = nil
+        checkpointRevision &+= 1
         state = .cancelled
+    }
+
+    func resetTranscription() {
+        guard !state.isProcessing else { return }
+        if !recording.audioFileName.isEmpty {
+            TranscriptionCheckpoint.clear(for: audioURL)
+        }
+        lastGeneration = nil
+        activeProvider = nil
+        progress = nil
+        progressSnapshot = nil
+        completedDuration = nil
+        progressTracker = nil
+        monotonicStart = nil
+        errorDetails = nil
+        checkpointRevision &+= 1
+        state = recording.transcript == nil ? .idle : .completed
     }
 
     func dismissCompletion() {

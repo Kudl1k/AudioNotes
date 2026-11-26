@@ -17,6 +17,17 @@ struct UsageTotals: Equatable, Sendable {
         let value = MoneyFormatter.string(Money(amount: knownAPIAmount))
         return unavailableRequests > 0 ? "\(value) known · \(unavailableRequests) unavailable" : value
     }
+
+    var compactDisplayText: String? {
+        if operationCount == 0 { return nil }
+        if meteredRequests == 0 {
+            if localRequests > 0 && planRequests == 0 { return "Local" }
+            if planRequests > 0 { return "Included in plan" }
+            return nil
+        }
+        if unavailableRequests == meteredRequests { return nil }
+        return MoneyFormatter.string(Money(amount: knownAPIAmount))
+    }
 }
 
 enum AccountUsageProvider: CaseIterable, Sendable {

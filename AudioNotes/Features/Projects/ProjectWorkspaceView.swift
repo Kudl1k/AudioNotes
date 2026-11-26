@@ -35,12 +35,12 @@ struct ProjectWorkspaceView: View {
             VStack(alignment: .leading, spacing: WorkspaceSpacing.section) {
                 VStack(alignment: .leading, spacing: WorkspaceSpacing.compact) {
                     Text(project.name).font(.title.bold()).textSelection(.enabled)
-                        .lineLimit(2).truncationMode(.tail).help(project.name)
+                        .lineLimit(2).truncationMode(.tail)
                     Text("^[\(project.recordings.count) recording](inflect: true) · ^[\(project.sources.count) source](inflect: true)")
                         .font(.subheadline).foregroundStyle(.secondary)
                     if let description = project.projectDescription {
                         Text(description).font(.subheadline).foregroundStyle(.secondary)
-                            .lineLimit(2).textSelection(.enabled).help(description)
+                            .lineLimit(2).textSelection(.enabled)
                     }
                 }
                 // Title, counts and description are read as one project summary.
@@ -139,8 +139,22 @@ struct ProjectWorkspaceView: View {
             }
         }
         .toolbar {
-            ToolbarItem { Button("Import Activity", systemImage: "list.bullet") { showsActivity.toggle() }
-                .popover(isPresented: $showsActivity) { ProjectImportActivityView(projectID: project.id, queue: queue) } }
+            ToolbarItem(placement: .automatic) {
+                if queue.items.contains(where: { $0.projectID == project.id }) {
+                    Button {
+                        showsActivity.toggle()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "tray.and.arrow.down")
+                            Text("Imports")
+                        }
+                    }
+                    .help("Project import queue")
+                    .popover(isPresented: $showsActivity) {
+                        ProjectImportActivityView(projectID: project.id, queue: queue)
+                    }
+                }
+            }
         }
         .sheet(item: $exporting) { ExportSheetView(recording: $0) }
         .sheet(item: $preview) { SourcePreviewView(target: $0, url: queue.storage.sourceURL($0.source)) }
@@ -259,7 +273,7 @@ struct ProjectWorkspaceView: View {
             HStack {
                 Image(systemName: "waveform").foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(recording.title).foregroundStyle(.primary).lineLimit(1).truncationMode(.middle).help(recording.title)
+                    Text(recording.title).foregroundStyle(.primary).lineLimit(2).truncationMode(.middle)
                     Text(AudioTime.string(recording.duration) + " · " + recordingStatus(recording)).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()

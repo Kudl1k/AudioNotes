@@ -1,15 +1,32 @@
 import Foundation
 import SwiftData
 
+struct SummaryNamingSnapshot {
+    let recordingTitle: String
+    let projectID: UUID?
+    let projectName: String?
+
+    @MainActor
+    init(_ recording: Recording) {
+        recordingTitle = recording.title
+        projectID = recording.project?.id
+        projectName = recording.project?.name
+    }
+}
+
 @MainActor
 protocol SummaryStoring {
     func save(_ newSummary: Summary, for recording: Recording) throws
+    func save(_ newSummary: Summary, for recording: Recording, naming snapshot: SummaryNamingSnapshot?) throws
     func record(_ generation: GenerationRecord) throws
     func makeCurrent(_ summary: Summary, for recording: Recording) throws
     func delete(_ summary: Summary, for recording: Recording) throws
 }
 
 extension SummaryStoring {
+    func save(_ newSummary: Summary, for recording: Recording, naming snapshot: SummaryNamingSnapshot?) throws {
+        try save(newSummary, for: recording)
+    }
     func record(_ generation: GenerationRecord) throws {}
     func makeCurrent(_ summary: Summary, for recording: Recording) throws {}
     func delete(_ summary: Summary, for recording: Recording) throws {}
@@ -26,16 +43,57 @@ final class SwiftDataSummaryRepository: SummaryStoring {
     }
 
     func save(_ newSummary: Summary, for recording: Recording) throws {
-        if let oldSummary = recording.summary, oldSummary.id != newSummary.id {
-            if !recording.summaryHistory.contains(where: { $0.id == oldSummary.id }) {
-                recording.summaryHistory.append(oldSummary)
+        try save(newSummary, for: recording, naming: nil)
+    }
+
+    func save(_ newSummary: Summary, for recording: Recording, naming snapshot: SummaryNamingSnapshot?) throws {
+        let title = newSummary.title.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let hasUsableTitle = !title.isEmpty && title.count <= 120
+        let previousTitle = recording.title
+        let previousSummary = recording.summary
+        let previousHistory = recording.summaryHistory
+        let previousHistoricalRecording = previousSummary?.historicalRecording
+        let project = recording.project
+        let previousProjectName = project?.name
+        let previousProjectDate = project?.updatedAt
+
+        if let snapshot, hasUsableTitle {
+            if recording.title == snapshot.recordingTitle, recording.title != title {
+                recording.title = title
+                project?.updatedAt = .now
             }
-            oldSummary.historicalRecording = recording
+            if let project, project.id == snapshot.projectID, project.name == snapshot.projectName,
+               previousSummary == nil, previousHistory.isEmpty,
+               !project.recordings.contains(where: { $0.summary != nil || !$0.summaryHistory.isEmpty }) {
+                project.name = title
+                project.updatedAt = .now
+            }
+        }
+        if let previousSummary, previousSummary.id != newSummary.id {
+            if !recording.summaryHistory.contains(where: { $0.id == previousSummary.id }) {
+                recording.summaryHistory.append(previousSummary)
+            }
+            previousSummary.historicalRecording = recording
         }
         recording.summary = newSummary
         newSummary.recording = recording
         context.insert(newSummary)
-        try context.save()
+        do {
+            try context.save()
+        } catch {
+            recording.title = previousTitle
+            if let project, let previousProjectName, let previousProjectDate {
+                project.name = previousProjectName
+                project.updatedAt = previousProjectDate
+            }
+            if previousSummary?.id != newSummary.id {
+                recording.summary = previousSummary
+                context.delete(newSummary)
+                previousSummary?.historicalRecording = previousHistoricalRecording
+                recording.summaryHistory = previousHistory
+            }
+            throw error
+        }
     }
 
     func makeCurrent(_ summary: Summary, for recording: Recording) throws {

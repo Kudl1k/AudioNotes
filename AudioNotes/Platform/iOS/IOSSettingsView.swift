@@ -33,6 +33,7 @@ struct IOSSettingsView: View {
         case usage
         case information(ReleaseInformationView.Page)
         case privacy
+        case driveSharing
         case about
     }
 
@@ -183,6 +184,7 @@ struct IOSSettingsView: View {
         case .usage: UsageCostView(isEmbedded: true)
         case .information(let page): ReleaseInformationView(page: page)
         case .privacy: privacyScreen
+        case .driveSharing: DriveProjectsSheet(storage: LibraryStorage(), isEmbedded: true)
         case .about: aboutScreen
         }
     }
@@ -289,6 +291,7 @@ struct IOSSettingsView: View {
 
         Section("Soniquill") {
             rootLink(.privacy) { Label("Privacy & Data", systemImage: "hand.raised") }
+            rootLink(.driveSharing) { Label("Google Drive Sharing", systemImage: "folder.badge.person.crop") }
             rootLink(.about) { Label("Help & About", systemImage: "info.circle") }
         }
     }

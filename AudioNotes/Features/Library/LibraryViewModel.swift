@@ -5,11 +5,15 @@ import SwiftData
 struct LibraryActivity: Identifiable, Sendable {
     let id: String
     let recordingID: UUID
-    let title: String
+    let operation: String
+    let recordingTitle: String
+    var title: String { operation + " · " + recordingTitle }
+
     init(recording: Recording, feature: String, title: String) {
         id = recording.id.uuidString + feature
         recordingID = recording.id
-        self.title = title + " · " + recording.title
+        operation = title
+        recordingTitle = recording.title
     }
 }
 

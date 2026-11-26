@@ -76,11 +76,13 @@ struct OpenAITranscriptionProvider: TranscriptionProvider {
             status(TranscriptionStatus(phase: .transcribing, currentPart: index + 1, totalParts: split.parts.count,
                                        completedParts: index, processedAudioDuration: completedAudio,
                                        totalAudioDuration: split.totalDuration))
-            let partTranscript: Transcript
+            let partTranscript: Transcript?
             let cached: Bool
+            let allowSilentPart = split.parts.count > 1
             if let response = checkpoint?.read(OpenAITranscriptionResponse.self, start: part.startTime, duration: part.duration),
-               let transcript = try? response.makeTranscript(modelName: configuration.model.rawValue, audioDuration: part.duration) {
-                partTranscript = transcript
+               let cachedResult = Self.cachedPartTranscript(from: response, modelName: configuration.model.rawValue,
+                                                            audioDuration: part.duration, allowSilence: allowSilentPart) {
+                partTranscript = cachedResult.transcript
                 cached = true
             } else {
                 let requestID = UUID()
@@ -95,19 +97,25 @@ struct OpenAITranscriptionProvider: TranscriptionProvider {
                     usage(.finished(requestID, nil, false))
                     throw error
                 }
-                partTranscript = try response.makeTranscript(modelName: configuration.model.rawValue, audioDuration: part.duration)
+                do {
+                    partTranscript = try response.makeTranscript(modelName: configuration.model.rawValue, audioDuration: part.duration)
+                } catch OpenAITranscriptionError.noSpeech where allowSilentPart {
+                    partTranscript = nil
+                }
                 checkpoint?.save(response, start: part.startTime, duration: part.duration)
                 cached = false
             }
             try Task.checkCancellation()
-            if index == 0 { merged.languageCode = partTranscript.languageCode }
-            for segment in partTranscript.orderedSegments {
-                guard segment.startTime < part.duration else { continue }
-                let startTime = min(part.duration, max(0, segment.startTime))
-                let endTime = min(part.duration, max(startTime, segment.endTime))
-                merged.segments.append(TranscriptSegment(position: merged.segments.count,
-                    startTime: startTime + part.startTime, endTime: endTime + part.startTime,
-                    text: segment.text, speaker: segment.speaker))
+            if let partTranscript {
+                if merged.languageCode == nil { merged.languageCode = partTranscript.languageCode }
+                for segment in partTranscript.orderedSegments {
+                    guard segment.startTime < part.duration else { continue }
+                    let startTime = min(part.duration, max(0, segment.startTime))
+                    let endTime = min(part.duration, max(startTime, segment.endTime))
+                    merged.segments.append(TranscriptSegment(position: merged.segments.count,
+                        startTime: startTime + part.startTime, endTime: endTime + part.startTime,
+                        text: segment.text, speaker: segment.speaker))
+                }
             }
             completedAudio += part.duration
             if split.wasSplit {
@@ -115,8 +123,8 @@ struct OpenAITranscriptionProvider: TranscriptionProvider {
                 progress(fraction)
             }
             status(TranscriptionStatus(phase: .transcribing, currentPart: index + 1, totalParts: split.parts.count,
-                                      completedParts: index + 1, processedAudioDuration: completedAudio,
-                                      totalAudioDuration: split.totalDuration, reusedPart: cached))
+                                       completedParts: index + 1, processedAudioDuration: completedAudio,
+                                       totalAudioDuration: split.totalDuration, reusedPart: cached))
         }
         try Task.checkCancellation()
         status(TranscriptionStatus(phase: .merging, currentPart: nil, totalParts: split.parts.count,
@@ -124,5 +132,21 @@ struct OpenAITranscriptionProvider: TranscriptionProvider {
                                    totalAudioDuration: split.totalDuration))
         guard !merged.segments.isEmpty else { throw OpenAITranscriptionError.noSpeech }
         return merged
+    }
+
+    @MainActor
+    private static func cachedPartTranscript(
+        from response: OpenAITranscriptionResponse,
+        modelName: String,
+        audioDuration: Double,
+        allowSilence: Bool
+    ) -> (transcript: Transcript?, silent: Bool)? {
+        do {
+            return (try response.makeTranscript(modelName: modelName, audioDuration: audioDuration), false)
+        } catch OpenAITranscriptionError.noSpeech where allowSilence {
+            return (nil, true)
+        } catch {
+            return nil
+        }
     }
 }

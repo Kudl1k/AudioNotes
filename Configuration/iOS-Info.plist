@@ -10,6 +10,12 @@
 	<string>com.googleusercontent.apps.576974561449-mrqi6hj029poen9emjp0658p09gkd4kt</string>
 	<key>GoogleCloudProjectID</key>
 	<string>sublime-elixir-474816-b4</string>
+	<key>DriveOAuthClientID</key>
+	<string>$(SONIQUILL_DRIVE_IOS_CLIENT_ID)</string>
+	<key>DriveCloudProjectID</key>
+	<string>$(SONIQUILL_DRIVE_CLOUD_PROJECT_ID)</string>
+	<key>DriveOAuthURLScheme</key>
+	<string>$(SONIQUILL_DRIVE_IOS_URL_SCHEME)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -17,6 +23,26 @@
 			<array>
 				<string>com.googleusercontent.apps.576974561449-mrqi6hj029poen9emjp0658p09gkd4kt</string>
 			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array><string>$(SONIQUILL_DRIVE_IOS_URL_SCHEME)</string></array>
+		</dict>
+	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>cz.kudladev.soniquill.recording-package</string>
+			<key>UTTypeDescription</key>
+			<string>Soniquill Recording Package</string>
+			<key>UTTypeConformsTo</key>
+			<array><string>public.data</string></array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array><string>soniquill</string></array>
+			</dict>
 		</dict>
 	</array>
 </dict>

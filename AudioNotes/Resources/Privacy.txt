@@ -12,6 +12,9 @@ Cloud providers receive the audio or transcript/source excerpts and conversation
 Network activity outside AI
 Explicit model downloads contact Hugging Face and its content delivery hosts. OAuth setup contacts the relevant account provider. Sparkle, when configured, fetches the public update feed from GitHub Pages and update packages from GitHub Releases. Update checks disclose ordinary network information such as your IP address to hosting services. System profiling is disabled. You can change automatic update checks in Settings. Local Only governs AI content execution, not updates, model downloads or account setup.
 
+Recording sharing
+Local recording package export and import use files you select. Google Drive is a separate connection. An explicitly confirmed upload sends the original audio, completed transcript and selected attachments to My Drive. Local Only blocks Drive connection and upload requests. Project sync sends completed recordings, their attachments, and project documents and images for the projects and Drive folder you confirm. Files inherit access from their Drive folder. You manage recipient access in Drive. Recipients can keep any copies they already downloaded.
+
 Diagnostics and telemetry
 Soniquill adds no behavioral analytics or remote crash reporting. Help → Export Diagnostics writes a local JSON file containing only version/build, macOS version, architecture, schema version and library/update availability. It excludes source content, names, paths, credentials, environment variables and logs. You decide whether and with whom to share that file. macOS may separately collect crash reports under your system settings. Development-only logs are not included in production diagnostics.
 

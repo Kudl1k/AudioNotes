@@ -161,12 +161,8 @@ final class LLMConfiguration {
     var cachedChatGPTModels: [OpenAIModelItem] {
         get {
             guard let data = defaults.data(forKey: "llm.chatgpt.cached_models"),
-                  let decoded = try? JSONDecoder().decode([OpenAIModelItem].self, from: data),
-                  !decoded.isEmpty else {
-                return [
-                    OpenAIModelItem(slug: "gpt-4o", displayName: "GPT-4o (flagship)"),
-                    OpenAIModelItem(slug: "o3-mini", displayName: "o3-mini (reasoning)")
-                ]
+                  let decoded = try? JSONDecoder().decode([OpenAIModelItem].self, from: data) else {
+                return []
             }
             return decoded
         }
@@ -252,7 +248,7 @@ final class LLMConfiguration {
         summaryOpenAIModel = OpenAILLMModel(rawValue: sumOpenAIModelRaw) ?? .gpt4oMini
 
         let sumChatGPTModelRaw = defaults.string(forKey: "llm.summary.chatgpt.model") ?? defaults.string(forKey: "llm.chatgpt.model")
-        if let sumChatGPTModelRaw, !sumChatGPTModelRaw.isEmpty, sumChatGPTModelRaw != "gpt-4o-mini" {
+        if let sumChatGPTModelRaw, !sumChatGPTModelRaw.isEmpty {
             summaryChatGPTModel = sumChatGPTModelRaw
         } else {
             summaryChatGPTModel = "gpt-4o"
@@ -276,7 +272,7 @@ final class LLMConfiguration {
         chatOpenAIModel = OpenAILLMModel(rawValue: chatOpenAIModelRaw) ?? .gpt4oMini
 
         let storedChatChatGPTModel = defaults.string(forKey: "llm.chat.chatgpt.model")
-        if let storedChatChatGPTModel, !storedChatChatGPTModel.isEmpty, storedChatChatGPTModel != "gpt-4o-mini" {
+        if let storedChatChatGPTModel, !storedChatChatGPTModel.isEmpty {
             chatChatGPTModel = storedChatChatGPTModel
         } else {
             chatChatGPTModel = "gpt-4o"
