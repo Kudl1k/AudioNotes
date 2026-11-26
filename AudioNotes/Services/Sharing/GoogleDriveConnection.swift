@@ -189,19 +189,26 @@ actor GoogleDriveConnection {
         return try await storage.load() != nil
     }
 
+    private enum Pick { case folder(DriveFolderAccess), importFiles }
+
     func connect() async throws {
-        _ = try await authorize(pickFolder: false)
+        _ = try await authorize()
     }
 
     /// - Parameter access: what the caller will do with the folder (see `DriveFolderAccess`).
     func chooseFolder(access: DriveFolderAccess = .publish) async throws -> DriveProjectFolder {
-        guard let folder = try await authorize(pickFolder: true, folderAccess: access) else {
+        guard let folder = try await authorize(pick: .folder(access)) else {
             throw GoogleDriveSharingError.consent
         }
         return folder
     }
 
-    private func authorize(pickFolder: Bool, folderAccess: DriveFolderAccess = .publish) async throws -> DriveProjectFolder? {
+    func chooseImportFolder() async throws -> DriveProjectFolder {
+        guard let folder = try await authorize(pick: .importFiles) else { throw GoogleDriveSharingError.consent }
+        return folder
+    }
+
+    private func authorize(pick: Pick? = nil) async throws -> DriveProjectFolder? {
         try checkPrivacy()
         guard !isAuthorizing, !isDisconnecting else { throw GoogleDriveSharingError.busy }
         isAuthorizing = true
@@ -221,13 +228,16 @@ actor GoogleDriveConnection {
         var authURL = try GoogleGeminiOAuthService.authorizationURL(
             clientID: client.clientID, redirectURI: redirect, state: state,
             challenge: PKCEHelper.generateCodeChallenge(from: verifier), scopes: [Self.scope])
-        if pickFolder {
+        if let pick {
             var address = URLComponents(url: authURL, resolvingAgainstBaseURL: false)!
             address.queryItems?.append(contentsOf: [
                 .init(name: "trigger_onepick", value: "true"),
-                .init(name: "allow_folder_selection", value: "true"),
-                .init(name: "mimetypes", value: DriveProjectRemote.folderType)
+                .init(name: "allow_folder_selection", value: "true")
             ])
+            switch pick {
+            case .folder: address.queryItems?.append(.init(name: "mimetypes", value: DriveProjectRemote.folderType))
+            case .importFiles: address.queryItems?.append(.init(name: "allow_multiple", value: "true"))
+            }
             authURL = address.url!
         }
         try checkPrivacy()
@@ -246,9 +256,10 @@ actor GoogleDriveConnection {
         guard callback.state == state, callback.error == nil, let code = callback.code else {
             throw GoogleDriveSharingError.consent
         }
-        let pickedID = callback.pickedFileIDs
-        if pickFolder {
-            guard let pickedID, DriveProjectRemote.validID(pickedID) else { throw GoogleDriveSharingError.consent }
+        let picked = (callback.pickedFileIDs ?? "").split(separator: ",").map(String.init)
+        if let pick {
+            guard !picked.isEmpty, picked.allSatisfy(DriveProjectRemote.validID) else { throw GoogleDriveSharingError.consent }
+            if case .folder = pick, picked.count != 1 { throw GoogleDriveSharingError.consent }
         }
         let tokens = try await token([
             "grant_type": "authorization_code", "code": code, "code_verifier": verifier, "redirect_uri": redirect
@@ -256,10 +267,13 @@ actor GoogleDriveConnection {
         guard let refresh = tokens.refresh_token, !refresh.isEmpty else { throw GoogleDriveSharingError.consent }
         try checkPrivacy()
         var folder: DriveProjectFolder?
-        if pickFolder, let pickedID {
+        if let pick {
             let remote = DriveProjectRemote(transport: transport, checkPrivacy: checkPrivacy,
                                             token: { _ in tokens.access_token })
-            folder = try await remote.validateFolder(id: pickedID, access: folderAccess)
+            switch pick {
+            case .folder(let access): folder = try await remote.validateFolder(id: picked[0], access: access)
+            case .importFiles: folder = try await remote.importFolder(picked: picked)
+            }
         }
         try checkPrivacy()
         try await storage.save(credential(tokens, refresh: refresh))

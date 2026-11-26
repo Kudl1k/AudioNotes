@@ -199,8 +199,8 @@ final class DriveProjectsModel {
 
     func importDriveProject(storage: LibraryStorage, container: ModelContainer,
                             onImported: @escaping (DriveProjectFolder, UUID) -> Void) {
-        start("Choose a published project folder in Drive…", cloud: true) {
-            let selected = try await self.connection.chooseFolder(access: .read)
+        start("Select the project’s files in Google Drive…", cloud: true) {
+            let selected = try await self.connection.chooseImportFolder()
             self.isDriveConnected = true
             self.needsReconnect = false
             self.status = "Importing Drive Project…"

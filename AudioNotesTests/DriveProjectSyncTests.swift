@@ -532,6 +532,12 @@ final class DriveProjectSyncTests {
         let selected = try await remote.validateFolder(id: mocked.root, access: .read)
         let importFolder = try await remote.projectFolderForImport(selected)
         #expect(importFolder == readable)
+        let pickedFiles = await mocked.entryIDs(keyPrefix: "r-") + mocked.entryIDs(keyPrefix: "s-")
+        #expect(try await remote.importFolder(picked: pickedFiles) == readable)
+        #expect(try await remote.importFolder(picked: [linkedID]) == readable)
+        await #expect(throws: DriveProjectError.selectPublishedProject) {
+            try await remote.importFolder(picked: pickedFiles + [mocked.root])
+        }
         let imported = try await sync.importProject(importFolder, remote: remote, storage: receiver.storage, container: container)
         #expect(imported.importedRecordings == 1)
         #expect(imported.importedSources == 1)

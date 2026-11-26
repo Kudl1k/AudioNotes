@@ -713,7 +713,7 @@ struct DriveProjectsSheet: View {
         } header: {
             Text("Received a Project?")
         } footer: {
-            Text("Pick a project folder someone shared with you in Google Drive. It’s added to your library as a new project and stays linked for future syncs.")
+            Text("Open a project folder someone shared with you in Google Drive and select all of its files (⌘A). It’s added to your library as a new project and stays linked for future syncs.")
         }
     }
 
