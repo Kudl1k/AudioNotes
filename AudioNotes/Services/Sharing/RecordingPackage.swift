@@ -63,7 +63,7 @@ struct RecordingPackageSnapshot: Sendable {
     let transcript: RecordingPackageManifest.Text
     let files: [File]
 
-    @MainActor
+    /// Copies `recording` on the caller's actor, which must own the recording's model context.
     init(recording: Recording, selected: Set<UUID>, storage: LibraryStorage) throws {
         guard let transcript = recording.transcript, !transcript.segments.isEmpty else {
             throw RecordingPackageError.missingTranscript

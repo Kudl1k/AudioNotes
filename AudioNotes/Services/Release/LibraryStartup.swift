@@ -10,6 +10,8 @@ final class LibraryStartup {
     private(set) var failed = false
     let support: URL
     var backups: URL { support.appending(path: "AudioNotes/Backups") }
+    /// Managed files of the library this startup opens.
+    var storage: LibraryStorage { LibraryStorage(rootURL: support.appending(path: "AudioNotes")) }
 
     init(support: URL = AppStorageLocations.applicationSupport()) {
         self.support = support

@@ -6,6 +6,7 @@ struct IOSSettingsView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.libraryStorage) private var libraryStorage
     @StateObject private var providerSettings: ProviderSettingsViewModel
     @State private var disconnectChatGPT = false
     @State private var disconnectGemini = false
@@ -184,7 +185,7 @@ struct IOSSettingsView: View {
         case .usage: UsageCostView(isEmbedded: true)
         case .information(let page): ReleaseInformationView(page: page)
         case .privacy: privacyScreen
-        case .driveSharing: DriveProjectsSheet(storage: LibraryStorage(), isEmbedded: true)
+        case .driveSharing: DriveProjectsSheet(storage: libraryStorage, isEmbedded: true)
         case .about: aboutScreen
         }
     }

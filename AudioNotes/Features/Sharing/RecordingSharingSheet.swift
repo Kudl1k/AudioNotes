@@ -25,6 +25,7 @@ struct RecordingSharingSheet: View {
     @State private var preparedAttachmentNames: [String] = []
     @State private var showSavePicker = false
     @State private var cloudWork = false
+    @State private var temporaryFolders = SharingTemporaryFolders()
 
     private let connection = GoogleDriveConnection.shared
 
@@ -134,8 +135,15 @@ struct RecordingSharingSheet: View {
             if enabled && cloudWork { work?.cancel() }
         }
         .onDisappear {
-            if work == nil { resetPackage() }
-            else { work?.cancel() }
+            let folders = temporaryFolders
+            if let work {
+                work.cancel()
+                // The cancelled task may still be finishing a package; clean up once it has stopped.
+                Task { await work.value; folders.removeAll() }
+            } else {
+                resetPackage()
+                folders.removeAll()
+            }
         }
         .confirmationDialog("Upload this package to My Drive?", isPresented: $confirmUpload, titleVisibility: .visible) {
             Button(upload == nil ? "Upload Package" : "Resume Upload") { uploadPackage() }
@@ -187,12 +195,13 @@ struct RecordingSharingSheet: View {
         let snapshot = try RecordingPackageSnapshot(recording: recording, selected: selected, storage: storage)
         let folder = FileManager.default.temporaryDirectory.appending(path: "SoniquillShare-\(UUID())")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        temporaryFolders.track(folder)
         let url = folder.appendingPathComponent(packageName)
         do {
             try await RecordingPackageCodec().export(snapshot, to: url)
             try Task.checkCancellation()
         } catch {
-            try? FileManager.default.removeItem(at: folder)
+            temporaryFolders.remove(folder)
             throw error
         }
         prepared = url
@@ -201,12 +210,16 @@ struct RecordingSharingSheet: View {
     }
 
     private func resetPackage() {
-        if let prepared { try? FileManager.default.removeItem(at: prepared.deletingLastPathComponent()) }
-        prepared = nil
-        preparedAttachmentNames = []
+        discardPreparedPackage()
         upload = nil
         link = nil
         status = nil
+    }
+
+    private func discardPreparedPackage() {
+        if let prepared { temporaryFolders.remove(prepared.deletingLastPathComponent()) }
+        prepared = nil
+        preparedAttachmentNames = []
     }
 
     private func savePackage() {
@@ -251,8 +264,27 @@ struct RecordingSharingSheet: View {
                 await MainActor.run { progress = Double(received) / Double(total) }
             }
             upload = nil
+            discardPreparedPackage()
             status = "Uploaded to My Drive."
         }
+    }
+}
+
+/// Temporary package folders this sheet created; removed when they are no longer needed.
+@MainActor
+private final class SharingTemporaryFolders {
+    private var folders: Set<URL> = []
+
+    func track(_ folder: URL) { folders.insert(folder) }
+
+    func remove(_ folder: URL) {
+        folders.remove(folder)
+        try? FileManager.default.removeItem(at: folder)
+    }
+
+    func removeAll() {
+        for folder in folders { try? FileManager.default.removeItem(at: folder) }
+        folders.removeAll()
     }
 }
 

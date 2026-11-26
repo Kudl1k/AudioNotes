@@ -11,6 +11,7 @@ struct ProviderSettingsView: View {
     @State private var information: ReleaseInformationView.Page?
 
     @State private var selectedPage: SettingsPage? = .defaults(.transcription)
+    @Environment(\.libraryStorage) private var libraryStorage
     private let navigation: SettingsNavigation?
 
     private enum SettingsPage: Hashable, Identifiable {
@@ -186,7 +187,7 @@ struct ProviderSettingsView: View {
         case .privacy:
             privacyPage
         case .driveSharing:
-            DriveProjectsSheet(storage: LibraryStorage(), isEmbedded: true)
+            DriveProjectsSheet(storage: libraryStorage, isEmbedded: true)
         case .usage:
             UsageCostView(isEmbedded: true)
         case .about:

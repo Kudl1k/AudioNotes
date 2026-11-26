@@ -113,10 +113,9 @@ struct IOSMoveRecordingSheet: View {
 struct IOSProjectActions: ViewModifier {
     let project: Project
     var showsToolbar = false
+    let requestDeletion: () -> Void
     @Environment(IOSAudioImportModel.self) private var imports
-    @Environment(\.modelContext) private var context
     @State private var rename = false
-    @State private var delete = false
     func body(content: Content) -> some View {
         content
             .contextMenu { actions }
@@ -128,30 +127,21 @@ struct IOSProjectActions: ViewModifier {
                     }
                 }
             }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) { actions }
-            .sheet(isPresented: $rename) { IOSProjectNameSheet(project: project, library: imports.library) }
-            .confirmationDialog("Delete \(project.name)?", isPresented: $delete, titleVisibility: .visible) {
-                Button("Delete Project, Keep Recordings", role: .destructive) { remove(false) }
-                Button("Delete Project and Recordings", role: .destructive) { remove(true) }
-                Button("Cancel", role: .cancel) {}
-            } message: { Text("Project sources and project chat will be deleted. Choose whether to keep its recordings in the library.") }
-            .onChange(of: delete) { _, presented in
-                if !presented, case .deleteProject(let pending) = imports.library.prompt, pending.id == project.id {
-                    imports.library.prompt = nil
-                }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                // A destructive swipe button would optimistically remove the row before confirmation.
+                Button("Delete", systemImage: "trash", action: requestDeletion)
+                    .tint(.red)
+                    .disabled(imports.library.isDeletingProject)
+                Button("Rename", systemImage: "pencil") { rename = true }
             }
+            .sheet(isPresented: $rename) { IOSProjectNameSheet(project: project, library: imports.library) }
     }
     @ViewBuilder private var actions: some View {
         Button("Rename", systemImage: "pencil") { rename = true }
-        Button("Delete", systemImage: "trash", role: .destructive) {
-            imports.library.requestDeleteProject(project)
-            delete = true
-        }
+        Button("Delete", systemImage: "trash", role: .destructive, action: requestDeletion)
             .disabled(imports.library.isDeletingProject)
     }
-    private func remove(_ recordings: Bool) {
-        Task { await imports.library.confirmDeleteProject(project, deletingRecordings: recordings, context: context) }
-    }
+
 }
 
 struct IOSRecordingActions: ViewModifier {

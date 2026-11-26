@@ -18,6 +18,7 @@ struct IOSRootView: View {
     @State private var showsDriveProjects = false
     @State private var showsFolderImporter = false
     @State private var showingNewProject = false
+    @State private var projectPendingDeletion: Project?
 
     @State private var navigationPath: [LibraryDestination] = []
     @State private var destination: LibraryDestination? = .allRecordings
@@ -46,6 +47,32 @@ struct IOSRootView: View {
         .alert("Audio Import", isPresented: Binding(get: { imports.resultMessage != nil }, set: { if !$0 { imports.resultMessage = nil } })) {
             Button("OK") { imports.resultMessage = nil }
         } message: { Text(imports.resultMessage ?? "") }
+    }
+
+    private func projectDeletionAlert(for list: some View) -> some View {
+        list
+            .alert(
+                projectPendingDeletion.map { "Delete \($0.name)?" } ?? "Delete Project?",
+                isPresented: Binding(
+                    get: { projectPendingDeletion != nil },
+                    set: { if !$0 { projectPendingDeletion = nil } }
+                ),
+                presenting: projectPendingDeletion
+            ) { project in
+                Button("Delete Project, Keep Recordings", role: .destructive) {
+                    confirmProjectDeletion(project, deletingRecordings: false)
+                }
+                Button("Delete Project and Recordings", role: .destructive) {
+                    confirmProjectDeletion(project, deletingRecordings: true)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("Project sources and project chat will be deleted. Choose whether to keep its recordings in the library.")
+            }
+    }
+
+    private func confirmProjectDeletion(_ project: Project, deletingRecordings: Bool) {
+        Task { await imports.library.confirmDeleteProject(project, deletingRecordings: deletingRecordings, context: context) }
     }
 
     var body: some View {
@@ -185,7 +212,7 @@ struct IOSRootView: View {
 
     private var compactLayout: some View {
         NavigationStack(path: $navigationPath) {
-            List {
+            projectDeletionAlert(for: List {
                 Section(header: Text("Projects")) {
                     if projects.isEmpty {
                         Text("No Projects")
@@ -202,7 +229,7 @@ struct IOSRootView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            .modifier(IOSProjectActions(project: project))
+                            .modifier(IOSProjectActions(project: project) { projectPendingDeletion = project })
                         }
                     }
                     Button("New Project…", systemImage: "folder.badge.plus") { showingNewProject = true }
@@ -234,7 +261,7 @@ struct IOSRootView: View {
                         }
                     }
                 }
-            }
+            })
             .navigationDestination(for: LibraryDestination.self) { value in
                 destinationView(value)
             }
@@ -257,7 +284,7 @@ struct IOSRootView: View {
 
     private var regularLayout: some View {
         NavigationSplitView {
-            List(selection: $destination) {
+            projectDeletionAlert(for: List(selection: $destination) {
                 Section("Library") {
                     NavigationLink(value: LibraryDestination.allRecordings) {
                         Label("All Recordings", systemImage: "waveform")
@@ -276,7 +303,7 @@ struct IOSRootView: View {
                                 Label(project.name, systemImage: "folder")
                                     .badge(project.recordings.count)
                             }
-                            .modifier(IOSProjectActions(project: project))
+                            .modifier(IOSProjectActions(project: project) { projectPendingDeletion = project })
                         }
                     }
                     Button("New Project…", systemImage: "folder.badge.plus") { showingNewProject = true }
@@ -295,7 +322,7 @@ struct IOSRootView: View {
                         }
                     }
                 }
-            }
+            })
             .navigationTitle("Soniquill")
             .toolbar {
                 if destination == .allRecordings || destination == nil {
