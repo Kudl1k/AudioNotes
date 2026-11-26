@@ -492,9 +492,19 @@ final class DriveProjectSyncTests {
         let sync = DriveProjectSync()
         let snapshot = try DriveProjectSnapshot(project: project, storage: workspace.storage)
         let root = DriveProjectFolder(id: mocked.root, name: "Shared folder")
+        await #expect(throws: DriveProjectError.selectPublishedProject) {
+            try await remote.projectFolderForImport(root)
+        }
         let first = try await sync.run(projects: [snapshot], folder: root, remote: remote) { _, _ in }
         #expect(first.uploaded == 2)
         let linkedID = try #require(await mocked.projectFolderID())
+
+        await mocked.duplicateEntry(key: "p-" + project.id.uuidString)
+        await #expect(throws: DriveProjectError.selectPublishedProject) {
+            try await remote.projectFolderForImport(root)
+        }
+        let duplicate = try #require(await mocked.entryIDs(keyPrefix: "p-").first { $0 != linkedID })
+        await mocked.trashEntry(duplicate)
 
         // Editor of someone else's folder: may sync and may use it as a sharing folder.
         await mocked.setAccess(linkedID, owned: false, writable: true)
@@ -519,7 +529,10 @@ final class DriveProjectSyncTests {
         }
         let receiver = try TestWorkspace(); defer { receiver.cleanUp() }
         let container = try receiver.storage.makeContainer(inMemory: true)
-        let imported = try await sync.importProject(readable, remote: remote, storage: receiver.storage, container: container)
+        let selected = try await remote.validateFolder(id: mocked.root, access: .read)
+        let importFolder = try await remote.projectFolderForImport(selected)
+        #expect(importFolder == readable)
+        let imported = try await sync.importProject(importFolder, remote: remote, storage: receiver.storage, container: container)
         #expect(imported.importedRecordings == 1)
         #expect(imported.importedSources == 1)
         #expect(imported.failures.isEmpty)

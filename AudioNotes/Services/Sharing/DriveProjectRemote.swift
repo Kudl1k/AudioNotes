@@ -79,6 +79,23 @@ struct DriveProjectRemote: Sendable {
         return .init(id: item.id, name: item.name, publishedProjectID: publishedProjectID(in: item))
     }
 
+    /// A shared parent can be used for import when it identifies exactly one visible published project.
+    func projectFolderForImport(_ selected: DriveProjectFolder) async throws -> DriveProjectFolder {
+        if selected.publishedProjectID != nil { return selected }
+        guard Self.validID(selected.id) else { throw GoogleDriveSharingError.invalidResponse }
+        let query = "'\(selected.id)' in parents and trashed = false and mimeType = '\(Self.folderType)'"
+        let projects = try await listFiles(query: query).compactMap { item -> DriveProjectFolder? in
+            guard item.mimeType == Self.folderType, item.trashed != true,
+                  item.parents?.contains(selected.id) == true,
+                  let projectID = publishedProjectID(in: item) else { return nil }
+            return .init(id: item.id, name: item.name, publishedProjectID: projectID)
+        }
+        guard projects.count == 1, let project = projects.first else {
+            throw DriveProjectError.selectPublishedProject
+        }
+        return project
+    }
+
     func sharingParent(of folder: DriveProjectFolder) async throws -> DriveProjectFolder? {
         guard let projectID = folder.publishedProjectID else { return nil }
         let item = try await folderItem(id: folder.id, access: .read)
